@@ -21,10 +21,7 @@ Type=Application
 Name=Openotes
 Exec=openotes %U
 Icon=openotes
-# Office is the main category; TextEditor refines it. Office and Utility are
-# both *main* categories, so listing them together makes the app appear twice
-# in some menus - desktop-file-validate warns about exactly that.
-Categories=Office;TextEditor;
+Categories=Office;Utility;
 StartupNotify=true
 StartupWMClass=Openotes
 MimeType=x-scheme-handler/openotes;

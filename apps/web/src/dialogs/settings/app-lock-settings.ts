@@ -18,7 +18,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
 import { strings } from "@notesnook/intl";
-import { checkFeature, verifyAccount } from "../../common";
+import { checkFeature } from "../../common";
 import { Checkmark } from "../../components/icons";
 import { showPasswordDialog } from "../../dialogs/password-dialog";
 import {
@@ -29,7 +29,6 @@ import {
   useKeyStore,
   wrongCredentialError
 } from "../../interfaces/key-store";
-import { useStore as useUserStore } from "../../stores/user-store";
 import { generatePassword } from "../../utils/password-generator";
 import { showToast } from "../../utils/toast";
 import { WebAuthn } from "../../utils/webauthn";
@@ -60,9 +59,6 @@ export const AppLockSettings: SettingsGroup[] = [
                 .at(0);
 
               if (!defaultCredential) {
-                const verified = await verifyAccount();
-                if (!verified) return;
-
                 await registerCredential("password");
               } else {
                 await unlockAppLock(defaultCredential);
@@ -323,19 +319,15 @@ async function registerCredential(type: CredentialType) {
       }
     });
   } else if (type === "securityKey") {
-    const user = useUserStore.getState().user;
-    const username =
-      user?.email ||
-      (await PromptDialog.show({
-        title: strings.securityKeyUsername(),
-        description: strings.securityKeyUsernameDesc()
-      }));
+    const username = await PromptDialog.show({
+      title: strings.securityKeyUsername(),
+      description: strings.securityKeyUsernameDesc()
+    });
     if (!username) return;
 
-    const userId = user
-      ? Buffer.from(user.id, "hex")
-      : // fixed id for unregistered users to avoid creating duplicate credentials
-        new Uint8Array([0x61, 0xd1, 0x20, 0x82]);
+    // fixed id: Openotes has a single local user, so a stable id keeps the
+    // authenticator from registering duplicate credentials.
+    const userId = new Uint8Array([0x61, 0xd1, 0x20, 0x82]);
 
     try {
       const { firstSalt, rawId, transports } =
@@ -417,9 +409,8 @@ async function authenticateAppLock() {
     .getState()
     .credentials.filter((c) => c.active)
     .at(0);
-  if (!defaultCredential) {
-    return verifyAccount();
-  }
+  // Nothing to authenticate against: app lock has no credential yet.
+  if (!defaultCredential) return true;
   return !!(await verifyCredential(defaultCredential, async (c) => {
     if (!(await useKeyStore.getState().verifyCredential(c)))
       throw new Error(wrongCredentialError(c));
