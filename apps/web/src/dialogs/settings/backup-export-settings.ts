@@ -33,7 +33,9 @@ export const BackupExportSettings: SettingsGroup[] = [
   {
     key: "backup",
     section: "backup-export",
-    header: strings.backups(),
+    // "Backups" proper is the encrypted snapshot engine in backup-settings.ts;
+    // this group is the portable file format you can carry elsewhere.
+    header: "Portable backup files",
     settings: [
       {
         key: "create-backup",

@@ -27,7 +27,7 @@ import { db } from "../common/db";
 import { store as appStore } from "../stores/app-store";
 import { importBackup } from "../common";
 import { SettingsDialog } from "./settings";
-import { WEBDAV_SETTINGS_SECTION } from "./settings/types";
+import { WebDavConnectionForm } from "./settings/components/webdav-connection";
 import Config from "../utils/config";
 import { showToast } from "../utils/toast";
 import { ShieldLock, Sync, Import } from "../components/icons";
@@ -180,25 +180,26 @@ export const OnboardingDialog = DialogManager.register(
         <Dialog
           testId="onboarding-dialog"
           isOpen={true}
-          title={strings.sync()}
-          description="Openotes syncs through a WebDAV server that you own. Everything is encrypted on this device before it leaves it, so the server only ever holds ciphertext."
+          title="Connect WebDAV"
+          description="Openotes syncs through a WebDAV server that you own. Everything is encrypted on this device before it leaves it, so the server only ever holds ciphertext. This is entirely optional — skip it and the vault stays on this computer."
           onClose={() => finish()}
-          positiveButton={{
-            text: "Set up sync",
-            onClick: () =>
-              finish(() =>
-                SettingsDialog.show({ activeSection: WEBDAV_SETTINGS_SECTION })
-              )
-          }}
+          width={520}
+          positiveButton={null}
           negativeButton={{
             text: strings.later(),
             onClick: () => setStep("import")
           }}
         >
-          <Text variant="body" sx={{ color: "paragraph-secondary" }}>
-            You can configure this at any time from Settings &rarr;{" "}
-            {strings.sync()}.
-          </Text>
+          <Flex sx={{ flexDirection: "column", gap: 2 }}>
+            <WebDavConnectionForm
+              showInsecureHttpOption
+              submitText="Connect"
+              onSaved={() => setStep("import")}
+            />
+            <Text variant="subBody">
+              You can also do this later from Settings &rarr; {strings.sync()}.
+            </Text>
+          </Flex>
         </Dialog>
       );
 

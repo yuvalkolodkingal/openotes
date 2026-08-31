@@ -52,6 +52,7 @@ import { BehaviourSettings } from "./behaviour-settings";
 import { DesktopIntegrationSettings } from "./desktop-integration-settings";
 import { NotificationsSettings } from "./notifications-settings";
 
+import { EncryptedBackupSettings } from "./backup-settings";
 import { BackupExportSettings } from "./backup-export-settings";
 import { ImporterSettings } from "./importer-settings";
 import { VaultSettings } from "./vault-settings";
@@ -138,6 +139,10 @@ const SettingsGroups = [
   ...BehaviourSettings,
   ...DesktopIntegrationSettings,
   ...NotificationsSettings,
+  // The encrypted snapshot engine comes first: it is the backup subsystem of
+  // this fork. BackupExportSettings below it keeps the portable .nnbackupz
+  // file export/import and the note exporter.
+  ...EncryptedBackupSettings,
   ...BackupExportSettings,
   ...ImporterSettings,
   ...AppLockSettings,
