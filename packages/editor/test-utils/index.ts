@@ -21,6 +21,25 @@ import { Editor, AnyExtension, Extensions } from "@tiptap/core";
 import StarterKit from "@tiptap/starter-kit";
 import { builders, NodeBuilder } from "prosemirror-test-builder";
 import { Schema } from "@tiptap/pm/model";
+import { afterEach } from "vitest";
+
+// ProseMirror's DOMObserver schedules a setTimeout that touches `document`.
+// If an editor is left alive when the test ends, that timer can fire after
+// the DOM environment is torn down and throw "document is not defined",
+// which vitest reports as an unhandled error and fails the run. Every editor
+// a test creates is tracked and destroyed after the test so its timers are
+// cleared.
+const liveEditors = new Set<Editor>();
+afterEach(() => {
+  for (const editor of liveEditors) {
+    try {
+      editor.destroy();
+    } catch {
+      /* already destroyed */
+    }
+  }
+  liveEditors.clear();
+});
 
 type Builder<TNodes extends string> = {
   scheme: Schema;
@@ -52,6 +71,8 @@ export function createEditor<TNodes extends string>(
       ...(Object.values(extensions) as Extensions)
     ]
   });
+
+  liveEditors.add(editor);
 
   const builder = builders(editor.schema) as unknown as Builder<TNodes>;
 
