@@ -21,9 +21,9 @@ import type {
   ApplyResult,
   CursorMap,
   SyncDataStore,
-  SyncRecord
+  SyncRecord,
 } from "@notesnook/sync-webdav";
-import { resolveConflict, contentHashOf } from "@notesnook/sync-webdav";
+import { contentHashOf, resolveConflict } from "@notesnook/sync-webdav";
 import type { SettingsStore } from "../native/settings.ts";
 import type { SqliteService } from "../native/sqlite.ts";
 import { logger } from "../native/logger.ts";
@@ -58,7 +58,7 @@ export const SYNC_TABLES = [
   "attachments",
   "shortcuts",
   "settings",
-  "vaults"
+  "vaults",
 ] as const;
 
 export type SyncTable = (typeof SYNC_TABLES)[number];
@@ -86,7 +86,7 @@ export class DatabaseSyncStore implements SyncDataStore {
     return this.options.sqlite.run(
       this.options.databaseHandle,
       sql,
-      parameters
+      parameters,
     );
   }
 
@@ -110,7 +110,7 @@ export class DatabaseSyncStore implements SyncDataStore {
       if (!this.tableExists(table)) continue;
       const rows = this.query(
         `SELECT * FROM ${table} WHERE synced IS NOT 1 LIMIT ?`,
-        [this.batchSize]
+        [this.batchSize],
       ).rows as Record<string, unknown>[];
 
       for (const row of rows) {
@@ -126,7 +126,7 @@ export class DatabaseSyncStore implements SyncDataStore {
           timestamp: Number(row.dateModified ?? Date.now()),
           item: deleted
             ? { id, deleted: true, dateModified: row.dateModified }
-            : item
+            : item,
         });
       }
     }
@@ -151,7 +151,7 @@ export class DatabaseSyncStore implements SyncDataStore {
         // goes out in the next cycle. (Same guard core's collector uses.)
         this.query(
           `UPDATE ${table} SET synced = 1 WHERE id = ? AND dateModified <= ?`,
-          [item.id, item.revision]
+          [item.id, item.revision],
         );
       }
     }
@@ -167,17 +167,17 @@ export class DatabaseSyncStore implements SyncDataStore {
     if (!this.tableExists(table)) return Promise.resolve("skipped-stale");
 
     const existing = this.query(`SELECT * FROM ${table} WHERE id = ?`, [
-      record.entityId
+      record.entityId,
     ]).rows[0] as Record<string, unknown> | undefined;
 
     const local = existing
       ? {
-          revision: revisionOf(existing),
-          dateModified: Number(existing.dateModified ?? 0),
-          dirty: existing.synced !== 1,
-          deleted: existing.deleted === 1 || existing.deleted === true,
-          contentHash: contentHashOf(stripLocalColumns(existing))
-        }
+        revision: revisionOf(existing),
+        dateModified: Number(existing.dateModified ?? 0),
+        dirty: existing.synced !== 1,
+        deleted: existing.deleted === 1 || existing.deleted === true,
+        contentHash: contentHashOf(stripLocalColumns(existing)),
+      }
       : undefined;
 
     const decision = resolveConflict(record, local);
@@ -189,7 +189,7 @@ export class DatabaseSyncStore implements SyncDataStore {
       case "ignore-stale-resurrect":
         log.info("Refused to resurrect a deleted item from a stale device", {
           table,
-          id: record.entityId
+          id: record.entityId,
         });
         return Promise.resolve("skipped-tombstone");
 
@@ -209,16 +209,16 @@ export class DatabaseSyncStore implements SyncDataStore {
         if (table === "content" && existing) {
           this.query(
             `UPDATE content SET conflicted = ?, synced = 0 WHERE id = ?`,
-            [JSON.stringify(record.item), record.entityId]
+            [JSON.stringify(record.item), record.entityId],
           );
           log.info("Marked note content as conflicted", {
             id: record.entityId,
-            reason: decision.reason
+            reason: decision.reason,
           });
           this.options.onConflictCopy?.({
             table,
             id: record.entityId,
-            title: "note content"
+            title: "note content",
           });
           return Promise.resolve("conflicted");
         }
@@ -234,7 +234,7 @@ export class DatabaseSyncStore implements SyncDataStore {
           this.options.onConflictCopy?.({
             table,
             id: String(copy.id),
-            title: String(copy.title ?? copy.id)
+            title: String(copy.title ?? copy.id),
           });
         }
         if (record.operation !== "delete") {
@@ -251,7 +251,7 @@ export class DatabaseSyncStore implements SyncDataStore {
       this.query(
         `INSERT INTO ${table} (id, deleted, dateModified, synced) VALUES (?, 1, ?, 1)
          ON CONFLICT(id) DO UPDATE SET deleted = 1, dateModified = ?, synced = 1`,
-        [id, revision, revision]
+        [id, revision, revision],
       );
     } else {
       this.query(`DELETE FROM ${table} WHERE id = ?`, [id]);
@@ -261,11 +261,11 @@ export class DatabaseSyncStore implements SyncDataStore {
   private upsert(
     table: string,
     item: Record<string, unknown>,
-    options: { markDirty?: boolean } = {}
+    options: { markDirty?: boolean } = {},
   ): void {
     const columns = this.columnsOf(table);
     const entries = Object.entries(item).filter(
-      ([key]) => columns.has(key) && !LOCAL_ONLY_COLUMNS.has(key)
+      ([key]) => columns.has(key) && !LOCAL_ONLY_COLUMNS.has(key),
     );
     if (entries.length === 0) return;
 
@@ -283,7 +283,7 @@ export class DatabaseSyncStore implements SyncDataStore {
     this.query(
       `INSERT INTO ${table} (${names}) VALUES (${placeholders})
        ON CONFLICT(id) DO UPDATE SET ${updates}`,
-      entries.map(([, value]) => serializeValue(value))
+      entries.map(([, value]) => serializeValue(value)),
     );
   }
 
@@ -338,7 +338,7 @@ export class DatabaseSyncStore implements SyncDataStore {
     const hashes = new Set<string>();
     if (!this.tableExists("attachments")) return hashes;
     const rows = this.query(
-      "SELECT hash FROM attachments WHERE deleted IS NOT 1"
+      "SELECT hash FROM attachments WHERE deleted IS NOT 1",
     ).rows as { hash?: string }[];
     for (const row of rows) if (row.hash) hashes.add(row.hash);
     return hashes;
@@ -365,7 +365,7 @@ export class DatabaseSyncStore implements SyncDataStore {
           timestamp: Number(row.dateModified ?? Date.now()),
           item: deleted
             ? { id, deleted: true, dateModified: row.dateModified }
-            : stripLocalColumns(row)
+            : stripLocalColumns(row),
         });
       }
     }
@@ -387,7 +387,7 @@ function revisionOf(row: Record<string, unknown>): number {
 }
 
 function stripLocalColumns(
-  row: Record<string, unknown>
+  row: Record<string, unknown>,
 ): Record<string, unknown> {
   const out: Record<string, unknown> = {};
   for (const [key, value] of Object.entries(row)) {
@@ -400,7 +400,10 @@ function stripLocalColumns(
 function serializeValue(value: unknown): unknown {
   if (value === undefined) return null;
   if (typeof value === "boolean") return value ? 1 : 0;
-  if (value !== null && typeof value === "object" && !(value instanceof Uint8Array)) {
+  if (
+    value !== null && typeof value === "object" &&
+    !(value instanceof Uint8Array)
+  ) {
     return JSON.stringify(value);
   }
   return value;

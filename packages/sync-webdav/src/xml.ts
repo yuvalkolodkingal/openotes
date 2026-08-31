@@ -43,7 +43,7 @@ function findElements(xml: string, localName: string): string[] {
   // non-greedy, case-insensitive. WebDAV bodies are small enough for this.
   const re = new RegExp(
     `<(?:[A-Za-z0-9_-]+:)?${localName}(?:\\s[^>]*)?>([\\s\\S]*?)</(?:[A-Za-z0-9_-]+:)?${localName}\\s*>`,
-    "gi"
+    "gi",
   );
   let match: RegExpExecArray | null;
   while ((match = re.exec(xml)) !== null) {
@@ -59,7 +59,7 @@ function findFirst(xml: string, localName: string): string | undefined {
 function hasSelfClosingOrElement(xml: string, localName: string): boolean {
   const re = new RegExp(
     `<(?:[A-Za-z0-9_-]+:)?${localName}(?:\\s[^>]*)?/?>`,
-    "i"
+    "i",
   );
   return re.test(xml);
 }
@@ -70,8 +70,9 @@ function decodeXmlEntities(value: string): string {
     .replace(/&gt;/g, ">")
     .replace(/&quot;/g, '"')
     .replace(/&apos;/g, "'")
-    .replace(/&#x([0-9a-fA-F]+);/g, (_, hex) =>
-      String.fromCodePoint(parseInt(hex, 16))
+    .replace(
+      /&#x([0-9a-fA-F]+);/g,
+      (_, hex) => String.fromCodePoint(parseInt(hex, 16)),
     )
     .replace(/&#(\d+);/g, (_, dec) => String.fromCodePoint(parseInt(dec, 10)))
     .replace(/&amp;/g, "&");
@@ -87,7 +88,7 @@ export function parseMultistatus(xml: string): DavEntry[] {
   if (!/<(?:[A-Za-z0-9_-]+:)?multistatus/i.test(xml)) {
     throw new SyncError(
       "Malformed PROPFIND response: no <multistatus> element",
-      "corrupt-data"
+      "corrupt-data",
     );
   }
 
@@ -107,8 +108,9 @@ export function parseMultistatus(xml: string): DavEntry[] {
 
     const propstats = findElements(response, "propstat");
     // Use the successful propstat when present, else the whole response.
-    const okPropstat =
-      propstats.find((p) => parseStatusLine(findFirst(p, "status")) === 200) ??
+    const okPropstat = propstats.find((p) =>
+      parseStatusLine(findFirst(p, "status")) === 200
+    ) ??
       propstats[0] ??
       response;
 
@@ -117,18 +119,16 @@ export function parseMultistatus(xml: string): DavEntry[] {
 
     entries.push({
       href,
-      isCollection:
-        hasSelfClosingOrElement(
-          findFirst(okPropstat, "resourcetype") ?? "",
-          "collection"
-        ) || href.endsWith("/"),
+      isCollection: hasSelfClosingOrElement(
+        findFirst(okPropstat, "resourcetype") ?? "",
+        "collection",
+      ) || href.endsWith("/"),
       etag: etagRaw ? decodeXmlEntities(etagRaw) : undefined,
-      contentLength:
-        contentLengthRaw && /^\d+$/.test(contentLengthRaw)
-          ? parseInt(contentLengthRaw, 10)
-          : undefined,
+      contentLength: contentLengthRaw && /^\d+$/.test(contentLengthRaw)
+        ? parseInt(contentLengthRaw, 10)
+        : undefined,
       lastModified: findFirst(okPropstat, "getlastmodified")?.trim(),
-      status: parseStatusLine(findFirst(response, "status"))
+      status: parseStatusLine(findFirst(response, "status")),
     });
   }
   return entries;

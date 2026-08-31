@@ -148,7 +148,7 @@ export class CredentialStore {
   /** Re-wrap every secret under a new passphrase. */
   async rewrap(
     newPassphrase: string | undefined,
-    newMode: "vault" | "machine"
+    newMode: "vault" | "machine",
   ): Promise<void> {
     const record = await this.read();
     this.mode = newMode;
@@ -157,7 +157,7 @@ export class CredentialStore {
       newMode === "vault"
         ? requirePassphrase(newPassphrase)
         : await this.machineSecret(),
-      salt
+      salt,
     );
     await this.write(record);
   }
@@ -167,7 +167,7 @@ export class CredentialStore {
     if (!this.wrappingKey) {
       throw new Error(
         "The credential store is locked. Unlock the vault before reading " +
-          "stored credentials."
+          "stored credentials.",
       );
     }
 
@@ -185,13 +185,13 @@ export class CredentialStore {
     } catch {
       throw new Error(
         "The stored credentials file is corrupt. Re-enter your WebDAV " +
-          "password in Settings to recreate it."
+          "password in Settings to recreate it.",
       );
     }
     if (envelope.mode !== this.mode) {
       throw new Error(
         `The stored credentials were locked with the ${envelope.mode} key, ` +
-          `but the store was unlocked with the ${this.mode} key.`
+          `but the store was unlocked with the ${this.mode} key.`,
       );
     }
 
@@ -199,14 +199,14 @@ export class CredentialStore {
       const plaintext = await crypto.subtle.decrypt(
         { name: "AES-GCM", iv: toArrayBuffer(fromBase64(envelope.iv)) },
         this.wrappingKey,
-        toArrayBuffer(fromBase64(envelope.ciphertext))
+        toArrayBuffer(fromBase64(envelope.ciphertext)),
       );
       this.cache = JSON.parse(new TextDecoder().decode(plaintext));
       return this.cache!;
     } catch {
       throw new Error(
         "Stored credentials could not be decrypted. If you changed your " +
-          "vault passphrase, re-enter your WebDAV password in Settings."
+          "vault passphrase, re-enter your WebDAV password in Settings.",
       );
     }
   }
@@ -223,8 +223,8 @@ export class CredentialStore {
       await crypto.subtle.encrypt(
         { name: "AES-GCM", iv: toArrayBuffer(iv) },
         this.wrappingKey,
-        toArrayBuffer(plaintext)
-      )
+        toArrayBuffer(plaintext),
+      ),
     );
 
     const envelope: StoredEnvelope = {
@@ -232,7 +232,7 @@ export class CredentialStore {
       mode: this.mode,
       salt: toBase64(await this.saltFor(this.mode)),
       iv: toBase64(iv),
-      ciphertext: toBase64(ciphertext)
+      ciphertext: toBase64(ciphertext),
     };
 
     // Write through a temp file so a crash cannot leave a truncated store.
@@ -285,26 +285,26 @@ function requirePassphrase(passphrase: string | undefined): string {
 
 async function deriveKey(
   secret: string,
-  salt: Uint8Array
+  salt: Uint8Array,
 ): Promise<CryptoKey> {
   const material = await crypto.subtle.importKey(
     "raw",
     toArrayBuffer(new TextEncoder().encode(secret)),
     "PBKDF2",
     false,
-    ["deriveKey"]
+    ["deriveKey"],
   );
   return await crypto.subtle.deriveKey(
     {
       name: "PBKDF2",
       salt: toArrayBuffer(salt),
       iterations: PBKDF2_ITERATIONS,
-      hash: "SHA-256"
+      hash: "SHA-256",
     },
     material,
     { name: "AES-GCM", length: 256 },
     false,
-    ["encrypt", "decrypt"]
+    ["encrypt", "decrypt"],
   );
 }
 

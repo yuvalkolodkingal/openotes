@@ -45,7 +45,7 @@ export function parseArguments(argv: string[]): Promise<CLIOptions> {
     note: false,
     notebook: false,
     reminder: false,
-    hidden: false
+    hidden: false,
   };
 
   const args = parseArgs(argv, {
@@ -54,7 +54,7 @@ export function parseArguments(argv: string[]): Promise<CLIOptions> {
     alias: { h: "help", v: "version" },
     // Ignore anything else rather than failing: launchers and the OS add
     // their own flags (a deep-link URL, for instance).
-    unknown: () => true
+    unknown: () => true,
   });
 
   if (args.help) {

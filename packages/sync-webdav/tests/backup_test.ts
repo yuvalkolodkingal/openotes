@@ -20,12 +20,12 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 import { assert, assertEquals, assertRejects } from "@std/assert";
 import {
   BackupEngine,
-  LocalBackupTarget,
-  WebDavBackupTarget,
   backupFileName,
-  parseBackupFileName,
   type BackupSnapshot,
-  type FileSystemAdapter
+  type FileSystemAdapter,
+  LocalBackupTarget,
+  parseBackupFileName,
+  WebDavBackupTarget,
 } from "../src/backup.ts";
 import { SyncCrypto } from "../src/crypto.ts";
 import { WebDavClient } from "../src/client.ts";
@@ -46,7 +46,7 @@ function engineFor(deviceId = "DEVICEA") {
   return new BackupEngine(crypto_, {
     appName: "Openotes",
     appVersion: "1.0.0-test",
-    deviceId
+    deviceId,
   });
 }
 
@@ -62,8 +62,8 @@ function memoryFs(): FileSystemAdapter & { files: Map<string, Uint8Array> } {
           .filter(([name]) => name.startsWith(path + "/"))
           .map(([name, data]) => ({
             name: name.slice(path.length + 1),
-            size: data.length
-          }))
+            size: data.length,
+          })),
       ),
     readFile: (path) => {
       const data = files.get(path);
@@ -78,7 +78,7 @@ function memoryFs(): FileSystemAdapter & { files: Map<string, Uint8Array> } {
       files.delete(path);
       return Promise.resolve();
     },
-    join: (...parts) => parts.join("/")
+    join: (...parts) => parts.join("/"),
   };
 }
 
@@ -99,13 +99,18 @@ Deno.test("backup round-trip preserves every entity and attachment", async () =>
   store.put({ id: "n2", type: "note", title: "Beta", content: "two" });
   store.put({ id: "nb1", type: "notebook", title: "Work" });
   store.put({ id: "t1", type: "tag", title: "urgent" });
-  store.put({ id: "a1", type: "attachment", hash: "hashone", title: "photo.png" });
+  store.put({
+    id: "a1",
+    type: "attachment",
+    hash: "hashone",
+    title: "photo.png",
+  });
 
   const attachmentContent = testBytes(50_000, 3);
   const snapshot: BackupSnapshot = {
     data: store.snapshot(),
     counts: { note: 2, notebook: 1, tag: 1, attachment: 1 },
-    attachments: new Map([["hashone", attachmentContent]])
+    attachments: new Map([["hashone", attachmentContent]]),
   };
 
   const { name, data, manifest } = await engine.create(key, snapshot);
@@ -122,7 +127,10 @@ Deno.test("backup round-trip preserves every entity and attachment", async () =>
   const reopened = await engine.open(key, data);
   const restored = new MemorySyncStore("DEVICEB");
   restored.restore(
-    reopened.snapshot.data as { items: TestItem[]; tombstones: [string, number][] }
+    reopened.snapshot.data as {
+      items: TestItem[];
+      tombstones: [string, number][];
+    },
   );
 
   assertEquals(restored.get("note", "n1")?.title, "Alpha");
@@ -135,7 +143,7 @@ Deno.test("backup round-trip preserves every entity and attachment", async () =>
   assert(restoredAttachment);
   assert(
     bytesEqual(restoredAttachment, attachmentContent),
-    "attachment content changed across the backup round-trip"
+    "attachment content changed across the backup round-trip",
   );
 });
 
@@ -144,14 +152,14 @@ Deno.test("a corrupted backup is rejected instead of restored", async () => {
   const engine = engineFor();
   const { data } = await engine.create(key, {
     data: { items: [{ id: "n1", title: "Alpha" }] },
-    counts: { note: 1 }
+    counts: { note: 1 },
   });
 
   // Flip a byte inside the ciphertext.
   const parsed = JSON.parse(new TextDecoder().decode(data));
   const cipher = parsed.payload.cipher as string;
-  parsed.payload.cipher =
-    cipher.slice(0, 10) + (cipher[10] === "A" ? "B" : "A") + cipher.slice(11);
+  parsed.payload.cipher = cipher.slice(0, 10) +
+    (cipher[10] === "A" ? "B" : "A") + cipher.slice(11);
   const corrupted = new TextEncoder().encode(JSON.stringify(parsed));
 
   const error = await assertRejects(() => engine.open(key, corrupted));
@@ -165,7 +173,7 @@ Deno.test("a backup with a tampered content hash is rejected", async () => {
   const engine = engineFor();
   const { data } = await engine.create(key, {
     data: { items: [] },
-    counts: {}
+    counts: {},
   });
   const parsed = JSON.parse(new TextDecoder().decode(data));
   parsed.manifest.contentHash = "0".repeat(64);
@@ -182,12 +190,12 @@ Deno.test("the wrong key cannot open a backup", async () => {
   const engine = engineFor();
   const { data } = await engine.create(key, {
     data: { items: [{ id: "n1" }] },
-    counts: { note: 1 }
+    counts: { note: 1 },
   });
 
   const otherMaster = await crypto_.deriveMasterKey(
     "a different passphrase",
-    "QkJCQkJCQkJCQkJCQkJCQg"
+    "QkJCQkJCQkJCQkJCQkJCQg",
   );
   const otherKey = await crypto_.deriveSubkey(otherMaster, "backup");
   const error = await assertRejects(() => engine.open(otherKey, data));
@@ -218,7 +226,7 @@ Deno.test("full backup lifecycle: create, upload, wipe, download, restore", asyn
     const client = new WebDavClient(new FetchTransport(), {
       baseUrl: server.url,
       allowInsecureHttp: true,
-      delay: () => Promise.resolve()
+      delay: () => Promise.resolve(),
     });
     const remote = new WebDavBackupTarget(client, "backups");
 
@@ -229,28 +237,30 @@ Deno.test("full backup lifecycle: create, upload, wipe, download, restore", asyn
         id: `n${index}`,
         type: "note",
         title: `Note ${index}`,
-        content: `content ${index}`
+        content: `content ${index}`,
       });
     }
     store.put({ id: "a1", type: "attachment", hash: "att1" });
     store.put({ id: "a2", type: "attachment", hash: "att2" });
     const attachments = new Map([
       ["att1", testBytes(20_000, 11)],
-      ["att2", testBytes(5_000, 12)]
+      ["att2", testBytes(5_000, 12)],
     ]);
 
     // Create the encrypted backup and upload it.
     const { name, data } = await engine.create(key, {
       data: store.snapshot(),
       counts: { note: 25, attachment: 2 },
-      attachments
+      attachments,
     });
     await remote.write(name, data);
 
     // It really is on the server, and it is not plaintext.
     const stored = server.getFile(`/backups/${name}`);
     assert(stored, "the backup was not uploaded");
-    const storedText = new TextDecoder("utf-8", { fatal: false }).decode(stored);
+    const storedText = new TextDecoder("utf-8", { fatal: false }).decode(
+      stored,
+    );
     assert(!storedText.includes("Note 7"), "plaintext leaked to the server");
 
     // "Delete the local test vault."
@@ -265,7 +275,7 @@ Deno.test("full backup lifecycle: create, upload, wipe, download, restore", asyn
     const downloaded = await remote.read(listed[0].name);
     const { snapshot, manifest } = await engine.open(key, downloaded);
     wiped.restore(
-      snapshot.data as { items: TestItem[]; tombstones: [string, number][] }
+      snapshot.data as { items: TestItem[]; tombstones: [string, number][] },
     );
 
     // Compare the resulting logical data.
@@ -277,7 +287,10 @@ Deno.test("full backup lifecycle: create, upload, wipe, download, restore", asyn
     for (const [hash, expected] of attachments) {
       const actual = snapshot.attachments?.get(hash);
       assert(actual, `attachment ${hash} missing after restore`);
-      assert(bytesEqual(actual, expected), `attachment ${hash} content changed`);
+      assert(
+        bytesEqual(actual, expected),
+        `attachment ${hash} content changed`,
+      );
     }
   } finally {
     await server.stop();
@@ -297,7 +310,7 @@ Deno.test("retention deletes the oldest snapshots only", async () => {
     names.push(name);
     const { data } = await engine.create(key, {
       data: { index },
-      counts: {}
+      counts: {},
     });
     await target.write(name, data);
   }
@@ -321,32 +334,44 @@ Deno.test("backup schedules fire only when due", () => {
 
   assertEquals(
     BackupEngine.isDue({ interval: "manual", retention: 5 }, undefined, now),
-    false
+    false,
   );
   assertEquals(
     BackupEngine.isDue({ interval: "daily", retention: 5 }, undefined, now),
     true,
-    "the first scheduled backup should be due immediately"
+    "the first scheduled backup should be due immediately",
   );
   assertEquals(
     BackupEngine.isDue({ interval: "daily", retention: 5 }, now - day / 2, now),
-    false
+    false,
   );
   assertEquals(
     BackupEngine.isDue({ interval: "daily", retention: 5 }, now - day - 1, now),
-    true
+    true,
   );
   assertEquals(
-    BackupEngine.isDue({ interval: "weekly", retention: 5 }, now - 6 * day, now),
-    false
+    BackupEngine.isDue(
+      { interval: "weekly", retention: 5 },
+      now - 6 * day,
+      now,
+    ),
+    false,
   );
   assertEquals(
-    BackupEngine.isDue({ interval: "weekly", retention: 5 }, now - 8 * day, now),
-    true
+    BackupEngine.isDue(
+      { interval: "weekly", retention: 5 },
+      now - 8 * day,
+      now,
+    ),
+    true,
   );
   assertEquals(
-    BackupEngine.isDue({ interval: "monthly", retention: 5 }, now - 31 * day, now),
-    true
+    BackupEngine.isDue(
+      { interval: "monthly", retention: 5 },
+      now - 31 * day,
+      now,
+    ),
+    true,
   );
 });
 
@@ -362,7 +387,7 @@ Deno.test("deleting a note does not touch historical backups", async () => {
 
   const first = await engine.create(key, {
     data: store.snapshot(),
-    counts: { note: 1 }
+    counts: { note: 1 },
   });
   await target.write(first.name, first.data);
 
@@ -377,7 +402,7 @@ Deno.test("deleting a note does not touch historical backups", async () => {
     archived.snapshot.data as {
       items: TestItem[];
       tombstones: [string, number][];
-    }
+    },
   );
   assertEquals(recovered.get("note", "n1")?.content, "keep me");
 });
@@ -390,7 +415,7 @@ Deno.test("unsafe backup file names are rejected", async () => {
       () => target.read(name),
       SyncError,
       undefined,
-      `expected ${JSON.stringify(name)} to be rejected`
+      `expected ${JSON.stringify(name)} to be rejected`,
     );
   }
 });
@@ -403,13 +428,13 @@ Deno.test("a WebDAV backup upload is verified before it counts", async () => {
       baseUrl: server.url,
       allowInsecureHttp: true,
       maxRetries: 0,
-      delay: () => Promise.resolve()
+      delay: () => Promise.resolve(),
     });
     const target = new WebDavBackupTarget(client, "backups");
     const key = await backupKey();
     const { name, data } = await engineFor().create(key, {
       data: { items: [] },
-      counts: {}
+      counts: {},
     });
 
     // The server silently truncates the upload.

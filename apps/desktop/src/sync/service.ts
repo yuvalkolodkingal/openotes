@@ -18,18 +18,18 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
 import {
+  type AttachmentSource,
   FetchTransport,
   OutgoingQueue,
+  type QueueStorage,
   SyncCrypto,
   SyncEngine,
   SyncError,
   SyncScheduler,
+  type SyncStatus,
+  type SyncTrigger,
   toBasicAuth,
   WebDavClient,
-  type AttachmentSource,
-  type QueueStorage,
-  type SyncStatus,
-  type SyncTrigger
 } from "@notesnook/sync-webdav";
 import type { SerializedKey } from "@notesnook/crypto";
 import { join } from "@std/path";
@@ -135,23 +135,24 @@ export class SyncService {
       throw new SyncError(
         "The WebDAV password is not available. Unlock the vault, or " +
           "re-enter the password in Settings → Synchronization.",
-        "unauthorized"
+        "unauthorized",
       );
     }
 
     const passphrase = await this.options.credentials.get(
-      CREDENTIAL_KEY_PASSPHRASE
+      CREDENTIAL_KEY_PASSPHRASE,
     );
     if (!passphrase) {
       throw new SyncError(
         "The sync passphrase is not set. It is what encrypts your notes " +
           "before they reach the server.",
-        "bad-key"
+        "bad-key",
       );
     }
 
     const transport = new FetchTransport({
-      getBasicAuth: () => Promise.resolve(toBasicAuth(config.username, password))
+      getBasicAuth: () =>
+        Promise.resolve(toBasicAuth(config.username, password)),
     }, (input, init) => {
       const headers = new Headers(init?.headers);
       headers.set("user-agent", USER_AGENT);
@@ -163,7 +164,7 @@ export class SyncService {
       baseUrl,
       requestTimeout: config.timeoutSeconds * 1000,
       maxRetries: config.maxRetries,
-      allowInsecureHttp: config.allowInsecureHttp
+      allowInsecureHttp: config.allowInsecureHttp,
     });
 
     // The salt lives in the remote protocol.json so a second device with
@@ -175,7 +176,7 @@ export class SyncService {
     this.masterKey = await this.crypto.deriveMasterKey(passphrase, salt);
 
     this.queue = new OutgoingQueue(
-      new FileQueueStorage(join(appDataDir(), "sync-queue.json"))
+      new FileQueueStorage(join(appDataDir(), "sync-queue.json")),
     );
 
     const engine = new SyncEngine({
@@ -193,14 +194,14 @@ export class SyncService {
       onConflict: (record) =>
         this.options.onConflict({
           entityId: record.entityId,
-          entityType: record.entityType
+          entityType: record.entityType,
         }),
       logger: {
         debug: (message, context) => log.debug(message, context),
         info: (message, context) => log.info(message, context),
         warn: (message, context) => log.warn(message, context),
-        error: (message, context) => log.error(message, context)
-      }
+        error: (message, context) => log.error(message, context),
+      },
     });
 
     this.engine = engine;
@@ -215,13 +216,13 @@ export class SyncService {
     if (options.password !== undefined) {
       await this.options.credentials.set(
         CREDENTIAL_KEY_PASSWORD,
-        options.password
+        options.password,
       );
     }
     if (options.passphrase !== undefined) {
       await this.options.credentials.set(
         CREDENTIAL_KEY_PASSPHRASE,
-        options.passphrase
+        options.passphrase,
       );
     }
     // Force a rebuild so the next cycle picks up the new credentials.
@@ -250,20 +251,20 @@ export class SyncService {
     try {
       const transport = new FetchTransport({
         getBasicAuth: () =>
-          Promise.resolve(toBasicAuth(candidate.username, candidate.password))
+          Promise.resolve(toBasicAuth(candidate.username, candidate.password)),
       });
       const client = new WebDavClient(transport, {
         baseUrl: joinUrl(candidate.serverUrl, candidate.directory),
         requestTimeout: (candidate.timeoutSeconds ?? 30) * 1000,
         maxRetries: 1,
-        allowInsecureHttp: candidate.allowInsecureHttp ?? false
+        allowInsecureHttp: candidate.allowInsecureHttp ?? false,
       });
 
       const knownSalt = await this.options.store.getMeta("webdav.salt");
       const salt = knownSalt ?? (await this.crypto.generateSalt());
       const masterKey = await this.crypto.deriveMasterKey(
         candidate.passphrase,
-        salt
+        salt,
       );
 
       const probe = new SyncEngine({
@@ -271,10 +272,10 @@ export class SyncService {
         crypto: this.crypto,
         store: this.options.store,
         queue: new OutgoingQueue(
-          new FileQueueStorage(join(appDataDir(), "sync-queue.probe.json"))
+          new FileQueueStorage(join(appDataDir(), "sync-queue.probe.json")),
         ),
         masterKey,
-        syncAttachments: false
+        syncAttachments: false,
       });
 
       const result = await probe.testConnection();
@@ -286,7 +287,7 @@ export class SyncService {
         message: result.initialized
           ? `Connected. The remote repository uses protocol version ` +
             `${result.protocolVersion} and has ${result.devices} device(s) registered.`
-          : "Connected. The remote directory is empty and will be set up on the first sync."
+          : "Connected. The remote directory is empty and will be set up on the first sync.",
       };
     } catch (error) {
       return { ok: false, message: describeError(error) };
@@ -294,7 +295,7 @@ export class SyncService {
   }
 
   /** Start scheduling: startup sync, periodic sync, debounced edits. */
-  async start(): Promise<void> {
+  start(): void {
     const config = this.options.settings.get("webdav");
     if (!config.enabled) {
       this.setStatus({ type: "disabled" });
@@ -307,14 +308,14 @@ export class SyncService {
         debounceMs: Math.max(1000, config.debounceSeconds * 1000),
         minIntervalMs: 5000,
         onError: (error) =>
-          log.warn("Scheduled sync failed", { error: describeError(error) })
-      }
+          log.warn("Scheduled sync failed", { error: describeError(error) }),
+      },
     );
 
     if (config.intervalMinutes > 0) {
       this.periodicTimer = setInterval(
         () => void this.scheduler?.trigger("periodic"),
-        config.intervalMinutes * 60_000
+        config.intervalMinutes * 60_000,
       );
     }
 
@@ -347,7 +348,10 @@ export class SyncService {
       // A sync failure is a status, never a crash (spec §58).
       const message = describeError(error);
       log.warn("Sync cycle failed", { trigger, error: message });
-      if (error instanceof SyncError && (error.code === "network" || error.code === "timeout")) {
+      if (
+        error instanceof SyncError &&
+        (error.code === "network" || error.code === "timeout")
+      ) {
         this.setStatus({ type: "offline" });
       } else {
         this.setStatus({ type: "error", error: message });
@@ -360,7 +364,7 @@ export class SyncService {
     await this.options.settings.patchSync({
       cursors: {},
       localSequence: 0,
-      meta: {}
+      meta: {},
     });
     this.engine = undefined;
     log.info("Sync cursors reset");
@@ -369,7 +373,9 @@ export class SyncService {
   /** Rebuild the remote repository from local state (spec §59). */
   async rebuildRemote(): Promise<string> {
     const engine = this.engine ?? (await this.buildEngine());
-    if (!engine) throw new SyncError("Synchronization is not configured", "cancelled");
+    if (!engine) {
+      throw new SyncError("Synchronization is not configured", "cancelled");
+    }
     const fullState = this.options.store.fullState();
     log.info("Rebuilding remote repository", { records: fullState.length });
     return await engine.rebuildRemote(fullState);
@@ -394,7 +400,7 @@ export class SyncService {
     log.info("Syncing pending changes before shutdown", { pending });
     await Promise.race([
       this.runCycle("shutdown"),
-      new Promise((resolve) => setTimeout(resolve, timeoutMs))
+      new Promise((resolve) => setTimeout(resolve, timeoutMs)),
     ]);
     await this.queue?.flush();
   }

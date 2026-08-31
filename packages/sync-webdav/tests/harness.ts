@@ -43,7 +43,7 @@ const sharedCrypto = new SyncCrypto();
 
 export function masterKeyFor(
   passphrase = TEST_PASSPHRASE,
-  salt = "AAAAAAAAAAAAAAAAAAAAAA"
+  salt = "AAAAAAAAAAAAAAAAAAAAAA",
 ): Promise<SerializedKey> {
   if (passphrase === TEST_PASSPHRASE && salt === "AAAAAAAAAAAAAAAAAAAAAA") {
     cachedMaster ??= sharedCrypto.deriveMasterKey(passphrase, salt);
@@ -83,12 +83,12 @@ export async function createDevice(options: {
   const transport = new FetchTransport(
     options.username
       ? {
-          getBasicAuth: () =>
-            Promise.resolve(
-              toBasicAuth(options.username!, options.password ?? "")
-            )
-        }
-      : undefined
+        getBasicAuth: () =>
+          Promise.resolve(
+            toBasicAuth(options.username!, options.password ?? ""),
+          ),
+      }
+      : undefined,
   );
 
   const client = new WebDavClient(transport, {
@@ -96,13 +96,13 @@ export async function createDevice(options: {
     allowInsecureHttp: true,
     maxRetries: options.maxRetries ?? 2,
     requestTimeout: options.requestTimeout ?? 5000,
-    delay: () => Promise.resolve()
+    delay: () => Promise.resolve(),
   });
 
   const store = options.store ?? new MemorySyncStore(options.id);
   const attachments = options.attachments ?? new MemoryAttachments();
   const queue = new OutgoingQueue(
-    options.queueStorage ?? new MemoryQueueStorage()
+    options.queueStorage ?? new MemoryQueueStorage(),
   );
 
   const engine = new SyncEngine({
@@ -116,7 +116,7 @@ export async function createDevice(options: {
     deviceName: options.id,
     appVersion: "1.0.0-test",
     platform: "linux",
-    onConflict: (record) => options.onConflict?.(record.entityId)
+    onConflict: (record) => options.onConflict?.(record.entityId),
   });
 
   return { id: options.id, store, queue, engine, client, attachments, crypto };

@@ -79,7 +79,7 @@ export class FakeWebDavServer {
       minimalProps?: boolean;
       /** Prefix every href with the full absolute URL (compat test). */
       absoluteHrefs?: boolean;
-    } = {}
+    } = {},
   ) {}
 
   get url(): string {
@@ -90,7 +90,7 @@ export class FakeWebDavServer {
   async start(): Promise<void> {
     this.server = Deno.serve(
       { port: 0, hostname: "127.0.0.1", onListen: () => {} },
-      (request) => this.handle(request)
+      (request) => this.handle(request),
     );
     // Give the listener a tick to bind.
     await Promise.resolve();
@@ -117,7 +117,7 @@ export class FakeWebDavServer {
     this.files.set(normalize(path), {
       data,
       etag: `"${++this.etagCounter}"`,
-      lastModified: new Date()
+      lastModified: new Date(),
     });
   }
 
@@ -138,7 +138,7 @@ export class FakeWebDavServer {
       (fault) =>
         (!fault.method || fault.method === method) &&
         (!fault.pathIncludes || path.includes(fault.pathIncludes)) &&
-        (fault.times ?? 1) > 0
+        (fault.times ?? 1) > 0,
     );
     if (index < 0) return undefined;
     const fault = this.faults[index];
@@ -168,14 +168,13 @@ export class FakeWebDavServer {
 
     if (this.options.username) {
       const auth = request.headers.get("authorization");
-      const expected =
-        "Basic " +
+      const expected = "Basic " +
         btoa(`${this.options.username}:${this.options.password ?? ""}`);
       if (auth !== expected) {
         log(401);
         return new Response("Unauthorized", {
           status: 401,
-          headers: { "WWW-Authenticate": 'Basic realm="test"' }
+          headers: { "WWW-Authenticate": 'Basic realm="test"' },
         });
       }
     }
@@ -197,14 +196,14 @@ export class FakeWebDavServer {
     if (fault?.status) {
       log(fault.status);
       return new Response(`Injected ${fault.status}`, {
-        status: fault.status
+        status: fault.status,
       });
     }
     if (fault?.malformedPropfind && method === "PROPFIND") {
       log(207);
       return new Response("<not-xml>{{{", {
         status: 207,
-        headers: { "Content-Type": "application/xml" }
+        headers: { "Content-Type": "application/xml" },
       });
     }
 
@@ -217,8 +216,8 @@ export class FakeWebDavServer {
             DAV: "1,2",
             Allow: this.options.noMove
               ? "OPTIONS, GET, HEAD, PUT, DELETE, PROPFIND, MKCOL"
-              : "OPTIONS, GET, HEAD, PUT, DELETE, PROPFIND, MKCOL, MOVE, COPY"
-          }
+              : "OPTIONS, GET, HEAD, PUT, DELETE, PROPFIND, MKCOL, MOVE, COPY",
+          },
         });
 
       case "HEAD": {
@@ -237,8 +236,8 @@ export class FakeWebDavServer {
           headers: {
             "Content-Length": String(file.data.length),
             ETag: fault?.wrongEtag ?? file.etag,
-            "Last-Modified": file.lastModified.toUTCString()
-          }
+            "Last-Modified": file.lastModified.toUTCString(),
+          },
         });
       }
 
@@ -253,8 +252,8 @@ export class FakeWebDavServer {
           status: 200,
           headers: {
             ETag: fault?.wrongEtag ?? file.etag,
-            "Content-Length": String(file.data.length)
-          }
+            "Content-Length": String(file.data.length),
+          },
         });
       }
 
@@ -285,12 +284,12 @@ export class FakeWebDavServer {
         this.files.set(normalize(path), {
           data,
           etag,
-          lastModified: new Date()
+          lastModified: new Date(),
         });
         log(existing ? 204 : 201);
         return new Response(null, {
           status: existing ? 204 : 201,
-          headers: { ETag: etag }
+          headers: { ETag: etag },
         });
       }
 
@@ -387,9 +386,7 @@ export class FakeWebDavServer {
 
         const origin = `${url.protocol}//${url.host}`;
         const href = (p: string) =>
-          this.options.absoluteHrefs
-            ? origin + encodeURI(p)
-            : encodeURI(p);
+          this.options.absoluteHrefs ? origin + encodeURI(p) : encodeURI(p);
 
         const entries: string[] = [];
         if (isDir) {
@@ -406,27 +403,33 @@ export class FakeWebDavServer {
                   fileXml(
                     href(filePath),
                     stored,
-                    this.options.minimalProps ?? false
-                  )
+                    this.options.minimalProps ?? false,
+                  ),
                 );
               }
             }
           }
         } else if (file) {
           entries.push(
-            fileXml(href(normalize(path)), file, this.options.minimalProps ?? false)
+            fileXml(
+              href(normalize(path)),
+              file,
+              this.options.minimalProps ?? false,
+            ),
           );
         }
 
         log(207);
         return new Response(
-          `<?xml version="1.0" encoding="utf-8"?>\n<D:multistatus xmlns:D="DAV:">\n${entries.join(
-            "\n"
-          )}\n</D:multistatus>`,
+          `<?xml version="1.0" encoding="utf-8"?>\n<D:multistatus xmlns:D="DAV:">\n${
+            entries.join(
+              "\n",
+            )
+          }\n</D:multistatus>`,
           {
             status: 207,
-            headers: { "Content-Type": 'application/xml; charset="utf-8"' }
-          }
+            headers: { "Content-Type": 'application/xml; charset="utf-8"' },
+          },
         );
       }
 
@@ -477,11 +480,9 @@ function collectionXml(href: string): string {
 function fileXml(
   href: string,
   file: StoredFile,
-  minimal: boolean
+  minimal: boolean,
 ): string {
-  const extra = minimal
-    ? ""
-    : `
+  const extra = minimal ? "" : `
         <D:getcontentlength>${file.data.length}</D:getcontentlength>
         <D:getetag>${file.etag}</D:getetag>
         <D:getlastmodified>${file.lastModified.toUTCString()}</D:getlastmodified>`;

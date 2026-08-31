@@ -71,7 +71,7 @@ const MIME_TYPES: Record<string, string> = {
   ".ttf": "font/ttf",
   ".otf": "font/otf",
   ".map": "application/json; charset=utf-8",
-  ".txt": "text/plain; charset=utf-8"
+  ".txt": "text/plain; charset=utf-8",
 };
 
 export interface UiServerOptions {
@@ -108,7 +108,7 @@ export function assignedOrigin(fallbackPort?: number): string {
 }
 
 export async function startUiServer(
-  options: UiServerOptions
+  options: UiServerOptions,
 ): Promise<RunningUiServer> {
   const root = await Deno.realPath(options.root);
 
@@ -121,7 +121,7 @@ export async function startUiServer(
       port: 0,
       onListen: (address) => {
         origin = `http://${address.hostname}:${address.port}`;
-      }
+      },
     },
     async (request) => {
       const url = new URL(request.url);
@@ -132,9 +132,9 @@ export async function startUiServer(
           {
             headers: {
               "content-type": "application/json",
-              [INSTANCE_HEADER]: options.instanceId
-            }
-          }
+              [INSTANCE_HEADER]: options.instanceId,
+            },
+          },
         );
       }
 
@@ -143,7 +143,7 @@ export async function startUiServer(
       }
 
       return await serveStatic(root, url.pathname, request.method === "HEAD");
-    }
+    },
   );
 
   log.info("Interface server started", { origin, root });
@@ -152,14 +152,14 @@ export async function startUiServer(
     get origin() {
       return origin;
     },
-    shutdown: () => server.shutdown()
+    shutdown: () => server.shutdown(),
   };
 }
 
 async function serveStatic(
   root: string,
   pathname: string,
-  headOnly: boolean
+  headOnly: boolean,
 ): Promise<Response> {
   let requested: string;
   try {
@@ -212,7 +212,7 @@ async function serveStatic(
     "x-content-type-options": "nosniff",
     "cache-control": filePath.endsWith("index.html")
       ? "no-cache"
-      : "public, max-age=31536000, immutable"
+      : "public, max-age=31536000, immutable",
   });
 
   if (headOnly) return new Response(null, { status: 200, headers });

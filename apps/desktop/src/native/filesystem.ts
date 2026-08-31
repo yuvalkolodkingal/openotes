@@ -23,7 +23,7 @@ import {
   assertInside,
   attachmentsDir,
   ensureDir,
-  sanitizeSegment
+  sanitizeSegment,
 } from "./paths.ts";
 import { logger } from "./logger.ts";
 
@@ -91,7 +91,7 @@ export class FileStorage {
     const file = await Deno.open(tempPath, {
       create: true,
       write: true,
-      truncate: true
+      truncate: true,
     });
     const handle = `w${this.nextHandle++}`;
     this.writes.set(handle, { file, tempPath, finalPath, written: 0 });
@@ -152,7 +152,7 @@ export class FileStorage {
   }
 
   async readStream(
-    hash: string
+    hash: string,
   ): Promise<ReadableStream<Uint8Array> | undefined> {
     try {
       const file = await Deno.open(this.pathFor(hash), { read: true });
@@ -164,7 +164,7 @@ export class FileStorage {
 
   async writeStream(
     hash: string,
-    stream: ReadableStream<Uint8Array>
+    stream: ReadableStream<Uint8Array>,
   ): Promise<void> {
     const handle = await this.beginWrite(hash);
     try {
@@ -199,7 +199,9 @@ export class FileStorage {
         for await (const second of Deno.readDir(join(this.root, first.name))) {
           if (!second.isDirectory) continue;
           for await (
-            const entry of Deno.readDir(join(this.root, first.name, second.name))
+            const entry of Deno.readDir(
+              join(this.root, first.name, second.name),
+            )
           ) {
             if (entry.isFile && !entry.name.endsWith(".part")) {
               hashes.push(entry.name);
@@ -239,7 +241,9 @@ export class FileStorage {
       }
     };
     await walk(this.root);
-    if (removed > 0) log.info("Removed interrupted attachment writes", { removed });
+    if (removed > 0) {
+      log.info("Removed interrupted attachment writes", { removed });
+    }
     return removed;
   }
 
@@ -273,13 +277,13 @@ export class ExportWriter {
     const resolved = assertInside(
       filePath,
       this.allowedRoots.length > 0 ? this.allowedRoots : [appDataDir()],
-      "export path"
+      "export path",
     );
     await ensureDir(dirOf(resolved));
     const file = await Deno.open(resolved, {
       create: true,
       write: true,
-      truncate: true
+      truncate: true,
     });
     const handle = `x${this.nextHandle++}`;
     this.writes.set(handle, { file, path: resolved });

@@ -26,7 +26,7 @@ import { MemoryAttachments, MemorySyncStore } from "./memory-store.ts";
 
 async function withServer(
   fn: (server: FakeWebDavServer) => Promise<void>,
-  options: ConstructorParameters<typeof FakeWebDavServer>[0] = {}
+  options: ConstructorParameters<typeof FakeWebDavServer>[0] = {},
 ) {
   const server = new FakeWebDavServer(options);
   await server.start();
@@ -71,7 +71,7 @@ Deno.test("connecting with the wrong passphrase refuses before writing", async (
     const intruder = await createDevice({
       id: "DEVICEC",
       baseUrl: server.url,
-      passphrase: "not the passphrase"
+      passphrase: "not the passphrase",
     });
     const error = await assertRejects(() => intruder.engine.connect());
     assert(error instanceof SyncError);
@@ -87,9 +87,14 @@ Deno.test("a newer protocol version blocks unsafe writes", async () => {
     const a = await createDevice({ id: "DEVICEA", baseUrl: server.url });
     await a.engine.connect();
 
-    const raw = JSON.parse(new TextDecoder().decode(server.getFile("/protocol.json")!));
+    const raw = JSON.parse(
+      new TextDecoder().decode(server.getFile("/protocol.json")!),
+    );
     raw.version = 99;
-    server.setFile("/protocol.json", new TextEncoder().encode(JSON.stringify(raw)));
+    server.setFile(
+      "/protocol.json",
+      new TextEncoder().encode(JSON.stringify(raw)),
+    );
 
     const b = await createDevice({ id: "DEVICEB", baseUrl: server.url });
     const error = await assertRejects(() => b.engine.connect());
@@ -103,7 +108,9 @@ Deno.test("a foreign directory is not overwritten", async () => {
   await withServer(async (server) => {
     server.setFile(
       "/protocol.json",
-      new TextEncoder().encode(JSON.stringify({ protocol: "other-app", version: 1 }))
+      new TextEncoder().encode(
+        JSON.stringify({ protocol: "other-app", version: 1 }),
+      ),
     );
     const a = await createDevice({ id: "DEVICEA", baseUrl: server.url });
     const error = await assertRejects(() => a.engine.connect());
@@ -115,14 +122,19 @@ Deno.test("a foreign directory is not overwritten", async () => {
 Deno.test("note content and titles never appear in remote filenames or bodies", async () => {
   await withServer(async (server) => {
     const a = await createDevice({ id: "DEVICEA", baseUrl: server.url });
-    a.store.put({ id: "n1", type: "note", title: "Nuclear Codes", content: "1234" });
+    a.store.put({
+      id: "n1",
+      type: "note",
+      title: "Nuclear Codes",
+      content: "1234",
+    });
     await a.engine.sync();
 
     for (const path of server.listPaths()) {
       assert(!path.includes("Nuclear"), `filename leaked: ${path}`);
       assert(!path.includes("1234"), `filename leaked: ${path}`);
       const body = new TextDecoder("utf-8", { fatal: false }).decode(
-        server.getFile(path)!
+        server.getFile(path)!,
       );
       assert(!body.includes("Nuclear Codes"), `content leaked in ${path}`);
       assert(!body.includes("battery staple"), `passphrase leaked in ${path}`);
@@ -156,8 +168,18 @@ Deno.test("full multi-device scenario (spec §50)", async () => {
     assertEquals(b.store.get("note", "alpha")?.content, "v2");
 
     // ---- Both edit Alpha differently while offline, then reconnect ----
-    a.store.put({ id: "alpha", type: "note", title: "Alpha", content: "from-A" });
-    b.store.put({ id: "alpha", type: "note", title: "Alpha", content: "from-B" });
+    a.store.put({
+      id: "alpha",
+      type: "note",
+      title: "Alpha",
+      content: "from-A",
+    });
+    b.store.put({
+      id: "alpha",
+      type: "note",
+      title: "Alpha",
+      content: "from-B",
+    });
     await a.engine.sync();
     await b.engine.sync(); // B pulls A's edit while holding its own
 
@@ -207,7 +229,7 @@ Deno.test("a stale device cannot resurrect a deleted note", async () => {
       type: "note",
       title: "Doomed",
       content: "x",
-      revision: 1
+      revision: 1,
     });
     await stale.engine.sync();
     await a.engine.sync();
@@ -215,7 +237,7 @@ Deno.test("a stale device cannot resurrect a deleted note", async () => {
     assertEquals(
       a.store.get("note", "n1"),
       undefined,
-      "a stale copy resurrected a deleted note"
+      "a stale copy resurrected a deleted note",
     );
   });
 });
@@ -256,7 +278,7 @@ Deno.test("a corrupt change record is skipped without wedging the sync", async (
     // Corrupt the first batch on the server.
     server.setFile(
       "/devices/DEVICEA/changes/0000000001.bin",
-      new TextEncoder().encode("{not json")
+      new TextEncoder().encode("{not json"),
     );
 
     const b = await createDevice({ id: "DEVICEB", baseUrl: server.url });
@@ -270,12 +292,21 @@ Deno.test("a corrupt change record is skipped without wedging the sync", async (
 
 Deno.test("records are only marked synced after the remote write verifies", async () => {
   await withServer(async (server) => {
-    const a = await createDevice({ id: "DEVICEA", baseUrl: server.url, maxRetries: 0 });
+    const a = await createDevice({
+      id: "DEVICEA",
+      baseUrl: server.url,
+      maxRetries: 0,
+    });
     await a.engine.connect();
     a.store.put({ id: "n1", type: "note", title: "Pending", content: "x" });
 
     // The PUT of the change batch fails outright.
-    server.injectFault({ status: 500, method: "PUT", pathIncludes: "changes", times: 10 });
+    server.injectFault({
+      status: 500,
+      method: "PUT",
+      pathIncludes: "changes",
+      times: 10,
+    });
     await assertRejects(() => a.engine.sync());
 
     // The record must still be queued, and nothing marked as synced.
@@ -302,11 +333,16 @@ Deno.test("queued changes survive a restart", async () => {
       baseUrl: server.url,
       store,
       queueStorage: storage,
-      maxRetries: 0
+      maxRetries: 0,
     });
     await first.engine.connect();
     store.put({ id: "n1", type: "note", title: "Survives", content: "x" });
-    server.injectFault({ status: 503, method: "PUT", pathIncludes: "changes", times: 10 });
+    server.injectFault({
+      status: 503,
+      method: "PUT",
+      pathIncludes: "changes",
+      times: 10,
+    });
     await assertRejects(() => first.engine.sync());
     await first.queue.flush();
 
@@ -316,7 +352,7 @@ Deno.test("queued changes survive a restart", async () => {
       id: "DEVICEA",
       baseUrl: server.url,
       store,
-      queueStorage: storage
+      queueStorage: storage,
     });
     assertEquals((await restarted.queue.peek()).length, 1);
     await restarted.engine.sync();
@@ -377,9 +413,12 @@ Deno.test("attachments sync end to end, encrypted and deduplicated", async () =>
     const c = await createDevice({ id: "DEVICEC", baseUrl: server.url });
     c.attachments.add(hash, content);
     await c.queue.enqueueAttachment(hash);
-    const before = server.listPaths().filter((p) => p.startsWith("/attachments/")).length;
+    const before = server.listPaths().filter((p) =>
+      p.startsWith("/attachments/")
+    ).length;
     await c.engine.sync();
-    const after = server.listPaths().filter((p) => p.startsWith("/attachments/")).length;
+    const after =
+      server.listPaths().filter((p) => p.startsWith("/attachments/")).length;
     assertEquals(after, before);
   });
 });
@@ -418,7 +457,7 @@ Deno.test("attachment sync can be turned off", async () => {
       id: "DEVICEA",
       baseUrl: server.url,
       syncAttachments: false,
-      attachments: new MemoryAttachments()
+      attachments: new MemoryAttachments(),
     });
     a.attachments.add("h1", testBytes(1000));
     await a.queue.enqueueAttachment("h1");
@@ -427,7 +466,7 @@ Deno.test("attachment sync can be turned off", async () => {
     assertEquals(result.attachmentsUploaded, 0);
     assertEquals(
       server.listPaths().filter((p) => p.startsWith("/attachments/")).length,
-      0
+      0,
     );
     // The metadata record still syncs so other devices know it exists.
     assertEquals(result.uploaded, 1);
@@ -449,7 +488,7 @@ Deno.test("rebuilding the remote keeps the old data until the new one verifies",
         operation: "upsert" as const,
         revision: item.revision,
         timestamp: item.dateModified,
-        item
+        item,
       }))
     );
 

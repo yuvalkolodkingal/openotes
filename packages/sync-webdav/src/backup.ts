@@ -85,13 +85,16 @@ export interface BackupPolicy {
 /** `2026-08-31T120000Z.backup.enc` */
 export function backupFileName(timestamp: number): string {
   // 2026-08-31T12:00:00.000Z -> 2026-08-31T120000Z.backup.enc
-  const stamp = new Date(timestamp).toISOString().slice(0, 19).replace(/:/g, "");
+  const stamp = new Date(timestamp).toISOString().slice(0, 19).replace(
+    /:/g,
+    "",
+  );
   return `${stamp}Z.backup.enc`;
 }
 
 export function parseBackupFileName(name: string): number | undefined {
-  const match =
-    /^(\d{4})-(\d{2})-(\d{2})T(\d{2})(\d{2})(\d{2})Z\.backup\.enc$/.exec(name);
+  const match = /^(\d{4})-(\d{2})-(\d{2})T(\d{2})(\d{2})(\d{2})Z\.backup\.enc$/
+    .exec(name);
   if (!match) return undefined;
   const [, y, mo, d, h, mi, s] = match;
   const time = Date.UTC(+y, +mo - 1, +d, +h, +mi, +s);
@@ -112,24 +115,24 @@ export class BackupEngine {
       appName: string;
       appVersion: string;
       deviceId: string;
-    }
+    },
   ) {}
 
   /** Build an encrypted backup blob from a logical snapshot. */
   async create(
     backupKey: SerializedKey,
-    snapshot: BackupSnapshot
+    snapshot: BackupSnapshot,
   ): Promise<{ name: string; data: Uint8Array; manifest: BackupManifest }> {
     const payload = {
       data: snapshot.data,
       attachments: snapshot.attachments
         ? Object.fromEntries(
-            [...snapshot.attachments].map(([hash, bytes]) => [
-              hash,
-              base64Encode(bytes)
-            ])
-          )
-        : undefined
+          [...snapshot.attachments].map(([hash, bytes]) => [
+            hash,
+            base64Encode(bytes),
+          ]),
+        )
+        : undefined,
     };
     const plaintext = new TextEncoder().encode(JSON.stringify(payload));
     const createdAt = Date.now();
@@ -143,16 +146,16 @@ export class BackupEngine {
       contentLength: plaintext.length,
       counts: snapshot.counts,
       attachments: snapshot.attachments?.size ?? 0,
-      encrypted: true
+      encrypted: true,
     };
     const file: BackupFile = {
       manifest,
-      payload: await this.crypto.encryptBytes(backupKey, plaintext)
+      payload: await this.crypto.encryptBytes(backupKey, plaintext),
     };
     return {
       name: backupFileName(createdAt),
       data: new TextEncoder().encode(JSON.stringify(file)),
-      manifest
+      manifest,
     };
   }
 
@@ -162,7 +165,7 @@ export class BackupEngine {
    */
   async open(
     backupKey: SerializedKey,
-    data: Uint8Array
+    data: Uint8Array,
   ): Promise<{ manifest: BackupManifest; snapshot: BackupSnapshot }> {
     let file: BackupFile;
     try {
@@ -173,14 +176,14 @@ export class BackupEngine {
     if (!file.manifest || !file.payload) {
       throw new SyncError(
         "Backup file is missing its manifest or payload",
-        "corrupt-data"
+        "corrupt-data",
       );
     }
     if (file.manifest.format > BACKUP_FORMAT_VERSION) {
       throw new SyncError(
         `Backup uses format version ${file.manifest.format}, which this ` +
           `version of the app cannot read.`,
-        "protocol-mismatch"
+        "protocol-mismatch",
       );
     }
     const plaintext = await this.crypto.decryptBytes(backupKey, file.payload);
@@ -189,23 +192,23 @@ export class BackupEngine {
       throw new SyncError(
         "Backup integrity check failed: content hash mismatch. The file is " +
           "corrupt and was not restored.",
-        "corrupt-data"
+        "corrupt-data",
       );
     }
     if (plaintext.length !== file.manifest.contentLength) {
       throw new SyncError(
         "Backup integrity check failed: unexpected payload length",
-        "corrupt-data"
+        "corrupt-data",
       );
     }
 
     const parsed = JSON.parse(new TextDecoder().decode(plaintext));
     const attachments = parsed.attachments
       ? new Map<string, Uint8Array>(
-          Object.entries(parsed.attachments as Record<string, string>).map(
-            ([hash, b64]) => [hash, base64Decode(b64)]
-          )
-        )
+        Object.entries(parsed.attachments as Record<string, string>).map(
+          ([hash, b64]) => [hash, base64Decode(b64)],
+        ),
+      )
       : undefined;
 
     return {
@@ -213,19 +216,19 @@ export class BackupEngine {
       snapshot: {
         data: parsed.data,
         counts: file.manifest.counts,
-        attachments
-      }
+        attachments,
+      },
     };
   }
 
   /** Apply the retention policy, oldest first. Returns deleted names. */
   async applyRetention(
     target: BackupTarget,
-    retention: number
+    retention: number,
   ): Promise<string[]> {
     if (retention <= 0) return [];
     const entries = (await target.list()).sort(
-      (a, b) => a.createdAt - b.createdAt
+      (a, b) => a.createdAt - b.createdAt,
     );
     const excess = entries.length - retention;
     if (excess <= 0) return [];
@@ -241,17 +244,16 @@ export class BackupEngine {
   static isDue(
     policy: BackupPolicy,
     lastBackupAt: number | undefined,
-    now = Date.now()
+    now = Date.now(),
   ): boolean {
     if (policy.interval === "manual") return false;
     if (!lastBackupAt) return true;
     const day = 24 * 60 * 60 * 1000;
-    const period =
-      policy.interval === "daily"
-        ? day
-        : policy.interval === "weekly"
-        ? 7 * day
-        : 30 * day;
+    const period = policy.interval === "daily"
+      ? day
+      : policy.interval === "weekly"
+      ? 7 * day
+      : 30 * day;
     return now - lastBackupAt >= period;
   }
 }
@@ -271,7 +273,7 @@ export function assertSafeBackupName(name: string): string {
   ) {
     throw new SyncError(
       `Unsafe backup file name: ${JSON.stringify(name)}`,
-      "corrupt-data"
+      "corrupt-data",
     );
   }
   return name;
@@ -281,7 +283,7 @@ export function assertSafeBackupName(name: string): string {
 export class WebDavBackupTarget implements BackupTarget {
   constructor(
     private readonly client: WebDavClient,
-    private readonly directory: string = PATHS.backups
+    private readonly directory: string = PATHS.backups,
   ) {}
 
   private path(name: string) {
@@ -331,7 +333,7 @@ export interface FileSystemAdapter {
 export class LocalBackupTarget implements BackupTarget {
   constructor(
     private readonly fs: FileSystemAdapter,
-    private readonly directory: string
+    private readonly directory: string,
   ) {}
 
   private path(name: string) {
@@ -361,7 +363,7 @@ export class LocalBackupTarget implements BackupTarget {
     if (written.length !== data.length) {
       throw new SyncError(
         "Local backup verification failed: written size mismatch",
-        "corrupt-data"
+        "corrupt-data",
       );
     }
   }

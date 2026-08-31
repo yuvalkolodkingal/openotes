@@ -165,7 +165,7 @@ export const PROCEDURE_NAMES = [
   "capabilities.get",
 
   // --- lifecycle ---
-  "bridge.ready"
+  "bridge.ready",
 ] as const;
 
 export type ProcedureName = (typeof PROCEDURE_NAMES)[number];
@@ -190,7 +190,7 @@ export const EVENT_NAMES = [
   "updater.error",
   "webdav.status",
   "webdav.conflict",
-  "backup.completed"
+  "backup.completed",
 ] as const;
 
 export type EventName = (typeof EVENT_NAMES)[number];

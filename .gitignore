@@ -20,3 +20,4 @@ apps/desktop/dist/
 packaging/flatpak/*.tar.gz
 apps/desktop/.build/
 apps/desktop/ui/
+dist/

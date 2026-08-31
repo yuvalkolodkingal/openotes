@@ -56,7 +56,7 @@ export type KvNamespace = "keys" | "settings";
 
 const FILES: Record<KvNamespace, string> = {
   keys: "keystore.json",
-  settings: "renderer-settings.json"
+  settings: "renderer-settings.json",
 };
 
 /** Rejects keys that could escape the namespace or bloat the file. */
@@ -74,7 +74,7 @@ function assertValidNamespace(value: unknown): KvNamespace {
   if (value === "keys" || value === "settings") return value;
   throw new Error(
     `Unknown storage namespace: ${JSON.stringify(value)}. ` +
-      `Expected "keys" or "settings".`
+      `Expected "keys" or "settings".`,
   );
 }
 
@@ -110,7 +110,7 @@ export class KeyValueStore {
         log.error("Storage file unreadable; keeping a copy for recovery", {
           namespace,
           backup,
-          error: error instanceof Error ? error.message : String(error)
+          error: error instanceof Error ? error.message : String(error),
         });
         try {
           await Deno.rename(this.path(namespace), backup);
@@ -141,7 +141,7 @@ export class KeyValueStore {
       .catch((error) => {
         log.error("Could not persist renderer storage", {
           namespace,
-          error: error instanceof Error ? error.message : String(error)
+          error: error instanceof Error ? error.message : String(error),
         });
       });
     return this.writeChain;
@@ -162,7 +162,7 @@ export class KeyValueStore {
     }
     if (value.length > MAX_VALUE_BYTES) {
       throw new Error(
-        `Value for "${name}" is too large (${value.length} bytes, max ${MAX_VALUE_BYTES})`
+        `Value for "${name}" is too large (${value.length} bytes, max ${MAX_VALUE_BYTES})`,
       );
     }
     const record = await this.load(space);
@@ -194,7 +194,7 @@ export class KeyValueStore {
     const space = assertValidNamespace(namespace);
     if (space === "keys") {
       throw new Error(
-        "Key material cannot be read in bulk; request keys individually"
+        "Key material cannot be read in bulk; request keys individually",
       );
     }
     return { ...(await this.load(space)) };

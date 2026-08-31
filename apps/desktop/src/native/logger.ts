@@ -35,7 +35,7 @@ const LEVEL_ORDER: Record<LogLevel, number> = {
   warn: 1,
   info: 2,
   debug: 3,
-  trace: 4
+  trace: 4,
 };
 
 /** Context keys whose values are always replaced with "[redacted]". */
@@ -65,7 +65,7 @@ const REDACTED_KEYS = new Set([
   "title",
   "note",
   "credentials",
-  "basic"
+  "basic",
 ]);
 
 const MAX_VALUE_LENGTH = 512;
@@ -107,7 +107,7 @@ export function redactValue(key: string, value: unknown, depth = 0): unknown {
     // Anything that looks like a bearer/basic credential goes, wherever it is.
     const withoutAuth = scrubbed.replace(
       /\b(Basic|Bearer)\s+[A-Za-z0-9._~+/=-]+/gi,
-      "$1 [redacted]"
+      "$1 [redacted]",
     );
     return withoutAuth.length > MAX_VALUE_LENGTH
       ? withoutAuth.slice(0, MAX_VALUE_LENGTH) + "…"
@@ -119,7 +119,7 @@ export function redactValue(key: string, value: unknown, depth = 0): unknown {
   if (value instanceof Error) {
     return {
       name: value.name,
-      message: redactValue("message", value.message, depth + 1)
+      message: redactValue("message", value.message, depth + 1),
     };
   }
   if (depth >= 3) return "[nested]";
@@ -144,7 +144,7 @@ export class Logger {
   private readonly encoder = new TextEncoder();
 
   constructor(
-    options: { level?: LogLevel; directory?: string; toFile?: boolean } = {}
+    options: { level?: LogLevel; directory?: string; toFile?: boolean } = {},
   ) {
     this.level = options.level ?? "info";
     this.directory = options.directory ?? logDir();
@@ -173,7 +173,7 @@ export class Logger {
       this.file = Deno.openSync(path, {
         create: true,
         append: true,
-        write: true
+        write: true,
       });
     } catch (error) {
       // Logging must never prevent the app from starting.
@@ -225,7 +225,7 @@ export class Logger {
     level: LogLevel,
     scope: string,
     message: string,
-    context?: Record<string, unknown>
+    context?: Record<string, unknown>,
   ): void {
     if (LEVEL_ORDER[level] > LEVEL_ORDER[this.level]) return;
     this.write({
@@ -235,7 +235,7 @@ export class Logger {
       message,
       context: context
         ? (redactValue("", context) as Record<string, unknown>)
-        : undefined
+        : undefined,
     });
   }
 
@@ -250,7 +250,7 @@ export class Logger {
       debug: (message: string, context?: Record<string, unknown>) =>
         this.log("debug", name, message, context),
       trace: (message: string, context?: Record<string, unknown>) =>
-        this.log("trace", name, message, context)
+        this.log("trace", name, message, context),
     };
   }
 
@@ -278,10 +278,9 @@ const envLevel = Deno.env.get("OPENOTES_LOG_LEVEL") as LogLevel | undefined;
 
 /** Production default is `info` (spec §29). */
 export const logger = new Logger({
-  level:
-    envLevel && envLevel in LEVEL_ORDER
-      ? envLevel
-      : Deno.env.get("OPENOTES_DEV") === "1"
-      ? "debug"
-      : "info"
+  level: envLevel && envLevel in LEVEL_ORDER
+    ? envLevel
+    : Deno.env.get("OPENOTES_DEV") === "1"
+    ? "debug"
+    : "info",
 });

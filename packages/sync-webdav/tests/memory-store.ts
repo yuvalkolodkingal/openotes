@@ -21,13 +21,13 @@ import {
   ApplyResult,
   CursorMap,
   SyncDataStore,
-  SyncRecord
+  SyncRecord,
 } from "../src/types.ts";
 import {
   conflictTitle,
   contentHashOf,
   LocalItemState,
-  resolveConflict
+  resolveConflict,
 } from "../src/conflicts.ts";
 import { AttachmentSource } from "../src/engine.ts";
 
@@ -60,7 +60,7 @@ export class MemorySyncStore implements SyncDataStore {
 
   constructor(
     readonly deviceId: string,
-    readonly deviceName = deviceId
+    readonly deviceName = deviceId,
   ) {}
 
   getDeviceId(): Promise<string> {
@@ -69,16 +69,18 @@ export class MemorySyncStore implements SyncDataStore {
 
   // ---- local mutation helpers (what the UI would call) ----
 
-  put(item: Omit<TestItem, "revision" | "dateModified"> & {
-    revision?: number;
-    dateModified?: number;
-  }): TestItem {
+  put(
+    item: Omit<TestItem, "revision" | "dateModified"> & {
+      revision?: number;
+      dateModified?: number;
+    },
+  ): TestItem {
     const key = itemKey(item.type, item.id);
     const existing = this.items.get(key);
     const stored: TestItem = {
       ...item,
       revision: item.revision ?? (existing ? existing.revision + 1 : 1),
-      dateModified: item.dateModified ?? Date.now()
+      dateModified: item.dateModified ?? Date.now(),
     };
     this.items.set(key, stored);
     this.dirty.add(key);
@@ -101,7 +103,7 @@ export class MemorySyncStore implements SyncDataStore {
   snapshot(): { items: TestItem[]; tombstones: [string, number][] } {
     return {
       items: [...this.items.values()],
-      tombstones: [...this.tombstones.entries()]
+      tombstones: [...this.tombstones.entries()],
     };
   }
 
@@ -133,7 +135,7 @@ export class MemorySyncStore implements SyncDataStore {
           operation: "upsert",
           revision: item.revision,
           timestamp: item.dateModified,
-          item
+          item,
         });
       } else {
         records.push({
@@ -142,7 +144,7 @@ export class MemorySyncStore implements SyncDataStore {
           operation: "delete",
           revision: this.tombstones.get(key) ?? 1,
           timestamp: Date.now(),
-          item: { id: entityId, type: entityType, deleted: true }
+          item: { id: entityId, type: entityType, deleted: true },
         });
       }
     }
@@ -168,12 +170,12 @@ export class MemorySyncStore implements SyncDataStore {
     const state: LocalItemState | undefined =
       local || tombstoneRevision !== undefined
         ? {
-            revision: local?.revision ?? tombstoneRevision ?? 0,
-            dateModified: local?.dateModified ?? 0,
-            dirty: this.dirty.has(key),
-            deleted: !local && tombstoneRevision !== undefined,
-            contentHash: local ? contentHashOf(local) : undefined
-          }
+          revision: local?.revision ?? tombstoneRevision ?? 0,
+          dateModified: local?.dateModified ?? 0,
+          dirty: this.dirty.has(key),
+          deleted: !local && tombstoneRevision !== undefined,
+          contentHash: local ? contentHashOf(local) : undefined,
+        }
         : undefined;
 
     const decision = resolveConflict(record, state);
@@ -205,10 +207,10 @@ export class MemorySyncStore implements SyncDataStore {
             title: conflictTitle(
               local.title ?? local.id,
               this.deviceName,
-              Date.now()
+              Date.now(),
             ),
             conflictOf: local.id,
-            revision: 1
+            revision: 1,
           };
           this.items.set(itemKey(copy.type, copy.id), copy);
           this.conflicts.push(copy);
@@ -279,8 +281,8 @@ export class MemoryAttachments implements AttachmentSource {
             controller.enqueue(data.subarray(offset, offset + size));
           }
           controller.close();
-        }
-      })
+        },
+      }),
     );
   }
 

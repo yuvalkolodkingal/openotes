@@ -113,7 +113,7 @@ export function defaultSettings(): AppSettings {
       // The custom titlebar relies on Chromium-only
       // windowControlsOverlay/env(titlebar-area-*), which WebKitGTK does
       // not implement. A native titlebar is the portable default.
-      nativeTitlebar: true
+      nativeTitlebar: true,
     },
     webdav: {
       enabled: false,
@@ -129,7 +129,7 @@ export function defaultSettings(): AppSettings {
       timeoutSeconds: 30,
       maxRetries: 3,
       allowInsecureHttp: false,
-      storeCredentialsWithMachineKey: false
+      storeCredentialsWithMachineKey: false,
     },
     backup: {
       localEnabled: true,
@@ -139,13 +139,13 @@ export function defaultSettings(): AppSettings {
       interval: "weekly",
       retention: 10,
       backupBeforeRestore: true,
-      backupBeforeMaintenance: true
+      backupBeforeMaintenance: true,
     },
     zoomFactor: 1,
     theme: "system",
     privacyMode: false,
     automaticUpdates: true,
-    sync: { cursors: {}, localSequence: 0, meta: {} }
+    sync: { cursors: {}, localSequence: 0, meta: {} },
   };
 }
 
@@ -170,7 +170,7 @@ export class SettingsStore {
         // A corrupt settings file must not stop the app from opening the
         // user's notes. Keep the broken file for inspection.
         log.error("Settings file unreadable; falling back to defaults", {
-          error: error instanceof Error ? error.message : String(error)
+          error: error instanceof Error ? error.message : String(error),
         });
         try {
           await Deno.rename(path, `${path}.corrupt-${Date.now()}`);
@@ -192,7 +192,7 @@ export class SettingsStore {
 
   async set<K extends keyof AppSettings>(
     key: K,
-    value: AppSettings[K]
+    value: AppSettings[K],
   ): Promise<void> {
     this.state = { ...this.state, [key]: value };
     await this.persist();
@@ -206,7 +206,7 @@ export class SettingsStore {
   async patchWebDav(partial: Partial<WebDavSettings>): Promise<void> {
     this.state = {
       ...this.state,
-      webdav: { ...this.state.webdav, ...partial }
+      webdav: { ...this.state.webdav, ...partial },
     };
     await this.persist();
   }
@@ -214,7 +214,7 @@ export class SettingsStore {
   async patchBackup(partial: Partial<BackupSettings>): Promise<void> {
     this.state = {
       ...this.state,
-      backup: { ...this.state.backup, ...partial }
+      backup: { ...this.state.backup, ...partial },
     };
     await this.persist();
   }
@@ -235,7 +235,7 @@ export class SettingsStore {
       })
       .catch((error) => {
         log.error("Could not persist settings", {
-          error: error instanceof Error ? error.message : String(error)
+          error: error instanceof Error ? error.message : String(error),
         });
       });
     return this.writeChain;
@@ -249,7 +249,7 @@ export class SettingsStore {
 /** Deep-merge that keeps unknown keys out and never drops defaults. */
 function mergeSettings(
   base: AppSettings,
-  incoming: Partial<AppSettings> | Record<string, unknown>
+  incoming: Partial<AppSettings> | Record<string, unknown>,
 ): AppSettings {
   const source = incoming as Record<string, unknown>;
   const merged: AppSettings = { ...base };
@@ -267,7 +267,7 @@ function mergeSettings(
     ) {
       (merged[key] as unknown) = {
         ...(current as Record<string, unknown>),
-        ...(value as Record<string, unknown>)
+        ...(value as Record<string, unknown>),
       };
     } else if (typeof current === typeof value) {
       (merged[key] as unknown) = value;

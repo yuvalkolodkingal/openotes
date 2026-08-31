@@ -34,7 +34,12 @@ import { FetchTransport, toBasicAuth } from "../../src/http.ts";
 import { SyncError } from "../../src/types.ts";
 import { SyncCrypto } from "../../src/crypto.ts";
 import { BackupEngine, WebDavBackupTarget } from "../../src/backup.ts";
-import { createDevice, bytesEqual, masterKeyFor, testBytes } from "../harness.ts";
+import {
+  bytesEqual,
+  createDevice,
+  masterKeyFor,
+  testBytes,
+} from "../harness.ts";
 import { MemorySyncStore, type TestItem } from "../memory-store.ts";
 
 const BASE_URL = Deno.env.get("WEBDAV_INTEGRATION_URL");
@@ -44,7 +49,7 @@ const PASSWORD = Deno.env.get("WEBDAV_INTEGRATION_PASSWORD") || undefined;
 if (!BASE_URL) {
   throw new Error(
     "WEBDAV_INTEGRATION_URL is not set. Run these through " +
-      "`deno task test:webdav`, which starts a real WebDAV server first."
+      "`deno task test:webdav`, which starts a real WebDAV server first.",
   );
 }
 
@@ -58,10 +63,10 @@ function transport() {
   return new FetchTransport(
     USERNAME
       ? {
-          getBasicAuth: () =>
-            Promise.resolve(toBasicAuth(USERNAME, PASSWORD ?? ""))
-        }
-      : undefined
+        getBasicAuth: () =>
+          Promise.resolve(toBasicAuth(USERNAME, PASSWORD ?? "")),
+      }
+      : undefined,
   );
 }
 
@@ -70,19 +75,19 @@ function clientFor(directory: string) {
     baseUrl: new URL(directory + "/", BASE_URL).toString(),
     allowInsecureHttp: true,
     maxRetries: 1,
-    requestTimeout: 20_000
+    requestTimeout: 20_000,
   });
 }
 
 async function withDirectory(
   name: string,
-  fn: (directory: string, client: WebDavClient) => Promise<void>
+  fn: (directory: string, client: WebDavClient) => Promise<void>,
 ) {
   const directory = uniqueDirectory(name);
   const root = new WebDavClient(transport(), {
     baseUrl: BASE_URL!,
     allowInsecureHttp: true,
-    requestTimeout: 20_000
+    requestTimeout: 20_000,
   });
   await root.mkcolRecursive(directory + "/");
   const client = clientFor(directory);
@@ -100,7 +105,7 @@ function deviceOptions(directory: string, id: string) {
     username: USERNAME,
     password: PASSWORD,
     requestTimeout: 20_000,
-    maxRetries: 1
+    maxRetries: 1,
   };
 }
 
@@ -109,7 +114,7 @@ Deno.test("real server: the WebDAV verb surface behaves as expected", async () =
     const options = await client.options();
     assert(
       options.dav.length > 0 || options.allow.length > 0,
-      "the server advertised neither a DAV nor an Allow header"
+      "the server advertised neither a DAV nor an Allow header",
     );
 
     await client.mkcolRecursive("a/b/c/");
@@ -123,7 +128,7 @@ Deno.test("real server: the WebDAV verb surface behaves as expected", async () =
 
     assertEquals(
       new TextDecoder().decode(await client.get("a/b/c/file.bin")),
-      "integration payload"
+      "integration payload",
     );
 
     const head = await client.head("a/b/c/file.bin");
@@ -138,12 +143,12 @@ Deno.test("real server: the WebDAV verb surface behaves as expected", async () =
     await client.move("a/b/c/file.bin", "a/b/c/moved.bin");
     assertEquals(
       new TextDecoder().decode(await client.get("a/b/c/moved.bin")),
-      "integration payload"
+      "integration payload",
     );
     assertEquals((await client.head("a/b/c/file.bin")).exists, false);
 
     await client.delete("a/b/c/moved.bin");
-    assertEquals((await client.exists("a/b/c/moved.bin")), false);
+    assertEquals(await client.exists("a/b/c/moved.bin"), false);
   });
 });
 
@@ -165,9 +170,9 @@ Deno.test("real server: bad credentials are rejected", async () => {
   const client = new WebDavClient(
     new FetchTransport({
       getBasicAuth: () =>
-        Promise.resolve(toBasicAuth(USERNAME, "definitely-not-the-password"))
+        Promise.resolve(toBasicAuth(USERNAME, "definitely-not-the-password")),
     }),
-    { baseUrl: BASE_URL!, allowInsecureHttp: true, maxRetries: 0 }
+    { baseUrl: BASE_URL!, allowInsecureHttp: true, maxRetries: 0 },
   );
   const error = await assertRejects(() => client.propfind("", 0));
   assert(error instanceof SyncError);
@@ -188,7 +193,7 @@ Deno.test("real server: conditional PUT is honoured or safely emulated", async (
       assertEquals(error.code, "precondition-failed");
       assertEquals(
         new TextDecoder().decode(await client.get("once.bin")),
-        "first"
+        "first",
       );
     }
   });
@@ -205,7 +210,12 @@ Deno.test("real server: full two-device sync scenario (spec §50)", async () => 
     assertEquals(b.store.get("note", "alpha")?.content, "v1");
 
     // Concurrent edits on both sides.
-    a.store.put({ id: "alpha", type: "note", title: "Alpha", content: "from-A" });
+    a.store.put({
+      id: "alpha",
+      type: "note",
+      title: "Alpha",
+      content: "from-A",
+    });
     b.store.put({ id: "beta", type: "note", title: "Beta", content: "b1" });
     await a.engine.sync();
     await b.engine.sync();
@@ -214,8 +224,18 @@ Deno.test("real server: full two-device sync scenario (spec §50)", async () => 
     assertEquals(b.store.get("note", "alpha")?.content, "from-A");
 
     // Divergent offline edits: neither may be lost.
-    a.store.put({ id: "alpha", type: "note", title: "Alpha", content: "A-again" });
-    b.store.put({ id: "alpha", type: "note", title: "Alpha", content: "B-again" });
+    a.store.put({
+      id: "alpha",
+      type: "note",
+      title: "Alpha",
+      content: "A-again",
+    });
+    b.store.put({
+      id: "alpha",
+      type: "note",
+      title: "Alpha",
+      content: "B-again",
+    });
     await a.engine.sync();
     await b.engine.sync();
 
@@ -241,7 +261,7 @@ Deno.test("real server: attachments round-trip encrypted", async () => {
       id: "att1",
       type: "attachment",
       hash: "bigattachment",
-      title: "big.bin"
+      title: "big.bin",
     });
     const pushed = await a.engine.sync();
     assertEquals(pushed.attachmentsUploaded, 1);
@@ -252,7 +272,10 @@ Deno.test("real server: attachments round-trip encrypted", async () => {
 
     const received = b.attachments.blobs.get("bigattachment");
     assert(received);
-    assert(bytesEqual(received, content), "attachment content changed in transit");
+    assert(
+      bytesEqual(received, content),
+      "attachment content changed in transit",
+    );
 
     // What the server actually holds must not be the plaintext.
     const raw = await b.client.get("attachments/bigattachment.bin");
@@ -267,7 +290,7 @@ Deno.test("real server: nothing readable is written to the server", async () => 
       id: "secret",
       type: "note",
       title: "Bank details",
-      content: "account 12345678"
+      content: "account 12345678",
     });
     await a.engine.sync();
 
@@ -286,7 +309,7 @@ Deno.test("real server: nothing readable is written to the server", async () => 
     for (const file of files) {
       assert(!file.includes("Bank"), `filename leaked content: ${file}`);
       const body = new TextDecoder("utf-8", { fatal: false }).decode(
-        await client.get(file)
+        await client.get(file),
       );
       assert(!body.includes("Bank details"), `content leaked in ${file}`);
       assert(!body.includes("12345678"), `content leaked in ${file}`);
@@ -302,7 +325,7 @@ Deno.test("real server: backup upload, download and restore", async () => {
     const engine = new BackupEngine(crypto_, {
       appName: "Openotes",
       appVersion: "1.0.0-test",
-      deviceId: "DEVICEA"
+      deviceId: "DEVICEA",
     });
 
     const store = new MemorySyncStore("DEVICEA");
@@ -311,7 +334,7 @@ Deno.test("real server: backup upload, download and restore", async () => {
         id: `n${index}`,
         type: "note",
         title: `Note ${index}`,
-        content: `body ${index}`
+        content: `body ${index}`,
       });
     }
 
@@ -319,7 +342,7 @@ Deno.test("real server: backup upload, download and restore", async () => {
     const { name, data } = await engine.create(key, {
       data: store.snapshot(),
       counts: { note: 10 },
-      attachments: new Map([["att", testBytes(10_000, 5)]])
+      attachments: new Map([["att", testBytes(10_000, 5)]]),
     });
     await target.write(name, data);
 
@@ -330,7 +353,7 @@ Deno.test("real server: backup upload, download and restore", async () => {
     const { snapshot } = await engine.open(key, downloaded);
     const restored = new MemorySyncStore("DEVICEB");
     restored.restore(
-      snapshot.data as { items: TestItem[]; tombstones: [string, number][] }
+      snapshot.data as { items: TestItem[]; tombstones: [string, number][] },
     );
     assertEquals(restored.items.size, 10);
     assertEquals(restored.get("note", "n7")?.content, "body 7");
@@ -370,14 +393,16 @@ Deno.test("real server: an existing journal entry is never overwritten", async (
     a.store.put({ id: "n2", type: "note", title: "Second", content: "2" });
     await a.engine.sync();
 
-    const stillFirst = await client.get("devices/DEVICEA/changes/0000000001.bin");
+    const stillFirst = await client.get(
+      "devices/DEVICEA/changes/0000000001.bin",
+    );
     assert(
       bytesEqual(first, stillFirst),
-      "the first journal entry was overwritten"
+      "the first journal entry was overwritten",
     );
     assert(
       await client.exists("devices/DEVICEA/changes/0000000002.bin"),
-      "the engine did not advance to a free sequence"
+      "the engine did not advance to a free sequence",
     );
 
     const b = await createDevice(deviceOptions(directory, "DEVICEB"));

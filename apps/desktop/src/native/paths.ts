@@ -17,7 +17,7 @@ You should have received a copy of the GNU General Public License
 along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
-import { join, normalize, resolve, isAbsolute } from "@std/path";
+import { isAbsolute, join, normalize, resolve } from "@std/path";
 import { APP_ID, APP_NAME } from "../constants.ts";
 
 /**
@@ -27,8 +27,7 @@ import { APP_ID, APP_NAME } from "../constants.ts";
  */
 
 function homeDir(): string {
-  const home =
-    Deno.env.get("HOME") ??
+  const home = Deno.env.get("HOME") ??
     Deno.env.get("USERPROFILE") ??
     (Deno.build.os === "windows" ? "C:\\Users\\Default" : "/tmp");
   return home;
@@ -45,13 +44,15 @@ export function appDataDir(): string {
 
   switch (Deno.build.os) {
     case "windows": {
-      const appData = Deno.env.get("APPDATA") ?? join(homeDir(), "AppData", "Roaming");
+      const appData = Deno.env.get("APPDATA") ??
+        join(homeDir(), "AppData", "Roaming");
       return join(appData, APP_NAME);
     }
     case "darwin":
       return join(homeDir(), "Library", "Application Support", APP_NAME);
     default: {
-      const xdg = Deno.env.get("XDG_DATA_HOME") ?? join(homeDir(), ".local", "share");
+      const xdg = Deno.env.get("XDG_DATA_HOME") ??
+        join(homeDir(), ".local", "share");
       return join(xdg, APP_ID);
     }
   }
@@ -82,7 +83,12 @@ export function attachmentsDir(): string {
 }
 
 export function databasePath(profile = "default"): string {
-  return join(appDataDir(), "profiles", sanitizeSegment(profile), "notesnook.db");
+  return join(
+    appDataDir(),
+    "profiles",
+    sanitizeSegment(profile),
+    "notesnook.db",
+  );
 }
 
 export function defaultBackupDir(): string {
@@ -117,7 +123,7 @@ export function dirname(path: string): string {
   const normalized = normalize(path);
   const index = Math.max(
     normalized.lastIndexOf("/"),
-    normalized.lastIndexOf("\\")
+    normalized.lastIndexOf("\\"),
   );
   return index <= 0 ? normalized : normalized.slice(0, index);
 }
@@ -146,7 +152,7 @@ export class PathAccessError extends Error {
 export function assertInside(
   candidate: string,
   allowedRoots: string[],
-  what = "path"
+  what = "path",
 ): string {
   if (!candidate || typeof candidate !== "string") {
     throw new PathAccessError(`Invalid ${what}`);
@@ -156,17 +162,21 @@ export function assertInside(
   }
 
   const resolved = realPathIfExists(
-    isAbsolute(candidate) ? resolve(candidate) : resolve(allowedRoots[0], candidate)
+    isAbsolute(candidate)
+      ? resolve(candidate)
+      : resolve(allowedRoots[0], candidate),
   );
 
   for (const root of allowedRoots) {
     const resolvedRoot = realPathIfExists(resolve(root));
-    if (resolved === resolvedRoot || resolved.startsWith(withSep(resolvedRoot))) {
+    if (
+      resolved === resolvedRoot || resolved.startsWith(withSep(resolvedRoot))
+    ) {
       return resolved;
     }
   }
   throw new PathAccessError(
-    `Access denied: ${what} is outside the directories this app may use`
+    `Access denied: ${what} is outside the directories this app may use`,
   );
 }
 

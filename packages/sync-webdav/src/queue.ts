@@ -65,7 +65,7 @@ function emptyState(): QueueState {
     records: [],
     attachments: [],
     downloads: [],
-    failures: 0
+    failures: 0,
   };
 }
 
@@ -89,7 +89,7 @@ export class OutgoingQueue {
             attachments: [...(parsed.attachments ?? [])],
             downloads: [...(parsed.downloads ?? [])],
             failures: parsed.failures ?? 0,
-            lastError: parsed.lastError
+            lastError: parsed.lastError,
           };
         }
       } catch {
@@ -98,7 +98,7 @@ export class OutgoingQueue {
         this.state = {
           ...emptyState(),
           failures: 1,
-          lastError: "queue file corrupt"
+          lastError: "queue file corrupt",
         };
       }
     }
@@ -122,7 +122,7 @@ export class OutgoingQueue {
       const index = this.state.records.findIndex(
         (existing) =>
           existing.entityId === record.entityId &&
-          existing.entityType === record.entityType
+          existing.entityType === record.entityType,
       );
       if (index >= 0) {
         const existing = this.state.records[index];
@@ -189,10 +189,10 @@ export class OutgoingQueue {
   async acknowledge(records: SyncRecord[]): Promise<void> {
     await this.load();
     const acknowledged = new Set(
-      records.map((r) => `${r.entityType}:${r.entityId}:${r.revision}`)
+      records.map((r) => `${r.entityType}:${r.entityId}:${r.revision}`),
     );
     this.state.records = this.state.records.filter(
-      (r) => !acknowledged.has(`${r.entityType}:${r.entityId}:${r.revision}`)
+      (r) => !acknowledged.has(`${r.entityType}:${r.entityId}:${r.revision}`),
     );
     this.state.failures = 0;
     this.state.lastError = undefined;
@@ -245,7 +245,7 @@ export class SyncScheduler {
       debounceMs: number;
       minIntervalMs: number;
       onError?: (error: unknown) => void;
-    }
+    },
   ) {}
 
   /** Schedule a debounced sync after local changes. */

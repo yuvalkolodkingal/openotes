@@ -60,7 +60,7 @@ export type ConflictDecision =
  */
 export function resolveConflict(
   record: SyncRecord,
-  local: LocalItemState | undefined
+  local: LocalItemState | undefined,
 ): ConflictDecision {
   // Item does not exist locally.
   if (!local) {
@@ -77,7 +77,7 @@ export function resolveConflict(
       // Preserve their work rather than honouring the delete blindly.
       return {
         action: "create-conflict-copy",
-        reason: "deleted-remotely-edited-locally"
+        reason: "deleted-remotely-edited-locally",
       };
     }
     return { action: "apply-tombstone" };
@@ -139,7 +139,7 @@ export function contentHashOf(item: unknown): string {
 /** JSON.stringify with deterministic key ordering and volatile keys dropped. */
 export function stableStringify(
   value: unknown,
-  skipKeys: string[] = ["dateModified", "dateEdited", "synced", "remote"]
+  skipKeys: string[] = ["dateModified", "dateEdited", "synced", "remote"],
 ): string {
   const seen = new WeakSet<object>();
   const walk = (input: unknown): unknown => {
@@ -165,7 +165,7 @@ export function stableStringify(
 export function conflictTitle(
   originalTitle: string,
   deviceName: string,
-  timestamp: number
+  timestamp: number,
 ): string {
   const date = new Date(timestamp).toISOString().slice(0, 10);
   return `${originalTitle} — Conflict from ${deviceName} (${date})`;

@@ -53,7 +53,7 @@ export interface CredentialProvider {
 export class FetchTransport implements HttpTransport {
   constructor(
     private readonly credentials?: CredentialProvider,
-    private readonly fetchFn: typeof fetch = fetch
+    private readonly fetchFn: typeof fetch = fetch,
   ) {}
 
   async request(req: HttpRequest): Promise<HttpResponse> {
@@ -77,7 +77,7 @@ export class FetchTransport implements HttpTransport {
         headers,
         body: req.body as BodyInit | undefined,
         signal: controller.signal,
-        redirect: "follow"
+        redirect: "follow",
       });
       const body = new Uint8Array(await response.arrayBuffer());
       const responseHeaders: Record<string, string> = {};
@@ -94,7 +94,7 @@ export class FetchTransport implements HttpTransport {
       }
       throw new SyncError(
         `Network error: ${e instanceof Error ? e.message : String(e)}`,
-        "network"
+        "network",
       );
     } finally {
       clearTimeout(timer);

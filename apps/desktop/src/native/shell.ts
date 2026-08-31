@@ -55,7 +55,7 @@ async function spawn(command: string, args: string[]): Promise<boolean> {
     const process = new Deno.Command(command, {
       args,
       stdout: "null",
-      stderr: "null"
+      stderr: "null",
     });
     const { code } = await process.output();
     return code === 0;
@@ -100,7 +100,7 @@ export class Shell {
           "/org/freedesktop/FileManager1",
           "org.freedesktop.FileManager1.ShowItems",
           `array:string:file://${path}`,
-          "string:"
+          "string:",
         ]);
         if (!ok) await this.openPath(dirOf(path));
       }
@@ -121,7 +121,7 @@ export class Shell {
     if (!["http:", "https:", "mailto:"].includes(parsed.protocol)) {
       throw new Error(
         `Refusing to open a ${parsed.protocol} link. Only web and mail ` +
-          `links can be opened from a note.`
+          `links can be opened from a note.`,
       );
     }
 
@@ -140,17 +140,23 @@ export interface OpenDialogOptions {
 }
 
 export class Dialogs {
-  async selectDirectory(options: { title: string }): Promise<string | undefined> {
+  async selectDirectory(
+    options: { title: string },
+  ): Promise<string | undefined> {
     const api = desktopApi();
     if (typeof api.openDialog === "function") {
       const result = await api.openDialog({
         title: options.title,
         directory: true,
-        multiple: false
+        multiple: false,
       });
       return firstPath(result);
     }
-    return await this.fallbackDialog(["--file-selection", "--directory", `--title=${options.title}`]);
+    return await this.fallbackDialog([
+      "--file-selection",
+      "--directory",
+      `--title=${options.title}`,
+    ]);
   }
 
   async selectFile(options: OpenDialogOptions): Promise<string | undefined> {
@@ -162,16 +168,18 @@ export class Dialogs {
         multiple: false,
         filters: options.extensions
           ? [{ name: "Supported files", extensions: options.extensions }]
-          : undefined
+          : undefined,
       });
       return firstPath(result);
     }
     const args = ["--file-selection", `--title=${options.title}`];
     if (options.extensions?.length) {
       args.push(
-        `--file-filter=Supported files | ${options.extensions
-          .map((extension) => `*.${extension}`)
-          .join(" ")}`
+        `--file-filter=Supported files | ${
+          options.extensions
+            .map((extension) => `*.${extension}`)
+            .join(" ")
+        }`,
       );
     }
     return await this.fallbackDialog(args);
@@ -185,7 +193,7 @@ export class Dialogs {
     if (typeof api.saveDialog === "function") {
       const result = await api.saveDialog({
         title: options.title,
-        defaultPath: options.defaultName
+        defaultPath: options.defaultName,
       });
       return result ?? undefined;
     }
@@ -194,7 +202,7 @@ export class Dialogs {
       "--save",
       "--confirm-overwrite",
       `--title=${options.title}`,
-      `--filename=${options.defaultName}`
+      `--filename=${options.defaultName}`,
     ]);
   }
 
@@ -209,7 +217,7 @@ export class Dialogs {
       const process = new Deno.Command("zenity", {
         args,
         stdout: "piped",
-        stderr: "null"
+        stderr: "null",
       });
       const output = await process.output();
       if (output.code !== 0) return undefined;
@@ -233,19 +241,21 @@ export class Notifications {
   constructor(private readonly appName: string) {}
 
   /** Returns the tag when the user activated the notification. */
-  async show(options: NotificationOptions): Promise<{ tag: string } | undefined> {
+  async show(
+    options: NotificationOptions,
+  ): Promise<{ tag: string } | undefined> {
     const api = desktopApi();
     if (typeof api.notify === "function") {
       try {
         await api.notify({
           title: options.title,
           body: options.body,
-          silent: options.silent
+          silent: options.silent,
         });
         return undefined;
       } catch (error) {
         log.warn("Native notification failed", {
-          error: error instanceof Error ? error.message : String(error)
+          error: error instanceof Error ? error.message : String(error),
         });
       }
     }
@@ -256,13 +266,15 @@ export class Notifications {
           "--app-name",
           this.appName,
           options.title,
-          options.body
+          options.body,
         ]);
         return undefined;
       case "darwin":
         await spawn("osascript", [
           "-e",
-          `display notification ${quoteAppleScript(options.body)} with title ${quoteAppleScript(options.title)}`
+          `display notification ${quoteAppleScript(options.body)} with title ${
+            quoteAppleScript(options.title)
+          }`,
         ]);
         return undefined;
       default:
@@ -284,7 +296,7 @@ export class Clipboard {
         const process = new Deno.Command("wl-paste", {
           args: ["--no-newline"],
           stdout: "piped",
-          stderr: "null"
+          stderr: "null",
         });
         const output = await process.output();
         if (output.code === 0) return new TextDecoder().decode(output.stdout);
@@ -295,7 +307,7 @@ export class Clipboard {
         const process = new Deno.Command("xclip", {
           args: ["-selection", "clipboard", "-o"],
           stdout: "piped",
-          stderr: "null"
+          stderr: "null",
         });
         const output = await process.output();
         if (output.code === 0) return new TextDecoder().decode(output.stdout);
@@ -313,16 +325,18 @@ export class Clipboard {
       return;
     }
     if (Deno.build.os === "linux") {
-      for (const [command, args] of [
-        ["wl-copy", []],
-        ["xclip", ["-selection", "clipboard"]]
-      ] as [string, string[]][]) {
+      for (
+        const [command, args] of [
+          ["wl-copy", []],
+          ["xclip", ["-selection", "clipboard"]],
+        ] as [string, string[]][]
+      ) {
         try {
           const process = new Deno.Command(command, {
             args,
             stdin: "piped",
             stdout: "null",
-            stderr: "null"
+            stderr: "null",
           });
           const child = process.spawn();
           const writer = child.stdin.getWriter();

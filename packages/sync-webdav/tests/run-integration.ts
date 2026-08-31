@@ -45,24 +45,24 @@ const DUFS_VERSION = "0.43.0";
 const DUFS_ASSETS: Record<string, { file: string; sha256: string }> = {
   "linux-x86_64": {
     file: `dufs-v${DUFS_VERSION}-x86_64-unknown-linux-musl.tar.gz`,
-    sha256: "e41a21fd11d1cbbc7fcaba8c6d246d878dfab5a5d12be48db84d8067c3f1c995"
+    sha256: "e41a21fd11d1cbbc7fcaba8c6d246d878dfab5a5d12be48db84d8067c3f1c995",
   },
   "linux-aarch64": {
     file: `dufs-v${DUFS_VERSION}-aarch64-unknown-linux-musl.tar.gz`,
-    sha256: ""
+    sha256: "",
   },
   "darwin-x86_64": {
     file: `dufs-v${DUFS_VERSION}-x86_64-apple-darwin.tar.gz`,
-    sha256: ""
+    sha256: "",
   },
   "darwin-aarch64": {
     file: `dufs-v${DUFS_VERSION}-aarch64-apple-darwin.tar.gz`,
-    sha256: ""
+    sha256: "",
   },
   "windows-x86_64": {
     file: `dufs-v${DUFS_VERSION}-x86_64-pc-windows-msvc.zip`,
-    sha256: ""
-  }
+    sha256: "",
+  },
 };
 
 const TEST_USER = "openotes";
@@ -79,7 +79,9 @@ interface RunningServer {
 async function sha256(data: Uint8Array): Promise<string> {
   const buffer = new ArrayBuffer(data.byteLength);
   new Uint8Array(buffer).set(data);
-  return encodeHex(new Uint8Array(await crypto.subtle.digest("SHA-256", buffer)));
+  return encodeHex(
+    new Uint8Array(await crypto.subtle.digest("SHA-256", buffer)),
+  );
 }
 
 function platformKey(): string {
@@ -91,7 +93,7 @@ async function commandExists(command: string): Promise<boolean> {
   try {
     const probe = new Deno.Command(
       Deno.build.os === "windows" ? "where" : "which",
-      { args: [command], stdout: "null", stderr: "null" }
+      { args: [command], stdout: "null", stderr: "null" },
     );
     return (await probe.output()).code === 0;
   } catch {
@@ -99,23 +101,25 @@ async function commandExists(command: string): Promise<boolean> {
   }
 }
 
-async function freePort(): Promise<number> {
+function freePort(): number {
   const listener = Deno.listen({ port: 0, hostname: "127.0.0.1" });
   const { port } = listener.addr as Deno.NetAddr;
   listener.close();
   return port;
 }
 
-async function waitForServer(url: string, timeoutMs = 20_000): Promise<boolean> {
+async function waitForServer(
+  url: string,
+  timeoutMs = 20_000,
+): Promise<boolean> {
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
     try {
       const response = await fetch(url, {
         method: "OPTIONS",
         headers: {
-          Authorization:
-            "Basic " + btoa(`${TEST_USER}:${TEST_PASSWORD}`)
-        }
+          Authorization: "Basic " + btoa(`${TEST_USER}:${TEST_PASSWORD}`),
+        },
       });
       await response.body?.cancel();
       if (response.status < 500) return true;
@@ -138,7 +142,7 @@ async function useExternalServer(): Promise<RunningServer | undefined> {
   if (!reachable) {
     throw new Error(
       `WEBDAV_TEST_URL is set to ${url} but the server did not respond to ` +
-        `OPTIONS within 20s.`
+        `OPTIONS within 20s.`,
     );
   }
   return {
@@ -146,12 +150,12 @@ async function useExternalServer(): Promise<RunningServer | undefined> {
     username,
     password,
     description: `external server at ${url}`,
-    stop: () => Promise.resolve()
+    stop: () => Promise.resolve(),
   };
 }
 
 async function startDufs(binary: string): Promise<RunningServer> {
-  const port = await freePort();
+  const port = freePort();
   const root = await Deno.makeTempDir({ prefix: "openotes-webdav-" });
 
   const child = new Deno.Command(binary, {
@@ -163,10 +167,10 @@ async function startDufs(binary: string): Promise<RunningServer> {
       String(port),
       "--allow-all",
       "--auth",
-      `${TEST_USER}:${TEST_PASSWORD}@/:rw`
+      `${TEST_USER}:${TEST_PASSWORD}@/:rw`,
     ],
     stdout: "null",
-    stderr: "piped"
+    stderr: "piped",
   }).spawn();
 
   const url = `http://127.0.0.1:${port}/`;
@@ -193,7 +197,7 @@ async function startDufs(binary: string): Promise<RunningServer> {
         /* already exited */
       }
       await Deno.remove(root, { recursive: true }).catch(() => {});
-    }
+    },
   };
 }
 
@@ -207,12 +211,12 @@ async function downloadDufs(): Promise<string | undefined> {
 
   const cacheDir = join(
     Deno.env.get("TMPDIR") ?? "/tmp",
-    "openotes-webdav-tools"
+    "openotes-webdav-tools",
   );
   await Deno.mkdir(cacheDir, { recursive: true });
   const binaryPath = join(
     cacheDir,
-    Deno.build.os === "windows" ? "dufs.exe" : "dufs"
+    Deno.build.os === "windows" ? "dufs.exe" : "dufs",
   );
   try {
     await Deno.stat(binaryPath);
@@ -239,13 +243,13 @@ async function downloadDufs(): Promise<string | undefined> {
   if (asset.sha256 && digest !== asset.sha256) {
     throw new Error(
       `dufs checksum mismatch for ${asset.file}\n` +
-        `  expected ${asset.sha256}\n  actual   ${digest}`
+        `  expected ${asset.sha256}\n  actual   ${digest}`,
     );
   }
   if (!asset.sha256 && Deno.env.get("CI")) {
     throw new Error(
       `No pinned checksum is recorded for ${asset.file}; refusing to run an ` +
-        `unverified binary in CI. Record the hash above in DUFS_ASSETS.`
+        `unverified binary in CI. Record the hash above in DUFS_ASSETS.`,
     );
   }
 
@@ -263,7 +267,9 @@ async function downloadDufs(): Promise<string | undefined> {
   return binaryPath;
 }
 
-async function obtainServer(allowDownload: boolean): Promise<RunningServer | undefined> {
+async function obtainServer(
+  allowDownload: boolean,
+): Promise<RunningServer | undefined> {
   const external = await useExternalServer();
   if (external) return external;
 
@@ -292,7 +298,7 @@ async function main() {
     console.error(
       `\nCould not start a WebDAV server: ${
         error instanceof Error ? error.message : String(error)
-      }`
+      }`,
     );
     Deno.exit(requireServer ? 1 : 0);
   }
@@ -305,7 +311,7 @@ async function main() {
       console.error(`\nFAILED: ${message}`);
       console.error(
         "These tests are required, so a missing server is a failure rather " +
-          "than a skip."
+          "than a skip.",
       );
       Deno.exit(1);
     }
@@ -315,16 +321,17 @@ async function main() {
 
   console.log(`Using ${server.description}\n`);
 
-  const testFile = new URL("./integration/integration_test.ts", import.meta.url).pathname;
+  const testFile =
+    new URL("./integration/integration_test.ts", import.meta.url).pathname;
   const test = new Deno.Command(Deno.execPath(), {
     args: ["test", "-A", "--no-check", testFile],
     env: {
       WEBDAV_INTEGRATION_URL: server.url,
       WEBDAV_INTEGRATION_USER: server.username ?? "",
-      WEBDAV_INTEGRATION_PASSWORD: server.password ?? ""
+      WEBDAV_INTEGRATION_PASSWORD: server.password ?? "",
     },
     stdout: "inherit",
-    stderr: "inherit"
+    stderr: "inherit",
   });
 
   const { code } = await test.output();

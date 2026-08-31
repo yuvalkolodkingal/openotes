@@ -31,30 +31,30 @@ function clientFor(
     password?: string;
     maxRetries?: number;
     requestTimeout?: number;
-  } = {}
+  } = {},
 ) {
   const transport = new FetchTransport(
     options.username
       ? {
-          getBasicAuth: () =>
-            Promise.resolve(
-              toBasicAuth(options.username!, options.password ?? "")
-            )
-        }
-      : undefined
+        getBasicAuth: () =>
+          Promise.resolve(
+            toBasicAuth(options.username!, options.password ?? ""),
+          ),
+      }
+      : undefined,
   );
   return new WebDavClient(transport, {
     baseUrl: server.url,
     allowInsecureHttp: true,
     maxRetries: options.maxRetries ?? 0,
     requestTimeout: options.requestTimeout ?? 3000,
-    delay: () => Promise.resolve()
+    delay: () => Promise.resolve(),
   });
 }
 
 async function withServer(
   options: ConstructorParameters<typeof FakeWebDavServer>[0],
-  fn: (server: FakeWebDavServer) => Promise<void>
+  fn: (server: FakeWebDavServer) => Promise<void> | void,
 ) {
   const server = new FakeWebDavServer(options);
   await server.start();
@@ -68,7 +68,7 @@ async function withServer(
 Deno.test("HTTPS is required unless insecure HTTP is explicitly allowed", () => {
   const transport = new FetchTransport();
   const error = assertThrows(
-    () => new WebDavClient(transport, { baseUrl: "http://example.com/dav" })
+    () => new WebDavClient(transport, { baseUrl: "http://example.com/dav" }),
   );
   assert(error instanceof SyncError);
   assertEquals(error.code, "insecure-url");
@@ -76,7 +76,7 @@ Deno.test("HTTPS is required unless insecure HTTP is explicitly allowed", () => 
   // Explicit opt-in works, and https never needs it.
   new WebDavClient(transport, {
     baseUrl: "http://example.com/dav",
-    allowInsecureHttp: true
+    allowInsecureHttp: true,
   });
   new WebDavClient(transport, { baseUrl: "https://example.com/dav" });
 });
@@ -102,7 +102,10 @@ Deno.test("OPTIONS, MKCOL, PUT, GET, HEAD, DELETE round-trip", async () => {
     const { etag } = await client.put("vault/objects/a.bin", body);
     assert(etag);
 
-    assertEquals(new TextDecoder().decode(await client.get("vault/objects/a.bin")), "hello webdav");
+    assertEquals(
+      new TextDecoder().decode(await client.get("vault/objects/a.bin")),
+      "hello webdav",
+    );
 
     const head = await client.head("vault/objects/a.bin");
     assertEquals(head.exists, true);
@@ -140,16 +143,19 @@ Deno.test("PROPFIND on a missing collection returns an empty list", async () => 
 });
 
 Deno.test("absolute hrefs and minimal props are handled", async () => {
-  await withServer({ absoluteHrefs: true, minimalProps: true }, async (server) => {
-    const client = clientFor(server);
-    await client.mkcolRecursive("repo/");
-    await client.put("repo/x.bin", "x");
-    const entries = await client.list("repo/");
-    assertEquals(entries.length, 1);
-    assertEquals(client.relativePath(entries[0]), "repo/x.bin");
-    // No getcontentlength: verifyUpload must not fail on unknown length.
-    await client.verifyUpload("repo/x.bin", 1);
-  });
+  await withServer(
+    { absoluteHrefs: true, minimalProps: true },
+    async (server) => {
+      const client = clientFor(server);
+      await client.mkcolRecursive("repo/");
+      await client.put("repo/x.bin", "x");
+      const entries = await client.list("repo/");
+      assertEquals(entries.length, 1);
+      assertEquals(client.relativePath(entries[0]), "repo/x.bin");
+      // No getcontentlength: verifyUpload must not fail on unknown length.
+      await client.verifyUpload("repo/x.bin", 1);
+    },
+  );
 });
 
 Deno.test("If-None-Match prevents overwriting an existing object", async () => {
@@ -183,7 +189,10 @@ Deno.test("MOVE falls back to copy+delete when unsupported", async () => {
     const client = clientFor(server);
     await client.put("from.bin", "payload");
     await client.move("from.bin", "to.bin");
-    assertEquals(new TextDecoder().decode(await client.get("to.bin")), "payload");
+    assertEquals(
+      new TextDecoder().decode(await client.get("to.bin")),
+      "payload",
+    );
     assertEquals((await client.head("from.bin")).exists, false);
   });
 });
@@ -193,13 +202,15 @@ Deno.test("HTTP error codes map to actionable SyncErrors", async () => {
     const client = clientFor(server);
     await client.put("a.bin", "x");
 
-    for (const [status, code] of [
-      [401, "unauthorized"],
-      [403, "forbidden"],
-      [404, "not-found"],
-      [409, "conflict"],
-      [412, "precondition-failed"]
-    ] as const) {
+    for (
+      const [status, code] of [
+        [401, "unauthorized"],
+        [403, "forbidden"],
+        [404, "not-found"],
+        [409, "conflict"],
+        [412, "precondition-failed"],
+      ] as const
+    ) {
       server.injectFault({ status, method: "GET" });
       const error = await assertRejects(() => client.get("a.bin"));
       assert(error instanceof SyncError, `status ${status}`);
@@ -265,19 +276,22 @@ Deno.test("a truncated PUT fails upload verification", async () => {
 });
 
 Deno.test("bad credentials produce an unauthorized error", async () => {
-  await withServer({ username: "alice", password: "s3cret" }, async (server) => {
-    const good = clientFor(server, { username: "alice", password: "s3cret" });
-    await good.put("a.bin", "ok");
+  await withServer(
+    { username: "alice", password: "s3cret" },
+    async (server) => {
+      const good = clientFor(server, { username: "alice", password: "s3cret" });
+      await good.put("a.bin", "ok");
 
-    const bad = clientFor(server, { username: "alice", password: "wrong" });
-    const error = await assertRejects(() => bad.get("a.bin"));
-    assert(error instanceof SyncError);
-    assertEquals(error.code, "unauthorized");
-  });
+      const bad = clientFor(server, { username: "alice", password: "wrong" });
+      const error = await assertRejects(() => bad.get("a.bin"));
+      assert(error instanceof SyncError);
+      assertEquals(error.code, "unauthorized");
+    },
+  );
 });
 
 Deno.test("path traversal segments are rejected", async () => {
-  await withServer({}, async (server) => {
+  await withServer({}, (server) => {
     const client = clientFor(server);
     for (const path of ["../escape.bin", "a/../../b.bin", "./x"]) {
       const error = assertThrows(() => client.url(path));

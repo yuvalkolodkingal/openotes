@@ -54,10 +54,11 @@ const results: Measurement[] = [];
 
 function record(measurement: Measurement) {
   results.push(measurement);
-  const value =
-    measurement.value === null
-      ? "not measured"
-      : `${measurement.value.toFixed(measurement.unit === "ms" ? 1 : 2)} ${measurement.unit}`;
+  const value = measurement.value === null
+    ? "not measured"
+    : `${
+      measurement.value.toFixed(measurement.unit === "ms" ? 1 : 2)
+    } ${measurement.unit}`;
   const samples = measurement.samples ? ` (n=${measurement.samples})` : "";
   console.log(`  ${measurement.name.padEnd(38)} ${value}${samples}`);
   if (measurement.note) console.log(`      ${measurement.note}`);
@@ -95,8 +96,9 @@ async function benchmarkDatabase(noteCount: number) {
       name: "database benchmarks",
       unit: "ms",
       value: null,
-      note:
-        `skipped: ${error instanceof Error ? error.message : String(error)}`
+      note: `skipped: ${
+        error instanceof Error ? error.message : String(error)
+      }`,
     });
     if (previousDataDir) Deno.env.set("OPENOTES_DATA_DIR", previousDataDir);
     return;
@@ -106,7 +108,9 @@ async function benchmarkDatabase(noteCount: number) {
   const key = "ab".repeat(32);
   const path = join(directory, "bench.db");
 
-  const openMs = await time(() => sqlite.open({ filePath: path, password: key }));
+  const openMs = await time(() =>
+    sqlite.open({ filePath: path, password: key })
+  );
   const handle = sqlite.open({ filePath: path, password: key });
 
   sqlite.run(
@@ -114,7 +118,7 @@ async function benchmarkDatabase(noteCount: number) {
     `CREATE TABLE notes (
        id TEXT PRIMARY KEY, title TEXT, dateModified INTEGER, synced INTEGER
      )`,
-    []
+    [],
   );
   sqlite.run(
     handle,
@@ -122,23 +126,35 @@ async function benchmarkDatabase(noteCount: number) {
        id TEXT PRIMARY KEY, noteId TEXT, data TEXT, dateModified INTEGER,
        synced INTEGER
      )`,
-    []
+    [],
   );
   sqlite.run(
     handle,
     `CREATE VIRTUAL TABLE content_fts USING fts5(
        id, noteId, data, tokenize='html better_trigram remove_diacritics 1'
      )`,
-    []
+    [],
   );
 
   const words = [
-    "meeting", "invoice", "recipe", "journal", "research", "quarterly",
-    "budget", "travel", "reading", "interview", "prototype", "retrospective"
+    "meeting",
+    "invoice",
+    "recipe",
+    "journal",
+    "research",
+    "quarterly",
+    "budget",
+    "travel",
+    "reading",
+    "interview",
+    "prototype",
+    "retrospective",
   ];
   const body = (index: number) =>
     `<p>${words[index % words.length]} note ${index}. ` +
-    `${words[(index * 7) % words.length]} ${words[(index * 3) % words.length]} ` +
+    `${words[(index * 7) % words.length]} ${
+      words[(index * 3) % words.length]
+    } ` +
     `Some additional body text so the index has something to chew on.</p>`;
 
   const insertMs = await time(() => {
@@ -147,17 +163,21 @@ async function benchmarkDatabase(noteCount: number) {
       sqlite.run(
         handle,
         "INSERT INTO notes (id, title, dateModified, synced) VALUES (?, ?, ?, 1)",
-        [`n${index}`, `Note ${index} about ${words[index % words.length]}`, Date.now()]
+        [
+          `n${index}`,
+          `Note ${index} about ${words[index % words.length]}`,
+          Date.now(),
+        ],
       );
       sqlite.run(
         handle,
         "INSERT INTO content (id, noteId, data, dateModified, synced) VALUES (?, ?, ?, ?, 1)",
-        [`c${index}`, `n${index}`, body(index), Date.now()]
+        [`c${index}`, `n${index}`, body(index), Date.now()],
       );
       sqlite.run(
         handle,
         "INSERT INTO content_fts (id, noteId, data) VALUES (?, ?, ?)",
-        [`c${index}`, `n${index}`, body(index)]
+        [`c${index}`, `n${index}`, body(index)],
       );
     }
     sqlite.run(handle, "COMMIT", []);
@@ -167,13 +187,13 @@ async function benchmarkDatabase(noteCount: number) {
   record({
     name: `insert ${noteCount} notes + index`,
     unit: "ms",
-    value: insertMs
+    value: insertMs,
   });
   record({
     name: "insert throughput",
     unit: "count",
     value: Math.round(noteCount / (insertMs / 1000)),
-    note: "notes per second"
+    note: "notes per second",
   });
 
   const openSamples: number[] = [];
@@ -184,9 +204,9 @@ async function benchmarkDatabase(noteCount: number) {
         sqlite.run(
           handle,
           "SELECT n.*, c.data FROM notes n JOIN content c ON c.noteId = n.id WHERE n.id = ?",
-          [`n${target}`]
+          [`n${target}`],
         )
-      )
+      ),
     );
   }
   record({
@@ -194,7 +214,7 @@ async function benchmarkDatabase(noteCount: number) {
     unit: "ms",
     value: median(openSamples),
     samples: openSamples.length,
-    note: "median"
+    note: "median",
   });
 
   const searchSamples: number[] = [];
@@ -204,9 +224,9 @@ async function benchmarkDatabase(noteCount: number) {
         sqlite.run(
           handle,
           "SELECT noteId FROM content_fts WHERE content_fts MATCH ? LIMIT 50",
-          [word]
+          [word],
         )
-      )
+      ),
     );
   }
   record({
@@ -214,14 +234,14 @@ async function benchmarkDatabase(noteCount: number) {
     unit: "ms",
     value: median(searchSamples),
     samples: searchSamples.length,
-    note: "median across distinct terms"
+    note: "median across distinct terms",
   });
 
   const listMs = await time(() =>
     sqlite.run(
       handle,
       "SELECT id, title FROM notes ORDER BY dateModified DESC LIMIT 100",
-      []
+      [],
     )
   );
   record({ name: "list 100 most recent notes", unit: "ms", value: listMs });
@@ -230,7 +250,7 @@ async function benchmarkDatabase(noteCount: number) {
   record({
     name: `database size for ${noteCount} notes`,
     unit: "MB",
-    value: dbSize
+    value: dbSize,
   });
 
   sqlite.closeAll();
@@ -249,18 +269,21 @@ async function benchmarkCrypto() {
   const crypto_ = new SyncCrypto();
 
   const deriveMs = await time(() =>
-    crypto_.deriveMasterKey("a reasonably long test passphrase", "AAAAAAAAAAAAAAAAAAAAAA")
+    crypto_.deriveMasterKey(
+      "a reasonably long test passphrase",
+      "AAAAAAAAAAAAAAAAAAAAAA",
+    )
   );
   record({
     name: "derive master key (argon2)",
     unit: "ms",
     value: deriveMs,
-    note: "deliberately slow; happens once per unlock"
+    note: "deliberately slow; happens once per unlock",
   });
 
   const master = await crypto_.deriveMasterKey(
     "a reasonably long test passphrase",
-    "AAAAAAAAAAAAAAAAAAAAAA"
+    "AAAAAAAAAAAAAAAAAAAAAA",
   );
   const syncKey = await crypto_.deriveSubkey(master, "sync");
 
@@ -274,7 +297,7 @@ async function benchmarkCrypto() {
     unit: "ms",
     value: median(encryptSamples),
     samples: encryptSamples.length,
-    note: "median"
+    note: "median",
   });
 
   const payload = new Uint8Array(5 * 1024 * 1024);
@@ -284,7 +307,7 @@ async function benchmarkCrypto() {
     name: "encrypt 5 MB attachment",
     unit: "ms",
     value: bulkMs,
-    note: `${(5 / (bulkMs / 1000)).toFixed(1)} MB/s`
+    note: `${(5 / (bulkMs / 1000)).toFixed(1)} MB/s`,
   });
 }
 
@@ -306,7 +329,7 @@ async function benchmarkSync() {
     record({
       name: "connect and verify repository",
       unit: "ms",
-      value: connectMs
+      value: connectMs,
     });
 
     for (let index = 0; index < 200; index++) {
@@ -314,14 +337,14 @@ async function benchmarkSync() {
         id: `n${index}`,
         type: "note",
         title: `Note ${index}`,
-        content: "some content here"
+        content: "some content here",
       });
     }
     const pushMs = await time(() => a.engine.sync());
     record({
       name: "first sync, 200 notes (upload)",
       unit: "ms",
-      value: pushMs
+      value: pushMs,
     });
 
     const b = await createDevice({ id: "BENCHDEVB", baseUrl: server.url });
@@ -329,7 +352,7 @@ async function benchmarkSync() {
     record({
       name: "first sync, 200 notes (download)",
       unit: "ms",
-      value: pullMs
+      value: pullMs,
     });
 
     const idleMs = await time(() => a.engine.sync());
@@ -337,15 +360,20 @@ async function benchmarkSync() {
       name: "sync with no changes",
       unit: "ms",
       value: idleMs,
-      note: "what a periodic sync costs when nothing happened"
+      note: "what a periodic sync costs when nothing happened",
     });
 
-    a.store.put({ id: "n5", type: "note", title: "Edited", content: "changed" });
+    a.store.put({
+      id: "n5",
+      type: "note",
+      title: "Edited",
+      content: "changed",
+    });
     const incrementalMs = await time(() => a.engine.sync());
     record({
       name: "sync one changed note",
       unit: "ms",
-      value: incrementalMs
+      value: incrementalMs,
     });
   } finally {
     await server.stop();
@@ -364,12 +392,12 @@ async function benchmarkFootprint() {
     name: "runtime heap after benchmarks",
     unit: "MB",
     value: memory.heapUsed / 1024 / 1024,
-    note: "this process only; not the webview's memory"
+    note: "this process only; not the webview's memory",
   });
   record({
     name: "runtime RSS after benchmarks",
     unit: "MB",
-    value: memory.rss / 1024 / 1024
+    value: memory.rss / 1024 / 1024,
   });
 
   const uiRoot = Deno.env.get("OPENOTES_UI_ROOT") ??
@@ -379,25 +407,29 @@ async function benchmarkFootprint() {
     name: "built interface size",
     unit: "MB",
     value: uiSize === null ? null : uiSize / 1024 / 1024,
-    note: uiSize === null ? "not built; run deno task build:ui" : undefined
+    note: uiSize === null ? "not built; run deno task build:ui" : undefined,
   });
 
   const nativeSize = await directorySize(
-    join(Deno.cwd(), "apps", "desktop", "native")
+    join(Deno.cwd(), "apps", "desktop", "native"),
   );
   record({
     name: "native libraries size",
     unit: "MB",
     value: nativeSize === null ? null : nativeSize / 1024 / 1024,
-    note: nativeSize === null ? "not built; run deno task build:native" : undefined
+    note: nativeSize === null
+      ? "not built; run deno task build:native"
+      : undefined,
   });
 
-  const distSize = await directorySize(join(Deno.cwd(), "apps", "desktop", "dist"));
+  const distSize = await directorySize(
+    join(Deno.cwd(), "apps", "desktop", "dist"),
+  );
   record({
     name: "packaged artifacts size",
     unit: "MB",
     value: distSize === null ? null : distSize / 1024 / 1024,
-    note: distSize === null ? "not built; run deno task build" : undefined
+    note: distSize === null ? "not built; run deno task build" : undefined,
   });
 
   // Cold and warm application startup need a built binary and a display;
@@ -407,19 +439,19 @@ async function benchmarkFootprint() {
     name: "cold application startup",
     unit: "ms",
     value: null,
-    note: "measured by the smoke test against a built binary, not here"
+    note: "measured by the smoke test against a built binary, not here",
   });
   record({
     name: "warm application startup",
     unit: "ms",
     value: null,
-    note: "measured by the smoke test against a built binary, not here"
+    note: "measured by the smoke test against a built binary, not here",
   });
   record({
     name: "idle / active editor RSS",
     unit: "MB",
     value: null,
-    note: "needs a running window; not measurable from this process"
+    note: "needs a running window; not measurable from this process",
   });
 }
 
@@ -449,12 +481,14 @@ async function directorySize(path: string): Promise<number | null> {
 async function main() {
   const args = Deno.args;
   const noteCount = Number(
-    args.find((arg) => arg.startsWith("--notes="))?.split("=")[1] ?? 2000
+    args.find((arg) => arg.startsWith("--notes="))?.split("=")[1] ?? 2000,
   );
 
   console.log(`${APP_NAME} ${APP_VERSION} benchmarks`);
   console.log(
-    `Deno ${Deno.version.deno} · ${Deno.build.target} · ${new Date().toISOString()}`
+    `Deno ${Deno.version.deno} · ${Deno.build.target} · ${
+      new Date().toISOString()
+    }`,
   );
   console.log(`Data directory: ${appDataDir()}`);
 
@@ -466,7 +500,7 @@ async function main() {
   const notMeasured = results.filter((result) => result.value === null);
   console.log(
     `\n${results.length - notMeasured.length} measured, ` +
-      `${notMeasured.length} not measurable in this environment.`
+      `${notMeasured.length} not measurable in this environment.`,
   );
 
   const jsonFlag = args.findIndex((arg) => arg === "--json");
@@ -481,11 +515,11 @@ async function main() {
           deno: Deno.version.deno,
           target: Deno.build.target,
           timestamp: new Date().toISOString(),
-          results
+          results,
         },
         null,
-        2
-      )
+        2,
+      ),
     );
     console.log(`Wrote ${path}`);
   }
@@ -509,23 +543,29 @@ async function compareWithBaseline(path: string) {
     console.error(
       `Could not read the baseline: ${
         error instanceof Error ? error.message : String(error)
-      }`
+      }`,
     );
     Deno.exit(2);
   }
 
-  console.log(`\nCompared with ${path} (${baseline.version ?? "unknown version"})`);
-  const byName = new Map(baseline.results.map((result) => [result.name, result]));
+  console.log(
+    `\nCompared with ${path} (${baseline.version ?? "unknown version"})`,
+  );
+  const byName = new Map(
+    baseline.results.map((result) => [result.name, result]),
+  );
   for (const current of results) {
     const previous = byName.get(current.name);
-    if (!previous || previous.value === null || current.value === null) continue;
+    if (!previous || previous.value === null || current.value === null) {
+      continue;
+    }
     const delta = current.value - previous.value;
     const percent = previous.value === 0 ? 0 : (delta / previous.value) * 100;
     const direction = delta === 0 ? "=" : delta < 0 ? "faster" : "slower";
     console.log(
       `  ${current.name.padEnd(38)} ${previous.value.toFixed(1)} → ` +
         `${current.value.toFixed(1)} ${current.unit} ` +
-        `(${percent >= 0 ? "+" : ""}${percent.toFixed(1)}%, ${direction})`
+        `(${percent >= 0 ? "+" : ""}${percent.toFixed(1)}%, ${direction})`,
     );
   }
 }

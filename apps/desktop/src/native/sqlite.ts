@@ -68,7 +68,7 @@ export function nativeDir(): string {
   const candidates = [
     join(dirnameOf(Deno.execPath()), "native"),
     join(Deno.cwd(), "apps", "desktop", "native"),
-    join(Deno.cwd(), "native")
+    join(Deno.cwd(), "native"),
   ];
   for (const candidate of candidates) {
     try {
@@ -134,7 +134,7 @@ export function configureNativeLibrary(): { path: string; encrypted: boolean } {
       `The encrypted SQLite library was not found at ${path}. ` +
         `The application cannot open an encrypted vault without it. ` +
         `Run "deno task build:native" to build it, or set ` +
-        `OPENOTES_NATIVE_DIR to the directory that contains it.`
+        `OPENOTES_NATIVE_DIR to the directory that contains it.`,
     );
   }
 }
@@ -160,7 +160,7 @@ export class SqliteConnection {
   constructor(
     readonly id: string,
     private readonly options: SqliteOptions,
-    Database: typeof DatabaseType
+    Database: typeof DatabaseType,
   ) {
     this.encrypted = !!options.password && options.filePath !== ":memory:";
     if (options.filePath !== ":memory:") {
@@ -176,8 +176,14 @@ export class SqliteConnection {
   /** Apply pragmas and load extensions once the database is readable. */
   private initialize(): void {
     if (this.initialized) return;
-    const { journalMode, lockingMode, synchronous, pageSize, cacheSize, tempStore } =
-      this.options;
+    const {
+      journalMode,
+      lockingMode,
+      synchronous,
+      pageSize,
+      cacheSize,
+      tempStore,
+    } = this.options;
 
     // page_size must be set before the first write for a new database.
     if (pageSize) this.db.exec(`PRAGMA page_size = ${pageSize}`);
@@ -212,11 +218,11 @@ export class SqliteConnection {
     } catch (error) {
       log.error("Could not load FTS5 tokenizer extensions", {
         directory,
-        error: error instanceof Error ? error.message : String(error)
+        error: error instanceof Error ? error.message : String(error),
       });
       throw new Error(
         `Full-text search extensions could not be loaded from ${directory}. ` +
-          `Search would silently return wrong results without them.`
+          `Search would silently return wrong results without them.`,
       );
     } finally {
       this.db.enableLoadExtension = false;
@@ -251,7 +257,7 @@ export class SqliteConnection {
     return {
       rows: [],
       numAffectedRows: changes,
-      insertId: Number(this.db.lastInsertRowId)
+      insertId: Number(this.db.lastInsertRowId),
     };
   }
 
@@ -323,7 +329,7 @@ export function verifyEncryptionInProcess(Database: typeof DatabaseType): void {
     path = Deno.makeTempFileSync({ prefix: "openotes-enc-", suffix: ".db" });
   } catch (error) {
     log.warn("Could not create a temporary file to verify encryption", {
-      error: error instanceof Error ? error.message : String(error)
+      error: error instanceof Error ? error.message : String(error),
     });
     return;
   }
@@ -345,7 +351,7 @@ export function verifyEncryptionInProcess(Database: typeof DatabaseType): void {
           "instead of the bundled encrypted one, so `PRAGMA key` silently " +
           "does nothing. Refusing to start rather than write your notes to " +
           "disk in plaintext. Rebuild the native library with " +
-          '"deno task build:native" (it must be linked with -Wl,-Bsymbolic).'
+          '"deno task build:native" (it must be linked with -Wl,-Bsymbolic).',
       );
     }
     log.info("Verified that the database engine encrypts in this process");
@@ -397,18 +403,17 @@ export class SqliteService {
     if (!this.Database) {
       throw new Error(
         "The SQLite service was not initialized. This is a programming " +
-          "error: call initialize() during startup."
+          "error: call initialize() during startup.",
       );
     }
 
-    const filePath =
-      options.filePath === ":memory:"
-        ? ":memory:"
-        : assertInside(
-            options.filePath,
-            [appDataDir()],
-            "database path"
-          );
+    const filePath = options.filePath === ":memory:"
+      ? ":memory:"
+      : assertInside(
+        options.filePath,
+        [appDataDir()],
+        "database path",
+      );
 
     if (options.password && !/^[0-9a-fA-F]+$/.test(options.password)) {
       throw new Error("The database key must be hex encoded");
@@ -417,12 +422,12 @@ export class SqliteService {
     const id = `db${this.nextId++}`;
     this.connections.set(
       id,
-      new SqliteConnection(id, { ...options, filePath }, this.Database)
+      new SqliteConnection(id, { ...options, filePath }, this.Database),
     );
     log.info("Opened database", {
       id,
       encrypted: !!options.password,
-      inMemory: filePath === ":memory:"
+      inMemory: filePath === ":memory:",
     });
     return id;
   }

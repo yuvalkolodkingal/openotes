@@ -41,8 +41,7 @@ const SQLITE3MC_URL =
  * SHA-256 of the amalgamation archive. Recorded by running this script with
  * --print-hashes; CI fails if the upstream artifact ever changes.
  */
-const SQLITE3MC_SHA256 =
-  Deno.env.get("OPENOTES_SQLITE3MC_SHA256") ??
+const SQLITE3MC_SHA256 = Deno.env.get("OPENOTES_SQLITE3MC_SHA256") ??
   "4125f8ff275ea953dabb3289331b20a0e76d4fc060f57148f4a5df3bf3b0d5e0";
 
 /**
@@ -52,7 +51,7 @@ const SQLITE3MC_SHA256 =
  */
 const EXTENSION_PACKAGES = [
   { npm: "sqlite-better-trigram", file: "better-trigram", version: "0.0.6" },
-  { npm: "sqlite3-fts5-html", file: "fts5-html", version: "0.0.6" }
+  { npm: "sqlite3-fts5-html", file: "fts5-html", version: "0.0.6" },
 ];
 
 const COMPILE_DEFINES = [
@@ -68,7 +67,7 @@ const COMPILE_DEFINES = [
   "SQLITE_USE_URI=1",
   "SQLITE_DQS=0",
   "SQLITE_MAX_VARIABLE_NUMBER=32766",
-  "HAVE_USLEEP"
+  "HAVE_USLEEP",
 ];
 
 const ROOT = new URL("../../../", import.meta.url).pathname;
@@ -83,7 +82,7 @@ interface Target {
 function hostTarget(): Target {
   return {
     os: Deno.build.os as Target["os"],
-    arch: Deno.build.arch === "aarch64" ? "aarch64" : "x86_64"
+    arch: Deno.build.arch === "aarch64" ? "aarch64" : "x86_64",
   };
 }
 
@@ -100,8 +99,11 @@ function extensionSuffix(os: Target["os"]): string {
 }
 
 function npmPlatform(target: Target): string {
-  const os =
-    target.os === "windows" ? "win32" : target.os === "darwin" ? "darwin" : "linux";
+  const os = target.os === "windows"
+    ? "win32"
+    : target.os === "darwin"
+    ? "darwin"
+    : "linux";
   const arch = target.arch === "aarch64" ? "arm64" : "x64";
   return `${os}-${arch}`;
 }
@@ -109,7 +111,9 @@ function npmPlatform(target: Target): string {
 async function sha256(data: Uint8Array): Promise<string> {
   const buffer = new ArrayBuffer(data.byteLength);
   new Uint8Array(buffer).set(data);
-  return encodeHex(new Uint8Array(await crypto.subtle.digest("SHA-256", buffer)));
+  return encodeHex(
+    new Uint8Array(await crypto.subtle.digest("SHA-256", buffer)),
+  );
 }
 
 async function download(url: string): Promise<Uint8Array> {
@@ -127,7 +131,7 @@ async function run(command: string, args: string[], cwd?: string) {
     args,
     cwd,
     stdout: "inherit",
-    stderr: "inherit"
+    stderr: "inherit",
   });
   const { code } = await process.output();
   if (code !== 0) {
@@ -154,7 +158,7 @@ async function buildSqlite(target: Target, verifyHash: boolean) {
     throw new Error(
       `SQLite3MultipleCiphers checksum mismatch.\n` +
         `  expected ${SQLITE3MC_SHA256}\n  actual   ${digest}\n` +
-        `Refusing to build against an unverified source archive.`
+        `Refusing to build against an unverified source archive.`,
     );
   }
   console.log(`  sha256 ${digest}`);
@@ -179,7 +183,7 @@ async function buildSqlite(target: Target, verifyHash: boolean) {
       "/LD",
       ...COMPILE_DEFINES.map((define) => `/D${define}`),
       source,
-      `/Fe:${output}`
+      `/Fe:${output}`,
     ]);
   } else {
     const compiler = (await which("cc")) ? "cc" : "gcc";
@@ -204,7 +208,7 @@ async function buildSqlite(target: Target, verifyHash: boolean) {
       "-Wl,-Bsymbolic",
       "-lpthread",
       "-lm",
-      ...(target.os === "linux" ? ["-ldl"] : [])
+      ...(target.os === "linux" ? ["-ldl"] : []),
     ]);
   }
   console.log(`  built ${output}`);
@@ -212,11 +216,14 @@ async function buildSqlite(target: Target, verifyHash: boolean) {
 
 async function which(command: string): Promise<boolean> {
   try {
-    const probe = new Deno.Command(Deno.build.os === "windows" ? "where" : "which", {
-      args: [command],
-      stdout: "null",
-      stderr: "null"
-    });
+    const probe = new Deno.Command(
+      Deno.build.os === "windows" ? "where" : "which",
+      {
+        args: [command],
+        stdout: "null",
+        stderr: "null",
+      },
+    );
     return (await probe.output()).code === 0;
   } catch {
     return false;
@@ -228,7 +235,7 @@ async function unzip(archive: string, destination: string) {
     await run("powershell", [
       "-NoProfile",
       "-Command",
-      `Expand-Archive -Force -Path '${archive}' -DestinationPath '${destination}'`
+      `Expand-Archive -Force -Path '${archive}' -DestinationPath '${destination}'`,
     ]);
   } else {
     await run("unzip", ["-o", "-q", archive, "-d", destination]);
@@ -242,8 +249,7 @@ async function fetchExtensions(target: Target) {
 
   for (const extension of EXTENSION_PACKAGES) {
     const packageName = `${extension.npm}-${npmPlatform(target)}`;
-    const url =
-      `https://registry.npmjs.org/${packageName}/-/` +
+    const url = `https://registry.npmjs.org/${packageName}/-/` +
       `${packageName}-${extension.version}.tgz`;
 
     const tarball = await download(url);
@@ -269,7 +275,7 @@ async function verifyArtifacts(target: Target) {
   const required = [
     libraryName(target.os),
     `better-trigram.${suffix}`,
-    `fts5-html.${suffix}`
+    `fts5-html.${suffix}`,
   ];
   const missing: string[] = [];
   for (const name of required) {
@@ -281,7 +287,7 @@ async function verifyArtifacts(target: Target) {
   }
   if (missing.length > 0) {
     throw new Error(
-      `Missing native artifacts in ${NATIVE_DIR}: ${missing.join(", ")}`
+      `Missing native artifacts in ${NATIVE_DIR}: ${missing.join(", ")}`,
     );
   }
   console.log(`All native artifacts present in ${NATIVE_DIR}`);
@@ -291,7 +297,7 @@ async function smokeTest() {
   console.log("Smoke-testing the encrypted database…");
   Deno.env.set(
     "DENO_SQLITE_PATH",
-    join(NATIVE_DIR, libraryName(hostTarget().os))
+    join(NATIVE_DIR, libraryName(hostTarget().os)),
   );
   const { Database } = await import("@db/sqlite");
   const path = join(BUILD_DIR, "smoke.db");
@@ -311,10 +317,12 @@ async function smokeTest() {
   db.loadExtension(join(NATIVE_DIR, `fts5-html.${suffix}`));
   db.enableLoadExtension = false;
   db.exec(
-    "CREATE VIRTUAL TABLE t_fts USING fts5(v, tokenize='html better_trigram remove_diacritics 1')"
+    "CREATE VIRTUAL TABLE t_fts USING fts5(v, tokenize='html better_trigram remove_diacritics 1')",
   );
   db.exec("INSERT INTO t_fts(v) SELECT v FROM t");
-  const hits = db.prepare("SELECT v FROM t_fts WHERE t_fts MATCH ?").all("smoke");
+  const hits = db.prepare("SELECT v FROM t_fts WHERE t_fts MATCH ?").all(
+    "smoke",
+  );
   db.close();
 
   if (hits.length !== 1) {
@@ -325,7 +333,7 @@ async function smokeTest() {
   const asText = new TextDecoder("utf-8", { fatal: false }).decode(raw);
   if (asText.includes("openotes smoke test")) {
     throw new Error(
-      "The database file contains plaintext — encryption is NOT active"
+      "The database file contains plaintext — encryption is NOT active",
     );
   }
   await Deno.remove(path);

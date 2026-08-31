@@ -19,17 +19,17 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 import {
   BackupEngine,
+  type BackupEntry,
+  type BackupManifest,
+  type BackupSnapshot,
+  type BackupTarget,
   FetchTransport,
+  type FileSystemAdapter,
   LocalBackupTarget,
   SyncCrypto,
   toBasicAuth,
   WebDavBackupTarget,
   WebDavClient,
-  type BackupEntry,
-  type BackupManifest,
-  type BackupSnapshot,
-  type BackupTarget,
-  type FileSystemAdapter
 } from "@notesnook/sync-webdav";
 import type { SerializedKey } from "@notesnook/crypto";
 import { join } from "@std/path";
@@ -70,7 +70,7 @@ const denoFs: FileSystemAdapter = {
     await Deno.rename(tempPath, path);
   },
   deleteFile: (path) => Deno.remove(path),
-  join: (...parts: string[]) => join(...(parts as [string, ...string[]]))
+  join: (...parts: string[]) => join(...(parts as [string, ...string[]])),
 };
 
 export interface BackupServiceOptions {
@@ -112,7 +112,7 @@ export class BackupService {
     this.engine = new BackupEngine(this.crypto, {
       appName: APP_NAME,
       appVersion: APP_VERSION,
-      deviceId: options.settings.get("sync").deviceId ?? "unknown"
+      deviceId: options.settings.get("sync").deviceId ?? "unknown",
     });
   }
 
@@ -121,11 +121,10 @@ export class BackupService {
     if (!passphrase) {
       throw new Error(
         "Backups are encrypted with your sync passphrase, which is not set. " +
-          "Set it in Settings → Synchronization, or choose a backup password."
+          "Set it in Settings → Synchronization, or choose a backup password.",
       );
     }
-    const salt =
-      (await this.options.store()?.getMeta("webdav.salt")) ??
+    const salt = (await this.options.store()?.getMeta("webdav.salt")) ??
       (await this.crypto.generateSalt());
     const master = await this.crypto.deriveMasterKey(passphrase, salt);
     return await this.crypto.deriveSubkey(master, "backup");
@@ -143,7 +142,7 @@ export class BackupService {
         const rows = this.options.sqlite.run(
           handle,
           `SELECT * FROM ${table}`,
-          []
+          [],
         ).rows;
         data[table] = rows;
         counts[table] = rows.length;
@@ -177,30 +176,30 @@ export class BackupService {
     if (!password) {
       throw new Error(
         "The WebDAV password is not available; unlock the vault to run a " +
-          "remote backup."
+          "remote backup.",
       );
     }
     const transport = new FetchTransport({
       getBasicAuth: () =>
-        Promise.resolve(toBasicAuth(webdav.username, password))
+        Promise.resolve(toBasicAuth(webdav.username, password)),
     });
     const client = new WebDavClient(transport, {
       baseUrl: joinUrl(webdav.serverUrl, webdav.directory),
       requestTimeout: webdav.timeoutSeconds * 1000,
       maxRetries: webdav.maxRetries,
-      allowInsecureHttp: webdav.allowInsecureHttp
+      allowInsecureHttp: webdav.allowInsecureHttp,
     });
     return new WebDavBackupTarget(client, backup.webdavDirectory);
   }
 
   /** Create a backup and write it to every enabled target. */
   async createNow(
-    options: { targets?: ("local" | "webdav")[] } = {}
+    options: { targets?: ("local" | "webdav")[] } = {},
   ): Promise<{ name: string; manifest: BackupManifest; written: string[] }> {
     const settings = this.options.settings.get("backup");
     const wanted = options.targets ?? [
       ...(settings.localEnabled ? (["local"] as const) : []),
-      ...(settings.webdavEnabled ? (["webdav"] as const) : [])
+      ...(settings.webdavEnabled ? (["webdav"] as const) : []),
     ];
     if (wanted.length === 0) {
       throw new Error("No backup destination is enabled");
@@ -212,7 +211,7 @@ export class BackupService {
     log.info("Created backup", {
       name,
       counts: manifest.counts,
-      attachments: manifest.attachments
+      attachments: manifest.attachments,
     });
 
     const written: string[] = [];
@@ -220,17 +219,21 @@ export class BackupService {
 
     for (const which of wanted) {
       try {
-        const target =
-          which === "local" ? this.localTarget() : await this.webdavTarget();
+        const target = which === "local"
+          ? this.localTarget()
+          : await this.webdavTarget();
         if (!target) continue;
         await target.write(name, data);
         if (settings.retention > 0) {
           const removed = await this.engine.applyRetention(
             target,
-            settings.retention
+            settings.retention,
           );
           if (removed.length > 0) {
-            log.info("Applied backup retention", { which, removed: removed.length });
+            log.info("Applied backup retention", {
+              which,
+              removed: removed.length,
+            });
           }
         }
         written.push(which);
@@ -243,7 +246,9 @@ export class BackupService {
     }
 
     if (written.length === 0) {
-      throw new Error(`The backup could not be written. ${failures.join("; ")}`);
+      throw new Error(
+        `The backup could not be written. ${failures.join("; ")}`,
+      );
     }
     await this.options.settings.patchBackup({ lastBackupAt: Date.now() });
     return { name, manifest, written };
@@ -275,17 +280,18 @@ export class BackupService {
       return true;
     } catch (error) {
       log.warn("Scheduled backup failed", {
-        error: error instanceof Error ? error.message : String(error)
+        error: error instanceof Error ? error.message : String(error),
       });
       return false;
     }
   }
 
   async list(
-    which: "local" | "webdav"
+    which: "local" | "webdav",
   ): Promise<BackupEntry[]> {
-    const target =
-      which === "local" ? this.localTarget() : await this.webdavTarget();
+    const target = which === "local"
+      ? this.localTarget()
+      : await this.webdavTarget();
     if (!target) return [];
     return await target.list();
   }
@@ -298,7 +304,7 @@ export class BackupService {
   async restore(
     which: "local" | "webdav" | "file",
     nameOrPath: string,
-    onProgress?: (progress: RestoreProgress) => void
+    onProgress?: (progress: RestoreProgress) => void,
   ): Promise<{ counts: Record<string, number>; safetyBackup?: string }> {
     const report = (step: RestoreProgress["step"], message: string) => {
       log.info(`Restore: ${message}`);
@@ -312,15 +318,18 @@ export class BackupService {
         nameOrPath,
         [
           this.options.settings.get("backup").localDirectory,
-          appDataDir()
+          appDataDir(),
         ],
-        "backup file"
+        "backup file",
       );
       raw = await Deno.readFile(path);
     } else {
-      const target =
-        which === "local" ? this.localTarget() : await this.webdavTarget();
-      if (!target) throw new Error(`The ${which} backup location is not configured`);
+      const target = which === "local"
+        ? this.localTarget()
+        : await this.webdavTarget();
+      if (!target) {
+        throw new Error(`The ${which} backup location is not configured`);
+      }
       raw = await target.read(nameOrPath);
     }
 
@@ -342,7 +351,7 @@ export class BackupService {
             `not be created (${
               error instanceof Error ? error.message : String(error)
             }). Fix that first, or turn off "back up before restore" if you ` +
-            "are sure."
+            "are sure.",
         );
       }
     }
@@ -363,7 +372,7 @@ export class BackupService {
         this.options.sqlite.run(handle, `DELETE FROM ${table}`, []);
         for (const row of rows) {
           const entries = Object.entries(row).filter(
-            ([, value]) => value !== undefined
+            ([, value]) => value !== undefined,
           );
           if (entries.length === 0) continue;
           const names = entries.map(([key]) => `"${key}"`).join(", ");
@@ -375,7 +384,7 @@ export class BackupService {
               value !== null && typeof value === "object"
                 ? JSON.stringify(value)
                 : value
-            )
+            ),
           );
         }
         counts[table] = rows.length;
@@ -386,7 +395,7 @@ export class BackupService {
       throw new Error(
         `The restore was rolled back and your data is unchanged: ${
           error instanceof Error ? error.message : String(error)
-        }`
+        }`,
       );
     }
 
@@ -399,8 +408,8 @@ export class BackupService {
             start(controller) {
               controller.enqueue(content);
               controller.close();
-            }
-          })
+            },
+          }),
         );
       }
     }
@@ -409,7 +418,7 @@ export class BackupService {
     const integrity = this.options.sqlite.run(
       handle,
       "PRAGMA integrity_check",
-      []
+      [],
     ).rows[0] as { integrity_check?: string } | undefined;
     const verdict = integrity?.integrity_check;
     if (verdict && verdict !== "ok") {
@@ -417,7 +426,7 @@ export class BackupService {
         `The database failed its integrity check after restore (${verdict}). ` +
           (safetyBackup
             ? `Your previous data is in the safety backup ${safetyBackup}.`
-            : "")
+            : ""),
       );
     }
 
@@ -425,7 +434,7 @@ export class BackupService {
     log.info("Restore finished", {
       counts,
       from: manifest.createdAt,
-      safetyBackup
+      safetyBackup,
     });
     return { counts, safetyBackup };
   }

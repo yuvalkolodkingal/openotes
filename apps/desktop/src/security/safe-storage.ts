@@ -80,7 +80,7 @@ export class SafeStorage {
       toArrayBuffer(secret),
       { name: "AES-GCM" },
       false,
-      ["encrypt", "decrypt"]
+      ["encrypt", "decrypt"],
     );
     return this.key;
   }
@@ -93,8 +93,8 @@ export class SafeStorage {
       await crypto.subtle.encrypt(
         { name: "AES-GCM", iv: toArrayBuffer(iv) },
         key,
-        toArrayBuffer(fromBase64(plaintextBase64))
-      )
+        toArrayBuffer(fromBase64(plaintextBase64)),
+      ),
     );
     const combined = new Uint8Array(iv.length + ciphertext.length);
     combined.set(iv, 0);
@@ -111,16 +111,19 @@ export class SafeStorage {
     try {
       const plaintext = new Uint8Array(
         await crypto.subtle.decrypt(
-          { name: "AES-GCM", iv: toArrayBuffer(combined.subarray(0, IV_BYTES)) },
+          {
+            name: "AES-GCM",
+            iv: toArrayBuffer(combined.subarray(0, IV_BYTES)),
+          },
           key,
-          toArrayBuffer(combined.subarray(IV_BYTES))
-        )
+          toArrayBuffer(combined.subarray(IV_BYTES)),
+        ),
       );
       return toBase64(plaintext);
     } catch {
       throw new Error(
         "The stored key could not be decrypted. The safe-storage secret may " +
-          "have been deleted or restored from a different installation."
+          "have been deleted or restored from a different installation.",
       );
     }
   }

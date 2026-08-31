@@ -25,7 +25,7 @@ import {
   attachmentsDir,
   cacheDir,
   documentsDir,
-  ensureDir
+  ensureDir,
 } from "./native/paths.ts";
 import { logger } from "./native/logger.ts";
 import { SettingsStore } from "./native/settings.ts";
@@ -37,7 +37,7 @@ import {
   Dialogs,
   Notifications,
   Shell,
-  ThemeWatcher
+  ThemeWatcher,
 } from "./native/shell.ts";
 import { CredentialStore } from "./security/credentials.ts";
 import { SafeStorage } from "./security/safe-storage.ts";
@@ -89,7 +89,7 @@ export interface AppContext {
   emit(event: EventName, payload: unknown): void;
   markRendererReady(): void;
   notifyLocalChange(): void;
-  reconfigureSync(): Promise<void>;
+  reconfigureSync(): void;
   applyDesktopIntegration(): Promise<void>;
   allowedRoots(): string[];
   refreshAllowedRoots(): void;
@@ -110,7 +110,9 @@ export interface CreateAppOptions {
  * the only place that knows how the pieces fit together, which keeps every
  * service testable in isolation.
  */
-export async function createApp(options: CreateAppOptions): Promise<AppContext> {
+export async function createApp(
+  options: CreateAppOptions,
+): Promise<AppContext> {
   await ensureDir(appDataDir());
   await ensureDir(attachmentsDir());
   await ensureDir(cacheDir());
@@ -145,7 +147,7 @@ export async function createApp(options: CreateAppOptions): Promise<AppContext> 
   const computeAllowedRoots = () => [
     appDataDir(),
     settings.get("backup").localDirectory,
-    documentsDir()
+    documentsDir(),
   ];
   const exports = new ExportWriter(computeAllowedRoots());
 
@@ -197,16 +199,16 @@ export async function createApp(options: CreateAppOptions): Promise<AppContext> 
       context.sync?.notifyLocalChange();
     },
 
-    async reconfigureSync() {
+    reconfigureSync() {
       context.sync.stop();
-      await context.sync.start();
+      context.sync.start();
     },
 
     async applyDesktopIntegration() {
       const desktop = settings.get("desktop");
       log.info("Applied desktop integration settings", {
         autoStart: desktop.autoStart,
-        nativeTitlebar: desktop.nativeTitlebar
+        nativeTitlebar: desktop.nativeTitlebar,
       });
       await Promise.resolve();
     },
@@ -234,7 +236,7 @@ export async function createApp(options: CreateAppOptions): Promise<AppContext> 
         await context.sync?.syncBeforeShutdown();
       } catch (error) {
         log.warn("Final sync did not complete", {
-          error: error instanceof Error ? error.message : String(error)
+          error: error instanceof Error ? error.message : String(error),
         });
       }
       context.sync?.stop();
@@ -244,7 +246,7 @@ export async function createApp(options: CreateAppOptions): Promise<AppContext> 
       sqlite.closeAll();
       await settings.flush();
       logger.close();
-    }
+    },
   };
 
   const sync = new SyncService({
@@ -258,14 +260,15 @@ export async function createApp(options: CreateAppOptions): Promise<AppContext> 
         if (!syncStore) {
           throw new Error("The vault is not open yet");
         }
-        const value = (syncStore as unknown as Record<string | symbol, unknown>)[
-          property
-        ];
+        const value =
+          (syncStore as unknown as Record<string | symbol, unknown>)[
+            property
+          ];
         return typeof value === "function" ? value.bind(syncStore) : value;
-      }
+      },
     }),
     onStatus: (status: SyncStatus) => emit("webdav.status", status),
-    onConflict: (info) => emit("webdav.conflict", info)
+    onConflict: (info) => emit("webdav.conflict", info),
   });
 
   const backups = new BackupService({
@@ -275,7 +278,7 @@ export async function createApp(options: CreateAppOptions): Promise<AppContext> 
     databaseHandle: () => databaseHandle,
     store: () => syncStore,
     files,
-    onCompleted: (info) => emit("backup.completed", info)
+    onCompleted: (info) => emit("backup.completed", info),
   });
 
   const updater = new UpdateService({
@@ -296,7 +299,7 @@ export async function createApp(options: CreateAppOptions): Promise<AppContext> 
           return emit("updater.error", { message: event.message });
       }
     },
-    openExternal: (url) => shell.openExternal(url)
+    openExternal: (url) => shell.openExternal(url),
   });
 
   context.sync = sync;
@@ -317,15 +320,17 @@ export async function createApp(options: CreateAppOptions): Promise<AppContext> 
         sqlite,
         databaseHandle: handle,
         settings,
-        onConflictCopy: (info) => emit("webdav.conflict", info)
+        onConflictCopy: (info) => emit("webdav.conflict", info),
       });
       log.info("Vault opened; sync adapter attached");
       // Starting sync is safe now: it no-ops unless WebDAV is configured.
-      void sync.start().catch((error) =>
+      try {
+        sync.start();
+      } catch (error) {
         log.warn("Could not start synchronization", {
-          error: error instanceof Error ? error.message : String(error)
-        })
-      );
+          error: error instanceof Error ? error.message : String(error),
+        });
+      }
       void backups.runIfDue();
     }
     return handle;
@@ -339,7 +344,7 @@ export async function createApp(options: CreateAppOptions): Promise<AppContext> 
       hasWebDavPassword = await credentials.has("webdav.password");
     } catch (error) {
       log.warn("Could not unlock stored credentials at startup", {
-        error: error instanceof Error ? error.message : String(error)
+        error: error instanceof Error ? error.message : String(error),
       });
     }
   }
@@ -347,7 +352,7 @@ export async function createApp(options: CreateAppOptions): Promise<AppContext> 
   log.info("Application ready", {
     version: APP_VERSION,
     dataDir: appDataDir(),
-    deno: Deno.version.deno
+    deno: Deno.version.deno,
   });
 
   return context;

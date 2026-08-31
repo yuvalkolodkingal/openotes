@@ -125,7 +125,7 @@ export const DEFAULT_SYNC_CONFIG: Omit<
   requestTimeout: 30_000,
   maxRetries: 3,
   syncAttachments: true,
-  allowInsecureHttp: false
+  allowInsecureHttp: false,
 };
 
 export type SyncStatus =
@@ -199,7 +199,7 @@ export class SyncError extends Error {
       | "corrupt-data"
       | "insecure-url"
       | "cancelled",
-    readonly status?: number
+    readonly status?: number,
   ) {
     super(message);
     this.name = "SyncError";

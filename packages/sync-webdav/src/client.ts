@@ -56,20 +56,20 @@ export class WebDavClient {
 
   constructor(
     private readonly transport: HttpTransport,
-    options: WebDavClientOptions
+    options: WebDavClientOptions,
   ) {
     let url = options.baseUrl;
     if (!/^https?:\/\//i.test(url)) {
       throw new SyncError(
         `Invalid WebDAV URL: ${url} — must start with http:// or https://`,
-        "insecure-url"
+        "insecure-url",
       );
     }
     if (url.startsWith("http://") && !options.allowInsecureHttp) {
       throw new SyncError(
         "Plain HTTP WebDAV is disabled. Use HTTPS, or explicitly enable " +
           "insecure connections for trusted local networks.",
-        "insecure-url"
+        "insecure-url",
       );
     }
     if (!url.endsWith("/")) url += "/";
@@ -77,8 +77,8 @@ export class WebDavClient {
     this.basePath = new URL(url).pathname;
     this.timeout = options.requestTimeout ?? 30_000;
     this.maxRetries = options.maxRetries ?? 3;
-    this.delay =
-      options.delay ?? ((ms) => new Promise((resolve) => setTimeout(resolve, ms)));
+    this.delay = options.delay ??
+      ((ms) => new Promise((resolve) => setTimeout(resolve, ms)));
   }
 
   /** Resolve a repository-relative path to an absolute URL. */
@@ -90,7 +90,7 @@ export class WebDavClient {
         if (part === "." || part === "..") {
           throw new SyncError(
             `Invalid path segment in "${path}"`,
-            "corrupt-data"
+            "corrupt-data",
           );
         }
         return encodeURIComponent(part);
@@ -111,7 +111,7 @@ export class WebDavClient {
   private async send(
     req: HttpRequest,
     okStatuses: number[],
-    retryable = true
+    retryable = true,
   ): Promise<HttpResponse> {
     let lastError: SyncError | undefined;
     const attempts = retryable ? this.maxRetries + 1 : 1;
@@ -121,13 +121,17 @@ export class WebDavClient {
       }
       let response: HttpResponse;
       try {
-        response = await this.transport.request({ timeout: this.timeout, ...req });
+        response = await this.transport.request({
+          timeout: this.timeout,
+          ...req,
+        });
       } catch (e) {
-        lastError =
-          e instanceof SyncError
-            ? e
-            : new SyncError(String(e), "network");
-        if (!lastError.isRetryable || lastError.code === "cancelled") throw lastError;
+        lastError = e instanceof SyncError
+          ? e
+          : new SyncError(String(e), "network");
+        if (!lastError.isRetryable || lastError.code === "cancelled") {
+          throw lastError;
+        }
         continue;
       }
       if (okStatuses.includes(response.status)) return response;
@@ -145,27 +149,27 @@ export class WebDavClient {
   async options(): Promise<{ dav: string; allow: string }> {
     const response = await this.send(
       { method: "OPTIONS", url: this.baseUrl },
-      [200, 204, 207]
+      [200, 204, 207],
     );
     return {
       dav: response.headers["dav"] ?? "",
-      allow: response.headers["allow"] ?? ""
+      allow: response.headers["allow"] ?? "",
     };
   }
 
   async head(
-    path: string
+    path: string,
   ): Promise<{ exists: boolean; etag?: string; contentLength?: number }> {
     try {
       const response = await this.send(
         { method: "HEAD", url: this.url(path) },
-        [200, 204]
+        [200, 204],
       );
       const length = response.headers["content-length"];
       return {
         exists: true,
         etag: response.headers["etag"],
-        contentLength: length ? parseInt(length, 10) : undefined
+        contentLength: length ? parseInt(length, 10) : undefined,
       };
     } catch (e) {
       if (e instanceof SyncError && e.code === "not-found") {
@@ -182,11 +186,11 @@ export class WebDavClient {
         url: this.url(path.endsWith("/") || path === "" ? path : path + "/"),
         headers: {
           Depth: String(depth),
-          "Content-Type": 'application/xml; charset="utf-8"'
+          "Content-Type": 'application/xml; charset="utf-8"',
         },
-        body: PROPFIND_BODY
+        body: PROPFIND_BODY,
       },
-      [207, 200]
+      [207, 200],
     );
     const text = new TextDecoder().decode(response.body);
     return parseMultistatus(text);
@@ -203,7 +207,7 @@ export class WebDavClient {
     }
     const selfPath = this.relativePath({
       href: new URL(this.url(path)).pathname,
-      isCollection: true
+      isCollection: true,
     });
     return entries.filter((entry) => this.relativePath(entry) !== selfPath);
   }
@@ -215,8 +219,11 @@ export class WebDavClient {
   async mkcol(path: string): Promise<void> {
     try {
       await this.send(
-        { method: "MKCOL", url: this.url(path.endsWith("/") ? path : path + "/") },
-        [201, 200]
+        {
+          method: "MKCOL",
+          url: this.url(path.endsWith("/") ? path : path + "/"),
+        },
+        [201, 200],
       );
     } catch (e) {
       // 405 = already exists on most servers; treat as success.
@@ -247,7 +254,7 @@ export class WebDavClient {
   async get(path: string): Promise<Uint8Array> {
     const response = await this.send(
       { method: "GET", url: this.url(path) },
-      [200]
+      [200],
     );
     return response.body;
   }
@@ -264,10 +271,10 @@ export class WebDavClient {
   async put(
     path: string,
     body: Uint8Array | string,
-    options: PutOptions = {}
+    options: PutOptions = {},
   ): Promise<{ etag?: string }> {
     const headers: Record<string, string> = {
-      "Content-Type": options.contentType ?? "application/octet-stream"
+      "Content-Type": options.contentType ?? "application/octet-stream",
     };
     if (options.ifNoneMatch) headers["If-None-Match"] = "*";
     if (options.ifMatch) headers["If-Match"] = options.ifMatch;
@@ -277,7 +284,7 @@ export class WebDavClient {
     // retries are safe. Conditional failures (412) are never retried.
     const response = await this.send(
       { method: "PUT", url: this.url(path), headers, body },
-      [200, 201, 204]
+      [200, 201, 204],
     );
     return { etag: response.headers["etag"] };
   }
@@ -286,7 +293,7 @@ export class WebDavClient {
     try {
       await this.send(
         { method: "DELETE", url: this.url(path) },
-        [200, 202, 204]
+        [200, 202, 204],
       );
     } catch (e) {
       if (e instanceof SyncError && e.code === "not-found") return;
@@ -302,10 +309,10 @@ export class WebDavClient {
           url: this.url(from),
           headers: {
             Destination: this.url(to),
-            Overwrite: overwrite ? "T" : "F"
-          }
+            Overwrite: overwrite ? "T" : "F",
+          },
         },
-        [200, 201, 204]
+        [200, 201, 204],
       );
       return;
     } catch (e) {
@@ -332,7 +339,7 @@ export class WebDavClient {
     if (!head.exists) {
       throw new SyncError(
         `Upload verification failed: ${path} does not exist on the server`,
-        "corrupt-data"
+        "corrupt-data",
       );
     }
     if (
@@ -342,7 +349,7 @@ export class WebDavClient {
       throw new SyncError(
         `Upload verification failed: ${path} has length ` +
           `${head.contentLength}, expected ${expectedLength}`,
-        "corrupt-data"
+        "corrupt-data",
       );
     }
   }
@@ -356,13 +363,13 @@ function statusToError(status: number, req: HttpRequest): SyncError {
         "Authentication failed — check your WebDAV username and password" +
           suffix,
         "unauthorized",
-        status
+        status,
       );
     case 403:
       return new SyncError(
         "The WebDAV server denied access" + suffix,
         "forbidden",
-        status
+        status,
       );
     case 404:
     case 410:
@@ -371,13 +378,13 @@ function statusToError(status: number, req: HttpRequest): SyncError {
       return new SyncError(
         "Conflict — a parent collection may be missing" + suffix,
         "conflict",
-        status
+        status,
       );
     case 412:
       return new SyncError(
         "Precondition failed — the resource changed on the server" + suffix,
         "precondition-failed",
-        status
+        status,
       );
     case 423:
       return new SyncError("Resource is locked" + suffix, "forbidden", status);
@@ -388,7 +395,7 @@ function statusToError(status: number, req: HttpRequest): SyncError {
       return new SyncError(
         "Unexpected response" + suffix,
         "server-error",
-        status
+        status,
       );
   }
 }

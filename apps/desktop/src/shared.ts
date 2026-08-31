@@ -42,7 +42,7 @@ export interface DesktopIntegration {
 /** Default locations, relative to the directories the runtime resolves. */
 export const PATHS = {
   backupsDirectory: "documents/Openotes/backups",
-  logsDirectory: "logs/"
+  logsDirectory: "logs/",
 } as const;
 
 /** Sync status, mirrored from @notesnook/sync-webdav for the status indicator. */
@@ -62,4 +62,4 @@ export interface Capabilities {
   cloudAccountRequired: false;
 }
 
-export type { ProcedureName, EventName } from "./rpc/protocol.ts";
+export type { EventName, ProcedureName } from "./rpc/protocol.ts";

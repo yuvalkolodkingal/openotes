@@ -22,10 +22,10 @@ import { WebDavClient } from "./client.ts";
 import { SyncCrypto } from "./crypto.ts";
 import { OutgoingQueue, SyncTrigger } from "./queue.ts";
 import {
+  assertSafeId,
   attachmentPath,
   PATHS,
   SyncRepository,
-  assertSafeId
 } from "./repository.ts";
 import {
   ApplyResult,
@@ -34,7 +34,7 @@ import {
   SyncDataStore,
   SyncError,
   SyncRecord,
-  SyncStatus
+  SyncStatus,
 } from "./types.ts";
 
 export interface AttachmentSource {
@@ -75,7 +75,7 @@ const NOOP_LOGGER: SyncLogger = {
   debug: () => {},
   info: () => {},
   warn: () => {},
-  error: () => {}
+  error: () => {},
 };
 
 export interface SyncResult {
@@ -127,25 +127,25 @@ export class SyncEngine {
       metadata = await this.repository.initialize(
         masterKey,
         deviceId,
-        newGeneration(deviceId)
+        newGeneration(deviceId),
       );
     }
 
     // The remote salt is authoritative: re-derive the master key with it so
     // a second device with the same passphrase lands on the same keys.
-    let effectiveMaster = masterKey;
+    const effectiveMaster = masterKey;
     if (metadata.salt && metadata.salt !== masterKey.salt) {
       throw new SyncError(
         "This device derived its keys with a different salt than the remote " +
           "repository. Re-enter your sync passphrase to re-derive keys.",
-        "bad-key"
+        "bad-key",
       );
     }
 
     this.syncKey = await this.repository.verifyKey(metadata, effectiveMaster);
     this.attachmentKey = await crypto.deriveSubkey(
       effectiveMaster,
-      "attachment"
+      "attachment",
     );
     this.metadata = metadata;
 
@@ -155,7 +155,7 @@ export class SyncEngine {
       // that no longer exists, so start over rather than skip records.
       this.logger.warn("Remote generation changed; resetting sync cursors", {
         knownGeneration,
-        remoteGeneration: metadata.generation
+        remoteGeneration: metadata.generation,
       });
       for (const device of Object.keys(await store.getCursors())) {
         await store.setCursor(device, 0);
@@ -167,7 +167,7 @@ export class SyncEngine {
     await this.repository.registerDevice(this.syncKey, deviceId, {
       name: this.options.deviceName ?? "Unnamed device",
       platform: this.options.platform ?? "desktop",
-      appVersion: this.options.appVersion ?? "0.0.0"
+      appVersion: this.options.appVersion ?? "0.0.0",
     });
 
     return metadata;
@@ -192,7 +192,7 @@ export class SyncEngine {
       ok: true,
       protocolVersion: metadata.version,
       devices: devices.length,
-      initialized: true
+      initialized: true,
     };
   }
 
@@ -204,7 +204,7 @@ export class SyncEngine {
     if (this.running) {
       throw new SyncError(
         "A synchronization cycle is already running",
-        "conflict"
+        "conflict",
       );
     }
     this.running = true;
@@ -217,7 +217,7 @@ export class SyncEngine {
       attachmentsUploaded: 0,
       attachmentsDownloaded: 0,
       devices: 0,
-      durationMs: 0
+      durationMs: 0,
     };
 
     try {
@@ -264,17 +264,14 @@ export class SyncEngine {
       }
       return result;
     } catch (error) {
-      const syncError =
-        error instanceof SyncError
-          ? error
-          : new SyncError(
-              error instanceof Error ? error.message : String(error),
-              "network"
-            );
+      const syncError = error instanceof SyncError ? error : new SyncError(
+        error instanceof Error ? error.message : String(error),
+        "network",
+      );
       await this.options.queue.recordFailure(syncError.message);
       this.logger.error("Sync cycle failed", {
         code: syncError.code,
-        message: syncError.message
+        message: syncError.message,
       });
       if (syncError.code === "network" || syncError.code === "timeout") {
         this.setStatus({ type: "offline" });
@@ -291,7 +288,7 @@ export class SyncEngine {
     syncKey: SerializedKey,
     selfDeviceId: string,
     devices: string[],
-    cursors: CursorMap
+    cursors: CursorMap,
   ): Promise<{ downloaded: number; applied: number; conflicts: number }> {
     const store = this.options.store;
     let downloaded = 0;
@@ -302,14 +299,14 @@ export class SyncEngine {
       if (device === selfDeviceId) continue;
       const cursor = cursors[device] ?? 0;
       const sequences = (await this.repository.listSequences(device)).filter(
-        (sequence) => sequence > cursor
+        (sequence) => sequence > cursor,
       );
       if (sequences.length === 0) continue;
 
       this.logger.debug("Pulling from device", {
         device,
         from: cursor,
-        batches: sequences.length
+        batches: sequences.length,
       });
 
       for (const sequence of sequences) {
@@ -326,11 +323,12 @@ export class SyncEngine {
             this.logger.error("Skipping unreadable change record", {
               device,
               sequence,
-              error: error.message
+              error: error.message,
             });
             this.setStatus({
               type: "error",
-              error: `Change record ${device}/${sequence} could not be read: ${error.message}`
+              error:
+                `Change record ${device}/${sequence} could not be read: ${error.message}`,
             });
             continue;
           }
@@ -344,7 +342,10 @@ export class SyncEngine {
             conflicts++;
             this.options.onConflict?.(record);
           }
-          if (outcome === "applied" || outcome === "merged" || outcome === "conflicted") {
+          if (
+            outcome === "applied" || outcome === "merged" ||
+            outcome === "conflicted"
+          ) {
             applied++;
           }
         }
@@ -358,14 +359,14 @@ export class SyncEngine {
 
   private async applyRecord(
     syncKey: SerializedKey,
-    record: SyncRecord
+    record: SyncRecord,
   ): Promise<ApplyResult> {
     let resolved = record;
     if (record.objectRef && record.item === undefined) {
       const data = await this.repository.getObject(syncKey, record.objectRef);
       resolved = {
         ...record,
-        item: JSON.parse(new TextDecoder().decode(data))
+        item: JSON.parse(new TextDecoder().decode(data)),
       };
     }
 
@@ -388,7 +389,7 @@ export class SyncEngine {
 
   private async push(
     syncKey: SerializedKey,
-    deviceId: string
+    deviceId: string,
   ): Promise<{ uploaded: number; attachmentsUploaded: number }> {
     const { store, queue } = this.options;
 
@@ -414,7 +415,7 @@ export class SyncEngine {
       if (encoded.length > inlineLimit) {
         const objectRef = await this.repository.putObject(
           syncKey,
-          new TextEncoder().encode(encoded)
+          new TextEncoder().encode(encoded),
         );
         records.push({ ...record, item: undefined, objectRef });
       } else {
@@ -423,7 +424,12 @@ export class SyncEngine {
     }
 
     const sequence = (await store.getLocalSequence()) + 1;
-    await this.writeBatchAtNextFreeSequence(syncKey, deviceId, sequence, records);
+    await this.writeBatchAtNextFreeSequence(
+      syncKey,
+      deviceId,
+      sequence,
+      records,
+    );
 
     return { uploaded: records.length, attachmentsUploaded };
   }
@@ -436,7 +442,7 @@ export class SyncEngine {
     syncKey: SerializedKey,
     deviceId: string,
     startSequence: number,
-    records: SyncRecord[]
+    records: SyncRecord[],
   ): Promise<void> {
     const { store, queue } = this.options;
     let sequence = startSequence;
@@ -455,7 +461,7 @@ export class SyncEngine {
         ) {
           this.logger.warn("Sequence already taken remotely, advancing", {
             deviceId,
-            sequence
+            sequence,
           });
           sequence++;
           await store.setLocalSequence(sequence - 1);
@@ -466,12 +472,12 @@ export class SyncEngine {
     }
     throw new SyncError(
       `Could not find a free journal sequence for device ${deviceId}`,
-      "conflict"
+      "conflict",
     );
   }
 
   private async uploadPendingAttachments(
-    syncKey: SerializedKey
+    syncKey: SerializedKey,
   ): Promise<number> {
     const source = this.options.attachments;
     if (!source) return 0;
@@ -488,14 +494,14 @@ export class SyncEngine {
       const stream = await source.read(hash);
       if (!stream) {
         this.logger.warn("Attachment content missing locally; skipping", {
-          hash
+          hash,
         });
         await this.options.queue.acknowledgeAttachment(hash);
         continue;
       }
       const encrypted = await this.encryptAttachmentStream(
         attachmentKey,
-        stream
+        stream,
       );
       await this.options.client.put(path, encrypted);
       await this.options.client.verifyUpload(path, encrypted.length);
@@ -529,8 +535,8 @@ export class SyncEngine {
           start(controller) {
             controller.enqueue(plaintext);
             controller.close();
-          }
-        })
+          },
+        }),
       );
       await this.options.queue.acknowledgeDownload(hash);
       downloaded++;
@@ -547,7 +553,7 @@ export class SyncEngine {
    */
   async encryptAttachmentStream(
     key: SerializedKey,
-    stream: ReadableStream<Uint8Array>
+    stream: ReadableStream<Uint8Array>,
   ): Promise<Uint8Array> {
     const { iv, stream: transform } = await this.options.crypto
       .createEncryptionStream(key);
@@ -568,9 +574,11 @@ export class SyncEngine {
         while (buffer.length >= ATTACHMENT_CHUNK_SIZE) {
           await writer.write({
             data: buffer.slice(0, ATTACHMENT_CHUNK_SIZE),
-            final: false
+            final: false,
           });
-          buffer = buffer.slice(ATTACHMENT_CHUNK_SIZE) as Uint8Array<ArrayBuffer>;
+          buffer = buffer.slice(ATTACHMENT_CHUNK_SIZE) as Uint8Array<
+            ArrayBuffer
+          >;
         }
       }
       await writer.write({ data: buffer, final: true });
@@ -589,13 +597,13 @@ export class SyncEngine {
 
   async decryptAttachmentBytes(
     key: SerializedKey,
-    data: Uint8Array
+    data: Uint8Array,
   ): Promise<Uint8Array> {
     let offset = 0;
     const headerLength = readUint32be(data, offset);
     offset += 4;
     const iv = new TextDecoder().decode(
-      data.subarray(offset, offset + headerLength)
+      data.subarray(offset, offset + headerLength),
     );
     offset += headerLength;
 
@@ -629,7 +637,7 @@ export class SyncEngine {
    */
   async rebuildRemote(
     fullState: SyncRecord[],
-    onProgress?: (done: number, total: number) => void
+    onProgress?: (done: number, total: number) => void,
   ): Promise<string> {
     const { store, masterKey, client } = this.options;
     const deviceId = await store.getDeviceId();
@@ -642,18 +650,18 @@ export class SyncEngine {
     // writing protocol.json last — readers never see a half-built repo.
     const stagedRepository = new SyncRepository(
       new StagedClient(client, staging) as unknown as WebDavClient,
-      this.options.crypto
+      this.options.crypto,
     );
     const metadata = await stagedRepository.initialize(
       masterKey,
       deviceId,
-      generation
+      generation,
     );
     const syncKey = await stagedRepository.verifyKey(metadata, masterKey);
     await stagedRepository.registerDevice(syncKey, deviceId, {
       name: this.options.deviceName ?? "Unnamed device",
       platform: this.options.platform ?? "desktop",
-      appVersion: this.options.appVersion ?? "0.0.0"
+      appVersion: this.options.appVersion ?? "0.0.0",
     });
 
     const BATCH = 500;
@@ -663,7 +671,7 @@ export class SyncEngine {
         syncKey,
         deviceId,
         Math.floor(i / BATCH) + 1,
-        slice
+        slice,
       );
       onProgress?.(Math.min(i + BATCH, fullState.length), fullState.length);
     }
@@ -674,7 +682,7 @@ export class SyncEngine {
       throw new SyncError(
         "Rebuilt repository failed verification; the existing remote data " +
           "has been left untouched.",
-        "corrupt-data"
+        "corrupt-data",
       );
     }
 
@@ -703,7 +711,7 @@ export class SyncEngine {
   /** Remove remote attachment objects no longer referenced by any device. */
   async pruneAttachments(
     referencedHashes: Set<string>,
-    retentionMs = 30 * 24 * 60 * 60 * 1000
+    retentionMs = 30 * 24 * 60 * 60 * 1000,
   ): Promise<number> {
     const entries = await this.options.client.list(PATHS.attachments + "/");
     const cutoff = Date.now() - retentionMs;
@@ -771,13 +779,13 @@ function uint32be(value: number): Uint8Array<ArrayBuffer> {
 function readUint32be(data: Uint8Array, offset: number): number {
   return new DataView(data.buffer, data.byteOffset + offset, 4).getUint32(
     0,
-    false
+    false,
   );
 }
 
 function concat(
   a: Uint8Array,
-  b: Uint8Array
+  b: Uint8Array,
 ): Uint8Array<ArrayBuffer> {
   const out = new Uint8Array(a.length + b.length);
   out.set(a, 0);
@@ -801,7 +809,7 @@ function concatAll(chunks: readonly Uint8Array[]): Uint8Array<ArrayBuffer> {
 class StagedClient {
   constructor(
     private readonly inner: WebDavClient,
-    private readonly prefix: string
+    private readonly prefix: string,
   ) {}
   url(path: string) {
     return this.inner.url(`${this.prefix}/${path}`);
@@ -843,7 +851,7 @@ class StagedClient {
     return this.inner.put(
       `${this.prefix}/${path}`,
       body,
-      options as Parameters<WebDavClient["put"]>[2]
+      options as Parameters<WebDavClient["put"]>[2],
     );
   }
   delete(path: string) {
@@ -853,7 +861,7 @@ class StagedClient {
     return this.inner.move(
       `${this.prefix}/${from}`,
       `${this.prefix}/${to}`,
-      overwrite
+      overwrite,
     );
   }
   verifyUpload(path: string, expectedLength: number) {

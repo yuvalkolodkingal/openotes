@@ -26,7 +26,7 @@ import {
   PROTOCOL_VERSION,
   ProtocolMetadata,
   SyncError,
-  SyncRecord
+  SyncRecord,
 } from "./types.ts";
 
 /**
@@ -48,7 +48,7 @@ export const PATHS = {
   devices: "devices",
   objects: "objects",
   attachments: "attachments",
-  backups: "backups"
+  backups: "backups",
 } as const;
 
 const KEY_CHECK_PLAINTEXT = "notesnook-webdav-sync-key-check-v1";
@@ -92,7 +92,7 @@ export function assertSafeId(id: string): void {
   if (!/^[A-Za-z0-9_-]{1,128}$/.test(id)) {
     throw new SyncError(
       `Unsafe identifier: ${JSON.stringify(id)}`,
-      "corrupt-data"
+      "corrupt-data",
     );
   }
 }
@@ -100,7 +100,7 @@ export function assertSafeId(id: string): void {
 export class SyncRepository {
   constructor(
     private readonly client: WebDavClient,
-    private readonly crypto: SyncCrypto
+    private readonly crypto: SyncCrypto,
   ) {}
 
   /** Read protocol.json. Returns undefined when the remote is empty. */
@@ -113,20 +113,20 @@ export class SyncRepository {
     } catch {
       throw new SyncError(
         "protocol.json on the server is not valid JSON",
-        "corrupt-data"
+        "corrupt-data",
       );
     }
     if (parsed.protocol !== PROTOCOL_NAME) {
       throw new SyncError(
         `The remote directory holds a different application's data ` +
           `(protocol "${parsed.protocol}"). Choose an empty directory.`,
-        "protocol-mismatch"
+        "protocol-mismatch",
       );
     }
     if (typeof parsed.version !== "number") {
       throw new SyncError(
         "protocol.json is missing a version field",
-        "corrupt-data"
+        "corrupt-data",
       );
     }
     if (parsed.version > PROTOCOL_VERSION) {
@@ -134,7 +134,7 @@ export class SyncRepository {
         `The remote repository uses sync protocol version ${parsed.version}, ` +
           `but this app only supports version ${PROTOCOL_VERSION}. Update the ` +
           `app before syncing — writing now could corrupt your data.`,
-        "protocol-mismatch"
+        "protocol-mismatch",
       );
     }
     return parsed;
@@ -147,7 +147,7 @@ export class SyncRepository {
   async initialize(
     masterKey: SerializedKey,
     deviceId: string,
-    generation: string
+    generation: string,
   ): Promise<ProtocolMetadata> {
     await this.client.mkcolRecursive(PATHS.devices + "/");
     await this.client.mkcolRecursive(PATHS.objects + "/");
@@ -162,14 +162,14 @@ export class SyncRepository {
       keyCheck: await this.crypto.encryptJson(syncKey, KEY_CHECK_PLAINTEXT),
       createdAt: Date.now(),
       createdBy: deviceId,
-      generation
+      generation,
     };
 
     const body = new TextEncoder().encode(JSON.stringify(metadata, null, 2));
     try {
       await this.client.put(PATHS.protocol, body, {
         ifNoneMatch: true,
-        contentType: "application/json"
+        contentType: "application/json",
       });
     } catch (e) {
       if (e instanceof SyncError && e.code === "precondition-failed") {
@@ -192,17 +192,17 @@ export class SyncRepository {
    */
   async verifyKey(
     metadata: ProtocolMetadata,
-    masterKey: SerializedKey
+    masterKey: SerializedKey,
   ): Promise<SerializedKey> {
     const syncKey = await this.crypto.deriveSubkey(masterKey, "sync");
     const value = await this.crypto.decryptJson<string>(
       syncKey,
-      metadata.keyCheck
+      metadata.keyCheck,
     );
     if (value !== KEY_CHECK_PLAINTEXT) {
       throw new SyncError(
         "The sync passphrase does not match this remote repository",
-        "bad-key"
+        "bad-key",
       );
     }
     return syncKey;
@@ -226,7 +226,7 @@ export class SyncRepository {
   async registerDevice(
     syncKey: SerializedKey,
     deviceId: string,
-    info: { name: string; platform: string; appVersion: string }
+    info: { name: string; platform: string; appVersion: string },
   ): Promise<void> {
     const path = `${devicePath(deviceId)}/device.json`;
     await this.client.mkcolRecursive(`${devicePath(deviceId)}/changes/`);
@@ -234,8 +234,8 @@ export class SyncRepository {
       id: deviceId,
       info: await this.crypto.encryptJson(syncKey, {
         ...info,
-        registeredAt: Date.now()
-      })
+        registeredAt: Date.now(),
+      }),
     });
     const body = new TextEncoder().encode(payload);
     await this.client.put(path, body, { contentType: "application/json" });
@@ -243,10 +243,10 @@ export class SyncRepository {
 
   async readDeviceInfo(
     syncKey: SerializedKey,
-    deviceId: string
+    deviceId: string,
   ): Promise<{ name: string; platform: string } | undefined> {
     const raw = await this.client.getIfExists(
-      `${devicePath(deviceId)}/device.json`
+      `${devicePath(deviceId)}/device.json`,
     );
     if (!raw) return undefined;
     try {
@@ -260,7 +260,7 @@ export class SyncRepository {
   /** Sequence numbers present in a device's journal, ascending. */
   async listSequences(deviceId: string): Promise<number[]> {
     const entries = await this.client.list(
-      `${devicePath(deviceId)}/changes/`
+      `${devicePath(deviceId)}/changes/`,
     );
     const sequences: number[] = [];
     for (const entry of entries) {
@@ -292,7 +292,7 @@ export class SyncRepository {
     syncKey: SerializedKey,
     deviceId: string,
     sequence: number,
-    records: SyncRecord[]
+    records: SyncRecord[],
   ): Promise<void> {
     const path = changePath(deviceId, sequence);
 
@@ -300,7 +300,7 @@ export class SyncRepository {
       throw new SyncError(
         `Journal entry ${deviceId}/${sequence} already exists on the server`,
         "precondition-failed",
-        412
+        412,
       );
     }
 
@@ -308,7 +308,7 @@ export class SyncRepository {
       protocolVersion: PROTOCOL_VERSION,
       deviceId,
       sequence,
-      cipher: await this.crypto.encryptJson(syncKey, records)
+      cipher: await this.crypto.encryptJson(syncKey, records),
     };
     const body = new TextEncoder().encode(JSON.stringify(envelope));
     await this.client.put(path, body, { ifNoneMatch: true });
@@ -319,7 +319,7 @@ export class SyncRepository {
   async readBatch(
     syncKey: SerializedKey,
     deviceId: string,
-    sequence: number
+    sequence: number,
   ): Promise<SyncRecord[]> {
     const raw = await this.client.get(changePath(deviceId, sequence));
     let envelope: ChangeBatchEnvelope;
@@ -328,31 +328,31 @@ export class SyncRepository {
     } catch {
       throw new SyncError(
         `Change record ${deviceId}/${sequence} is corrupt (invalid JSON)`,
-        "corrupt-data"
+        "corrupt-data",
       );
     }
     if (envelope.protocolVersion > PROTOCOL_VERSION) {
       throw new SyncError(
         `Change record ${deviceId}/${sequence} uses protocol version ` +
           `${envelope.protocolVersion}, which this app cannot read`,
-        "protocol-mismatch"
+        "protocol-mismatch",
       );
     }
     if (envelope.deviceId !== deviceId || envelope.sequence !== sequence) {
       throw new SyncError(
         `Change record ${deviceId}/${sequence} has mismatched envelope ` +
           `metadata (${envelope.deviceId}/${envelope.sequence})`,
-        "corrupt-data"
+        "corrupt-data",
       );
     }
     const records = await this.crypto.decryptJson<SyncRecord[]>(
       syncKey,
-      envelope.cipher
+      envelope.cipher,
     );
     if (!Array.isArray(records)) {
       throw new SyncError(
         `Change record ${deviceId}/${sequence} does not contain a record list`,
-        "corrupt-data"
+        "corrupt-data",
       );
     }
     return records;
@@ -361,7 +361,7 @@ export class SyncRepository {
   /** Store an oversized payload as a content-addressed object. */
   async putObject(
     syncKey: SerializedKey,
-    data: Uint8Array
+    data: Uint8Array,
   ): Promise<string> {
     const hash = await this.crypto.contentAddress(syncKey, data);
     const path = objectPath(hash);
@@ -375,7 +375,7 @@ export class SyncRepository {
 
   async getObject(
     syncKey: SerializedKey,
-    hash: string
+    hash: string,
   ): Promise<Uint8Array> {
     const raw = await this.client.get(objectPath(hash));
     const cipher = JSON.parse(new TextDecoder().decode(raw));
@@ -384,7 +384,7 @@ export class SyncRepository {
     if (actual !== hash) {
       throw new SyncError(
         `Integrity check failed for object ${hash}`,
-        "corrupt-data"
+        "corrupt-data",
       );
     }
     return data;

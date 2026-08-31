@@ -17,7 +17,7 @@ You should have received a copy of the GNU General Public License
 along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
-import { NNCrypto, SerializedKey, Cipher } from "@notesnook/crypto";
+import { Cipher, NNCrypto, SerializedKey } from "@notesnook/crypto";
 import { Sodium } from "@notesnook/sodium";
 import { SerializedCipher, SyncError } from "./types.ts";
 
@@ -42,7 +42,7 @@ export const KEY_CONTEXTS = {
   sync: "nn-sync-v1",
   attachment: "nn-attachment-v1",
   backup: "nn-backup-v1",
-  database: "nn-database-v1"
+  database: "nn-database-v1",
 } as const;
 
 export type KeyPurpose = keyof typeof KEY_CONTEXTS;
@@ -65,7 +65,7 @@ export class SyncCrypto {
   /** Derive the master key from a passphrase. Salt is base64. */
   async deriveMasterKey(
     passphrase: string,
-    salt?: string
+    salt?: string,
   ): Promise<SerializedKey> {
     if (!passphrase) {
       throw new SyncError("A sync passphrase is required", "bad-key");
@@ -77,75 +77,81 @@ export class SyncCrypto {
   async generateSalt(): Promise<string> {
     const sodium = await this.getSodium();
     return sodium.to_base64(
-      sodium.randombytes_buf(sodium.crypto_pwhash_SALTBYTES)
+      sodium.randombytes_buf(sodium.crypto_pwhash_SALTBYTES),
     );
   }
 
   /** Derive a purpose-specific subkey from the master key. */
   async deriveSubkey(
     masterKey: SerializedKey,
-    purpose: KeyPurpose
+    purpose: KeyPurpose,
   ): Promise<SerializedKey> {
     const sodium = await this.getSodium();
     if (!masterKey.key || !masterKey.salt) {
       throw new SyncError(
         "Master key must be a derived key, not a raw password",
-        "bad-key"
+        "bad-key",
       );
     }
     const keyBytes = sodium.from_base64(masterKey.key);
     const subkey = sodium.crypto_generichash(
       KEY_BYTES,
       new TextEncoder().encode(KEY_CONTEXTS[purpose]),
-      keyBytes
+      keyBytes,
     );
     return { key: sodium.to_base64(subkey), salt: masterKey.salt };
   }
 
-  async encryptJson(key: SerializedKey, value: unknown): Promise<SerializedCipher> {
+  async encryptJson(
+    key: SerializedKey,
+    value: unknown,
+  ): Promise<SerializedCipher> {
     const cipher = await this.crypto.encrypt(
       key,
       JSON.stringify(value),
       "text",
-      "base64"
+      "base64",
     );
     return toSerializedCipher(cipher);
   }
 
-  async decryptJson<T>(key: SerializedKey, cipher: SerializedCipher): Promise<T> {
+  async decryptJson<T>(
+    key: SerializedKey,
+    cipher: SerializedCipher,
+  ): Promise<T> {
     const text = await this.decryptText(key, cipher);
     try {
       return JSON.parse(text) as T;
     } catch {
       throw new SyncError(
         "Decrypted payload is not valid JSON — the record is corrupt",
-        "corrupt-data"
+        "corrupt-data",
       );
     }
   }
 
   async decryptText(
     key: SerializedKey,
-    cipher: SerializedCipher
+    cipher: SerializedCipher,
   ): Promise<string> {
     try {
       return await this.crypto.decrypt(
         key,
         cipher as unknown as Cipher<"base64">,
-        "text"
+        "text",
       );
     } catch (e) {
       throw new SyncError(
         `Failed to decrypt: ${e instanceof Error ? e.message : String(e)}. ` +
           "The passphrase may be wrong or the data may be corrupt.",
-        "bad-key"
+        "bad-key",
       );
     }
   }
 
   async encryptBytes(
     key: SerializedKey,
-    data: Uint8Array
+    data: Uint8Array,
   ): Promise<SerializedCipher> {
     const cipher = await this.crypto.encrypt(key, data, "uint8array", "base64");
     return toSerializedCipher(cipher);
@@ -153,20 +159,20 @@ export class SyncCrypto {
 
   async decryptBytes(
     key: SerializedKey,
-    cipher: SerializedCipher
+    cipher: SerializedCipher,
   ): Promise<Uint8Array> {
     try {
       return await this.crypto.decrypt(
         key,
         cipher as unknown as Cipher<"base64">,
-        "uint8array"
+        "uint8array",
       );
     } catch (e) {
       throw new SyncError(
         `Failed to decrypt binary payload: ${
           e instanceof Error ? e.message : String(e)
         }`,
-        "bad-key"
+        "bad-key",
       );
     }
   }
@@ -191,14 +197,14 @@ export class SyncCrypto {
    */
   async contentAddress(
     key: SerializedKey,
-    data: Uint8Array
+    data: Uint8Array,
   ): Promise<string> {
     const sodium = await this.getSodium();
     if (!key.key) throw new SyncError("Invalid key", "bad-key");
     const digest = sodium.crypto_generichash(
       32,
       data,
-      sodium.from_base64(key.key)
+      sodium.from_base64(key.key),
     );
     return toHex(digest);
   }
@@ -209,7 +215,7 @@ export class SyncCrypto {
 }
 
 export function toSerializedCipher(
-  cipher: Cipher<"base64">
+  cipher: Cipher<"base64">,
 ): SerializedCipher {
   return {
     format: "base64",
@@ -217,7 +223,7 @@ export function toSerializedCipher(
     cipher: cipher.cipher,
     iv: cipher.iv,
     salt: cipher.salt,
-    length: cipher.length
+    length: cipher.length,
   };
 }
 

@@ -19,16 +19,25 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 import { SyncError } from "@notesnook/sync-webdav";
 import type { AppContext } from "../app.ts";
-import { isKnownProcedure, type RpcRequest, type RpcResponse } from "./protocol.ts";
+import {
+  isKnownProcedure,
+  type RpcRequest,
+  type RpcResponse,
+} from "./protocol.ts";
 import { logger } from "../native/logger.ts";
 import {
   APP_IDENTIFIER,
   APP_NAME,
   APP_VERSION,
   SYNC_PROTOCOL_VERSION,
-  UPSTREAM_BASE
+  UPSTREAM_BASE,
 } from "../constants.ts";
-import { assertInside, isFlatpak, isPortable, isSnap } from "../native/paths.ts";
+import {
+  assertInside,
+  isFlatpak,
+  isPortable,
+  isSnap,
+} from "../native/paths.ts";
 import { PathAccessError } from "../native/paths.ts";
 
 const log = logger.scope("rpc");
@@ -53,7 +62,7 @@ export function createHandlers(): Record<string, Handler> {
       // No subscription tiers exist in this fork.
       allLocalFeatures: true,
       syncProvider: "webdav",
-      cloudAccountRequired: false
+      cloudAccountRequired: false,
     }),
 
     // ---------------- window ----------------
@@ -91,7 +100,7 @@ export function createHandlers(): Record<string, Handler> {
       denoVersion: Deno.version.deno,
       v8Version: Deno.version.v8,
       syncProtocolVersion: SYNC_PROTOCOL_VERSION,
-      platform: `${Deno.build.os}/${Deno.build.arch}`
+      platform: `${Deno.build.os}/${Deno.build.arch}`,
     }),
 
     "integration.backupDirectory": (_input, context) =>
@@ -99,7 +108,7 @@ export function createHandlers(): Record<string, Handler> {
 
     "integration.selectBackupDirectory": async (_input, context) => {
       const directory = await context.dialogs.selectDirectory({
-        title: "Choose a folder for backups"
+        title: "Choose a folder for backups",
       });
       if (!directory) return undefined;
       await context.settings.patchBackup({ localDirectory: directory });
@@ -109,7 +118,7 @@ export function createHandlers(): Record<string, Handler> {
 
     "integration.selectDirectory": async (input, context) =>
       await context.dialogs.selectDirectory({
-        title: optionalString(input?.title) ?? "Choose a folder"
+        title: optionalString(input?.title) ?? "Choose a folder",
       }),
 
     "integration.selectFile": async (input, context) =>
@@ -117,16 +126,17 @@ export function createHandlers(): Record<string, Handler> {
         title: optionalString(input?.title) ?? "Choose a file",
         extensions: Array.isArray(input?.extensions)
           ? input.extensions.filter((e: unknown) => typeof e === "string")
-          : undefined
+          : undefined,
       }),
 
     "integration.saveFile": async (input, context) =>
       await context.dialogs.saveFile({
         title: optionalString(input?.title) ?? "Save file",
-        defaultName: optionalString(input?.defaultName) ?? "export"
+        defaultName: optionalString(input?.defaultName) ?? "export",
       }),
 
-    "integration.zoomFactor": (_input, context) => context.settings.get("zoomFactor"),
+    "integration.zoomFactor": (_input, context) =>
+      context.settings.get("zoomFactor"),
     "integration.setZoomFactor": async (input, context) => {
       const factor = Number(input);
       if (!Number.isFinite(factor) || factor < 0.25 || factor > 4) {
@@ -136,7 +146,8 @@ export function createHandlers(): Record<string, Handler> {
       context.window.setZoom(factor);
     },
 
-    "integration.privacyMode": (_input, context) => context.settings.get("privacyMode"),
+    "integration.privacyMode": (_input, context) =>
+      context.settings.get("privacyMode"),
     "integration.setPrivacyMode": async (input, context) => {
       await context.settings.set("privacyMode", !!input?.enabled);
     },
@@ -150,13 +161,13 @@ export function createHandlers(): Record<string, Handler> {
         startMinimized: boolOr(input?.startMinimized, current.startMinimized),
         minimizeToSystemTray: boolOr(
           input?.minimizeToSystemTray,
-          current.minimizeToSystemTray
+          current.minimizeToSystemTray,
         ),
         closeToSystemTray: boolOr(
           input?.closeToSystemTray,
-          current.closeToSystemTray
+          current.closeToSystemTray,
         ),
-        nativeTitlebar: boolOr(input?.nativeTitlebar, current.nativeTitlebar)
+        nativeTitlebar: boolOr(input?.nativeTitlebar, current.nativeTitlebar),
       });
       await context.applyDesktopIntegration();
     },
@@ -166,7 +177,7 @@ export function createHandlers(): Record<string, Handler> {
         title: optionalString(input?.title) ?? APP_NAME,
         body: optionalString(input?.body) ?? "",
         tag: optionalString(input?.tag) ?? "",
-        silent: !!input?.silent
+        silent: !!input?.silent,
       }),
 
     "integration.showMenu": () => {
@@ -180,7 +191,7 @@ export function createHandlers(): Record<string, Handler> {
       const path = assertInside(
         asString(input, "path", 4096),
         context.allowedRoots(),
-        "path"
+        "path",
       );
       await context.shell.openPath(path);
     },
@@ -189,7 +200,7 @@ export function createHandlers(): Record<string, Handler> {
       const path = assertInside(
         asString(input, "path", 4096),
         context.allowedRoots(),
-        "path"
+        "path",
       );
       await context.shell.revealPath(path);
     },
@@ -214,7 +225,8 @@ export function createHandlers(): Record<string, Handler> {
       context.theme.apply(theme);
     },
 
-    "integration.readClipboard": (_input, context) => context.clipboard.readText(),
+    "integration.readClipboard": (_input, context) =>
+      context.clipboard.readText(),
     "integration.writeClipboard": (input, context) => {
       context.clipboard.writeText(asString(input, "text", 5_000_000));
     },
@@ -243,14 +255,14 @@ export function createHandlers(): Record<string, Handler> {
         synchronous: input?.synchronous,
         pageSize: input?.pageSize,
         cacheSize: input?.cacheSize,
-        tempStore: input?.tempStore
+        tempStore: input?.tempStore,
       }),
 
     "sqlite.run": (input, context) => {
       const result = context.sqlite.run(
         asString(input, "id", 64),
         asString(input, "sql", 1_000_000),
-        Array.isArray(input?.parameters) ? input.parameters : []
+        Array.isArray(input?.parameters) ? input.parameters : [],
       );
       // The database is the vault: a write is a local change worth syncing.
       if (isWriteStatement(input.sql)) context.notifyLocalChange();
@@ -273,7 +285,7 @@ export function createHandlers(): Record<string, Handler> {
     "backups.write": async (input, context) => {
       await context.exports.write(
         asString(input, "id", 64),
-        base64Decode(asString(input, "chunk", 100_000_000))
+        base64Decode(asString(input, "chunk", 100_000_000)),
       );
     },
     "backups.close": async (input, context) =>
@@ -312,29 +324,31 @@ export function createHandlers(): Record<string, Handler> {
       context.safeStorage.isAvailable(),
     "safeStorage.encryptString": async (input, context) =>
       await context.safeStorage.encryptString(
-        asString(input, "plaintext", 1_000_000)
+        asString(input, "plaintext", 1_000_000),
       ),
     "safeStorage.decryptString": async (input, context) =>
       await context.safeStorage.decryptString(
-        asString(input, "payload", 1_000_000)
+        asString(input, "payload", 1_000_000),
       ),
 
     // ---------------- compression ----------------
 
     "compress.gzip": async (input) =>
       base64Encode(
-        await compress(base64Decode(asString(input, "data", 100_000_000)))
+        await compress(base64Decode(asString(input, "data", 100_000_000))),
       ),
     "compress.gunzip": async (input) =>
       base64Encode(
-        await decompress(base64Decode(asString(input, "data", 100_000_000)))
+        await decompress(base64Decode(asString(input, "data", 100_000_000))),
       ),
 
     // ---------------- updates ----------------
 
     "updater.check": async (_input, context) => await context.updater.check(),
-    "updater.download": async (_input, context) => await context.updater.download(),
-    "updater.install": async (_input, context) => await context.updater.install(),
+    "updater.download": async (_input, context) =>
+      await context.updater.download(),
+    "updater.install": async (_input, context) =>
+      await context.updater.install(),
     "updater.autoUpdates": (_input, context) =>
       context.settings.get("automaticUpdates"),
     "updater.toggleAutoUpdates": async (input, context) => {
@@ -367,7 +381,7 @@ export function createHandlers(): Record<string, Handler> {
       ) {
         throw new Error(
           "Plain HTTP is disabled. Use https://, or explicitly enable " +
-            "insecure connections for a trusted local network."
+            "insecure connections for a trusted local network.",
         );
       }
       await context.settings.patchWebDav({
@@ -375,31 +389,55 @@ export function createHandlers(): Record<string, Handler> {
         serverUrl,
         username: optionalString(input?.username) ?? current.username,
         directory: optionalString(input?.directory) ?? current.directory,
-        intervalMinutes: clampInt(input?.intervalMinutes, 0, 1440, current.intervalMinutes),
+        intervalMinutes: clampInt(
+          input?.intervalMinutes,
+          0,
+          1440,
+          current.intervalMinutes,
+        ),
         syncOnStartup: boolOr(input?.syncOnStartup, current.syncOnStartup),
         syncAfterEdits: boolOr(input?.syncAfterEdits, current.syncAfterEdits),
-        debounceSeconds: clampInt(input?.debounceSeconds, 1, 600, current.debounceSeconds),
+        debounceSeconds: clampInt(
+          input?.debounceSeconds,
+          1,
+          600,
+          current.debounceSeconds,
+        ),
         syncOnMeteredNetwork: boolOr(
           input?.syncOnMeteredNetwork,
-          current.syncOnMeteredNetwork
+          current.syncOnMeteredNetwork,
         ),
-        syncAttachments: boolOr(input?.syncAttachments, current.syncAttachments),
-        timeoutSeconds: clampInt(input?.timeoutSeconds, 5, 600, current.timeoutSeconds),
+        syncAttachments: boolOr(
+          input?.syncAttachments,
+          current.syncAttachments,
+        ),
+        timeoutSeconds: clampInt(
+          input?.timeoutSeconds,
+          5,
+          600,
+          current.timeoutSeconds,
+        ),
         maxRetries: clampInt(input?.maxRetries, 0, 10, current.maxRetries),
-        allowInsecureHttp: boolOr(input?.allowInsecureHttp, current.allowInsecureHttp),
+        allowInsecureHttp: boolOr(
+          input?.allowInsecureHttp,
+          current.allowInsecureHttp,
+        ),
         storeCredentialsWithMachineKey: boolOr(
           input?.storeCredentialsWithMachineKey,
-          current.storeCredentialsWithMachineKey
-        )
+          current.storeCredentialsWithMachineKey,
+        ),
       });
       await context.reconfigureSync();
-      return { ...context.settings.get("webdav"), hasPassword: context.hasStoredWebDavPassword() };
+      return {
+        ...context.settings.get("webdav"),
+        hasPassword: context.hasStoredWebDavPassword(),
+      };
     },
 
     "webdav.setPassphrase": async (input, context) => {
       await context.sync.setCredentials({
         password: optionalString(input?.password),
-        passphrase: optionalString(input?.passphrase)
+        passphrase: optionalString(input?.passphrase),
       });
       return { ok: true };
     },
@@ -412,7 +450,7 @@ export function createHandlers(): Record<string, Handler> {
         directory: optionalString(input?.directory) ?? "Openotes",
         passphrase: asString(input, "passphrase", 1024),
         allowInsecureHttp: !!input?.allowInsecureHttp,
-        timeoutSeconds: clampInt(input?.timeoutSeconds, 5, 600, 30)
+        timeoutSeconds: clampInt(input?.timeoutSeconds, 5, 600, 30),
       }),
 
     "webdav.connect": async (_input, context) => {
@@ -434,7 +472,7 @@ export function createHandlers(): Record<string, Handler> {
 
     "webdav.status": async (_input, context) => ({
       status: context.sync.currentStatus,
-      pending: await context.sync.pendingCount()
+      pending: await context.sync.pendingCount(),
     }),
 
     "webdav.resetRemoteState": async (_input, context) => {
@@ -445,7 +483,7 @@ export function createHandlers(): Record<string, Handler> {
     "webdav.rebuildRemote": async (input, context) => {
       if (input?.confirm !== "rebuild") {
         throw new Error(
-          "Rebuilding the remote repository requires explicit confirmation"
+          "Rebuilding the remote repository requires explicit confirmation",
         );
       }
       const generation = await context.sync.rebuildRemote();
@@ -463,20 +501,21 @@ export function createHandlers(): Record<string, Handler> {
         localEnabled: boolOr(input?.localEnabled, current.localEnabled),
         localDirectory: localDirectory ?? current.localDirectory,
         webdavEnabled: boolOr(input?.webdavEnabled, current.webdavEnabled),
-        webdavDirectory:
-          optionalString(input?.webdavDirectory) ?? current.webdavDirectory,
-        interval: ["manual", "daily", "weekly", "monthly"].includes(input?.interval)
-          ? input.interval
-          : current.interval,
+        webdavDirectory: optionalString(input?.webdavDirectory) ??
+          current.webdavDirectory,
+        interval:
+          ["manual", "daily", "weekly", "monthly"].includes(input?.interval)
+            ? input.interval
+            : current.interval,
         retention: clampInt(input?.retention, 0, 1000, current.retention),
         backupBeforeRestore: boolOr(
           input?.backupBeforeRestore,
-          current.backupBeforeRestore
+          current.backupBeforeRestore,
         ),
         backupBeforeMaintenance: boolOr(
           input?.backupBeforeMaintenance,
-          current.backupBeforeMaintenance
-        )
+          current.backupBeforeMaintenance,
+        ),
       });
       context.refreshAllowedRoots();
       return context.settings.get("backup");
@@ -491,16 +530,18 @@ export function createHandlers(): Record<string, Handler> {
         name: result.name,
         written: result.written,
         counts: result.manifest.counts,
-        attachments: result.manifest.attachments
+        attachments: result.manifest.attachments,
       };
     },
 
     "backup.list": async (input, context) =>
-      await context.backups.list(input?.target === "webdav" ? "webdav" : "local"),
+      await context.backups.list(
+        input?.target === "webdav" ? "webdav" : "local",
+      ),
 
     "backup.selectLocalDirectory": async (_input, context) => {
       const directory = await context.dialogs.selectDirectory({
-        title: "Choose a folder for backups"
+        title: "Choose a folder for backups",
       });
       if (!directory) return undefined;
       await context.settings.patchBackup({ localDirectory: directory });
@@ -511,25 +552,24 @@ export function createHandlers(): Record<string, Handler> {
     "backup.importFile": async (_input, context) =>
       await context.dialogs.selectFile({
         title: "Choose a backup file",
-        extensions: ["enc", "nnbackup", "nnbackupz", "json"]
+        extensions: ["enc", "nnbackup", "nnbackupz", "json"],
       }),
 
     "backup.restore": async (input, context) => {
       if (input?.confirm !== "restore") {
         throw new Error("Restoring requires explicit confirmation");
       }
-      const which =
-        input?.target === "webdav"
-          ? "webdav"
-          : input?.target === "file"
-          ? "file"
-          : "local";
+      const which = input?.target === "webdav"
+        ? "webdav"
+        : input?.target === "file"
+        ? "file"
+        : "local";
       return await context.backups.restore(
         which,
         asString(input, "name", 4096),
-        (progress) => context.emit("backup.completed", progress)
+        (progress) => context.emit("backup.completed", progress),
       );
-    }
+    },
   };
 }
 
@@ -537,7 +577,7 @@ export function createHandlers(): Record<string, Handler> {
 export async function dispatch(
   request: RpcRequest,
   handlers: Record<string, Handler>,
-  context: AppContext
+  context: AppContext,
 ): Promise<RpcResponse> {
   const path = typeof request?.path === "string" ? request.path : "";
 
@@ -545,7 +585,10 @@ export async function dispatch(
     log.warn("Rejected an unknown procedure", { path });
     return {
       ok: false,
-      error: { name: "UnknownProcedure", message: `Unknown procedure: ${path}` }
+      error: {
+        name: "UnknownProcedure",
+        message: `Unknown procedure: ${path}`,
+      },
     };
   }
 
@@ -555,8 +598,8 @@ export async function dispatch(
       ok: false,
       error: {
         name: "NotImplemented",
-        message: `Procedure ${path} has no handler`
-      }
+        message: `Procedure ${path} has no handler`,
+      },
     };
   }
 
@@ -564,17 +607,20 @@ export async function dispatch(
     const result = await handler(request.input, context);
     return { ok: true, result: result === undefined ? null : result };
   } catch (error) {
-    const name =
-      error instanceof PathAccessError
-        ? "PathAccessError"
-        : error instanceof SyncError
-        ? "SyncError"
-        : error instanceof Error
-        ? error.name
-        : "Error";
+    const name = error instanceof PathAccessError
+      ? "PathAccessError"
+      : error instanceof SyncError
+      ? "SyncError"
+      : error instanceof Error
+      ? error.name
+      : "Error";
     const message = error instanceof Error ? error.message : String(error);
     const code = error instanceof SyncError ? error.code : undefined;
-    log.warn("Procedure failed", { path, name, message: message.slice(0, 300) });
+    log.warn("Procedure failed", {
+      path,
+      name,
+      message: message.slice(0, 300),
+    });
     return { ok: false, error: { name, message, code } };
   }
 }
@@ -604,7 +650,7 @@ function clampInt(
   value: unknown,
   min: number,
   max: number,
-  fallback: number
+  fallback: number,
 ): number {
   const parsed = Number(value);
   if (!Number.isFinite(parsed)) return fallback;
