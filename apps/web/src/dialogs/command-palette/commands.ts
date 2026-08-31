@@ -168,7 +168,11 @@ const staticCommands: Command[] = [
     id: "help",
     title: strings.helpAndSupport(),
     icon: ArrowTopRight,
-    action: () => (window.location.href = "https://notesnook.com/help"),
+    action: () =>
+      window.open(
+        "https://github.com/yuvalkolodkingal/notesnook#readme",
+        "_blank"
+      ),
     group: strings.navigate(),
     type: "command"
   },

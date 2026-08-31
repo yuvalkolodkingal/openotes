@@ -872,7 +872,10 @@ function NavigationDropdown() {
               icon: Documentation.path,
               key: "help-and-support",
               onClick: () => {
-                window.open("https://notesnook.com/help/", "_blank");
+                window.open(
+                  "https://github.com/yuvalkolodkingal/notesnook#readme",
+                  "_blank"
+                );
               }
             }
           ],

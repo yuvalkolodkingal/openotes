@@ -19,16 +19,15 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 import { expose } from "comlink";
 
 const module = {
+  // Upstream probed api.notesnook.com/health here. This fork contacts only
+  // the user's own WebDAV server and its own release endpoint, so there is
+  // no health endpoint it may call: the browser's connectivity signal is
+  // used instead, and the sync engine does its own retrying against the
+  // one server that actually matters — the user's.
   async waitForInternet() {
     let retries = 3;
     while (retries-- > 0) {
-      try {
-        const response = await fetch("https://api.notesnook.com/health");
-        if (response.ok) return true;
-      } catch {
-        // ignore
-      }
-
+      if (navigator.onLine) return true;
       // wait a bit before trying again.
       await new Promise((resolve) => setTimeout(resolve, 2500));
     }

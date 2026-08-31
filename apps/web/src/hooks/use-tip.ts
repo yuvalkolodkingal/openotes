@@ -141,13 +141,16 @@ const tips: Tip[] = [
     contexts: ["notebooks"]
   },
   {
-    text: "We value your feedback so join us on Discord and share your experiences and ideas.",
+    text: "Found a bug or have an idea? Open an issue on GitHub.",
     contexts: ["notes", "notebooks", "tags"],
     button: {
       title: strings.joinCommunity(),
       icon: ArrowTopRight,
       onClick: () =>
-        window.open("https://discord.gg/notesnook-796015620436787241", "_blank")
+        window.open(
+          "https://github.com/yuvalkolodkingal/notesnook/issues",
+          "_blank"
+        )
     }
   },
   {

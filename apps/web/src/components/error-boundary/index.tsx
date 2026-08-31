@@ -198,8 +198,10 @@ export function ErrorComponent({ error, resetErrorBoundary }: FallbackProps) {
                 variant="secondary"
                 sx={{ alignSelf: "start", px: 30, mt: 1 }}
                 onClick={async () => {
-                  const mailto = new URL("mailto:support@streetwriters.co");
-                  mailto.searchParams.set(
+                  const issue = new URL(
+                    "https://github.com/yuvalkolodkingal/notesnook/issues/new"
+                  );
+                  issue.searchParams.set(
                     "body",
                     `${errorToString(error)}
 
@@ -208,7 +210,7 @@ Device information:
 
 ${getDeviceInfo()}`
                   );
-                  window.open(mailto.toString(), "_blank");
+                  window.open(issue.toString(), "_blank");
                 }}
               >
                 {strings.contactSupport()}
