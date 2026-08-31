@@ -21,15 +21,11 @@ import { FeatureId } from "@notesnook/common";
 import { Icon } from "../../components/icons";
 
 const SectionKeys = [
-  "profile",
-  "auth",
-  "subscription",
   "sync",
   "appearance",
   "behaviour",
   "desktop",
   "notifications",
-  "servers",
   "editor",
   "backup-export",
   "export",
@@ -40,15 +36,13 @@ const SectionKeys = [
   "support",
   "legal",
   "developer",
-  "about",
-  "inbox",
-  "circle"
+  "about"
 ] as const;
 
 export type SectionKeys = (typeof SectionKeys)[number];
 
 export type SectionGroupKeys =
-  | "account"
+  | "sync"
   | "customization"
   | "import-export"
   | "security"

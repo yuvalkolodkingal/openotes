@@ -2,7 +2,7 @@
 This file is part of the Notesnook project (https://notesnook.com/)
 
 Copyright (C) 2023 Streetwriters (Private) Limited
-Copyright (C) 2026 Notesnook Deno Desktop contributors
+Copyright (C) 2026 Openotes contributors
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by

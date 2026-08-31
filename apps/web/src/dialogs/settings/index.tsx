@@ -21,7 +21,6 @@ import { Flex, Text, Button, Input, Switch } from "@theme-ui/components";
 import Dialog from "../../components/dialog";
 import {
   About,
-  Account,
   Appearance,
   Backup,
   Behaviour,
@@ -33,14 +32,9 @@ import {
   Legal,
   Loading,
   Notification,
-  PasswordAndAuth,
   Privacy,
-  Pro,
-  Servers,
   ShieldLock,
-  Sync,
-  Inbox,
-  CircleEmpty
+  Sync
 } from "../../components/icons";
 import NavigationItem from "../../components/navigation-menu/navigation-item";
 import { FlexScrollContainer } from "../../components/scroll-container";
@@ -53,9 +47,6 @@ import {
   Setting,
   SettingsGroup
 } from "./types";
-import { ProfileSettings } from "./profile-settings";
-import { AuthenticationSettings } from "./auth-settings";
-import { useStore as useUserStore } from "../../stores/user-store";
 import { SyncSettings } from "./sync-settings";
 import { BehaviourSettings } from "./behaviour-settings";
 import { DesktopIntegrationSettings } from "./desktop-integration-settings";
@@ -73,16 +64,12 @@ import {
 } from "./other-settings";
 import { AppearanceSettings } from "./appearance-settings";
 import { debounce, useIsFeatureAvailable, usePromise } from "@notesnook/common";
-import { SubscriptionSettings } from "./subscription-settings";
 import { ScopedThemeProvider } from "../../components/theme-provider";
 import { AppLockSettings } from "./app-lock-settings";
 import { BaseDialogProps, DialogManager } from "../../common/dialog-manager";
-import { ServersSettings } from "./servers-settings";
 import { strings } from "@notesnook/intl";
 import { mdToHtml } from "../../utils/md";
-import { InboxSettings } from "./inbox-settings";
 import { withFeatureCheck } from "../../common";
-import { NotesnookCircleSettings } from "./notesnook-circle-settings";
 import { hashNavigate } from "../../navigation";
 
 type SettingsDialogProps = BaseDialogProps<false> & {
@@ -91,41 +78,11 @@ type SettingsDialogProps = BaseDialogProps<false> & {
 
 const sectionGroups: SectionGroup[] = [
   {
-    key: "account",
-    title: strings.account(),
-    sections: [
-      { key: "profile", title: strings.profile(), icon: Account },
-      {
-        key: "subscription",
-        title: strings.subDetails(),
-        icon: Pro,
-        isHidden: () => !useUserStore.getState().isLoggedIn
-      },
-      {
-        key: "auth",
-        title: strings.authentication(),
-        icon: PasswordAndAuth,
-        isHidden: () => !useUserStore.getState().isLoggedIn
-      },
-      {
-        key: "sync",
-        title: strings.sync(),
-        icon: Sync,
-        isHidden: () => !useUserStore.getState().isLoggedIn
-      },
-      {
-        key: "circle",
-        title: "Notesnook Circle",
-        icon: CircleEmpty,
-        isHidden: () => !useUserStore.getState().isLoggedIn
-      },
-      {
-        key: "inbox",
-        title: "Inbox",
-        icon: Inbox,
-        isHidden: () => !useUserStore.getState().isLoggedIn
-      }
-    ]
+    // Openotes syncs to the user's own WebDAV server, so this group holds
+    // the sync configuration instead of a Notesnook account.
+    key: "sync",
+    title: strings.sync(),
+    sections: [{ key: "sync", title: strings.sync(), icon: Sync }]
   },
   {
     key: "customization",
@@ -144,8 +101,7 @@ const sectionGroups: SectionGroup[] = [
         key: "notifications",
         title: strings.notifications(),
         icon: Notification
-      },
-      { key: "servers", title: strings.servers(), icon: Servers }
+      }
     ]
   },
   {
@@ -177,8 +133,6 @@ const sectionGroups: SectionGroup[] = [
 ];
 
 const SettingsGroups = [
-  ...ProfileSettings,
-  ...AuthenticationSettings,
   ...SyncSettings,
   ...AppearanceSettings,
   ...BehaviourSettings,
@@ -192,11 +146,7 @@ const SettingsGroups = [
   ...EditorSettings,
   ...LegalSettings,
   ...SupportSettings,
-  ...AboutSettings,
-  ...SubscriptionSettings,
-  ...ServersSettings,
-  ...InboxSettings,
-  ...NotesnookCircleSettings
+  ...AboutSettings
 ];
 
 // Thoughts:
@@ -215,9 +165,7 @@ export const SettingsDialog = DialogManager.register(function SettingsDialog(
   props: SettingsDialogProps
 ) {
   const [activeSettings, setActiveSettings] = useState<SettingsGroup[]>(
-    SettingsGroups.filter(
-      (g) => g.section === (props.activeSection || "profile")
-    )
+    SettingsGroups.filter((g) => g.section === (props.activeSection || "sync"))
   );
 
   return (
@@ -276,8 +224,7 @@ type SettingsSideBarProps = {
 };
 function SettingsSideBar(props: SettingsSideBarProps) {
   const { onNavigate, activeSection } = props;
-  const [route, setRoute] = useState<SectionKeys>(activeSection || "profile");
-  useUserStore((store) => store.isLoggedIn);
+  const [route, setRoute] = useState<SectionKeys>(activeSection || "sync");
 
   useEffect(() => {
     hashNavigate(`/settings/${route}`, {
@@ -531,9 +478,6 @@ function SettingItem(props: { item: Setting }) {
             >
               {item.title}
             </Text>
-            {feature && !feature.isAllowed ? (
-              <Pro size={14} color="orange" />
-            ) : null}
           </Flex>
           {item.description && (
             <Text

@@ -1,4 +1,4 @@
-# PORTING_NOTES.md — Notesnook → Deno Desktop ("Notestone")
+# PORTING_NOTES.md — Notesnook → Deno Desktop ("Openotes")
 
 Synthesis of seven domain audits (desktop-electron, web-ui, core-data, crypto,
 subscription, mobile-footprint, editor-and-themes), cross-checked against the
@@ -15,8 +15,8 @@ tests, own `deno.json`), plus root `deno.json`/`deno.lock` and
 Untracked work in flight: `apps/desktop/src/rpc/protocol.ts` (the new binding
 contract), `apps/desktop/src/native/{paths,logger}.ts`, and a modified
 `apps/desktop/src/constants.ts` establishing fork identity (`APP_NAME =
-"Notestone"`, `APP_IDENTIFIER = "org.notestone.Notestone"`, deep-link scheme
-`notestone`, `UPDATE_MANIFEST_URL` → the fork's GitHub releases,
+"Openotes"`, `APP_IDENTIFIER = "org.openotes.Openotes"`, deep-link scheme
+`openotes`, `UPDATE_MANIFEST_URL` → the fork's GitHub releases,
 `TELEMETRY_ENABLED = false`).
 
 > **Known breakage introduced by the new constants.ts:** it deletes the
@@ -84,7 +84,7 @@ titlebar/menu/keybinding decisions).
 |---|---|---|
 | `sqlite.open/run/close/delete` | `sqlite.open/run/close/delete` (+ new `sqlite.export`) | **Critical.** Renderer runs Kysely; `{sql, parameters}` forwarded raw (`apps/web/src/common/sqlite/index.desktop.ts:95` → `apps/desktop/src/api/sqlite-kysely.ts`). Host must be a SQLite3MC-compatible build (`PRAGMA key` arrives as ordinary SQL; hex of `databaseKey` passed via `sqliteOptions.password`, `apps/web/src/common/db.ts:88-93`), WAL + exclusive locking, and must load `sqlite-better-trigram` + `sqlite3-fts5-html` extensions **after** decryption (`sqlite-kysely.ts:129-150`) or FTS migrations fail. FTS triggers are TEMPORARY, re-created per connection (`packages/core/src/database/triggers.ts`, called from `api/index.ts:333-335`). |
 | `backups.open/write/close` | `backups.open/write/close` | Base64-chunk streamed file writes into `config.backupDirectory` (`apps/desktop/src/api/backups.ts`; consumed by `createWritableStream`, `index.desktop.ts:86-102`). |
-| `bridge.ready`, `bridge.onOpenLink` (sub) | `bridge.ready` + event `bridge.openLink` | Deep links; scheme is now `notestone://` (upstream `nn://` grammar parsed by `packages/core/src/utils/internal-link.ts` — keep `nn://` parsing for note links inside the editor, register the fork scheme with the OS). |
+| `bridge.ready`, `bridge.onOpenLink` (sub) | `bridge.ready` + event `bridge.openLink` | Deep links; scheme is now `openotes://` (upstream `nn://` grammar parsed by `packages/core/src/utils/internal-link.ts` — keep `nn://` parsing for note links inside the editor, register the fork scheme with the OS). |
 | `bridge.onCreateItem` (sub) | *(add an event)* | **Verified upstream regression:** main emits it (tray/dock/second-instance) but the web never subscribes — only `onOpenLink` and `updater.on*` are attached in `index.desktop.ts:37-70`, while the handler `AppEvents.onCreateItem` exists at `apps/web/src/app-effects.tsx:234,242-254`. The port should wire it up. |
 | `integration.*` (isFlatpak/isSnap/isPortable, backupDirectory, selectBackupDirectory, zoomFactor, setZoomFactor, privacyMode, desktopIntegration, restart, showNotification, openPath, bringToFront, changeTheme; subs onThemeChanged, showMenu) | `integration.*` same names + new `openExternal, revealFile, systemTheme, selectDirectory, selectFile, saveFile, readClipboard, writeClipboard, appVersion, about, openLogDirectory, logs` | `showNotification` (returns clicked tag) + `bringToFront` are **required for reminders** (`apps/web/src/stores/reminder-store.ts:95-125`). `changeTheme`/`onThemeChanged` drive dark-mode sync (`apps/web/src/stores/theme-store.ts:82,128`, `hooks/use-system-theme.ts`). `openPath` backs `file:` links (`components/editor/tiptap.tsx:439`). `showMenu` is mac-only nicety with an HTML fallback — stub-able. |
 | `safeStorage.isEncryptionAvailable/encryptString/decryptString` | `safeStorage.*` | Optimization only: return `isEncryptionAvailable=false` and the web app falls back to CryptoKey wrapping in IndexedDB (`apps/web/src/interfaces/key-store.ts:421-481`) — the portable-build path, correct today. Implement libsecret/DPAPI/Keychain later if desired. |

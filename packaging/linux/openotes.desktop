@@ -1,7 +1,7 @@
 # This file is part of the Notesnook project (https://notesnook.com/)
 #
 # Copyright (C) 2023 Streetwriters (Private) Limited
-# Copyright (C) 2026 Notesnook Deno Desktop contributors
+# Copyright (C) 2026 Openotes contributors
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -21,7 +21,10 @@ Type=Application
 Name=Openotes
 Exec=openotes %U
 Icon=openotes
-Categories=Office;Utility;
+# Office is the main category; TextEditor refines it. Office and Utility are
+# both *main* categories, so listing them together makes the app appear twice
+# in some menus - desktop-file-validate warns about exactly that.
+Categories=Office;TextEditor;
 StartupNotify=true
 StartupWMClass=Openotes
 MimeType=x-scheme-handler/openotes;
