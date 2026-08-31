@@ -20,6 +20,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 import { expect, test, vi, beforeEach, afterEach } from "vitest";
 import { createEditor, h } from "../../../../test-utils";
 import { ImageNode } from "../image";
+import { AttachmentNode } from "../../attachment/attachment";
 
 const mockClipboardWrite = vi.fn();
 const mockClipboardItem = vi.fn();
@@ -56,7 +57,9 @@ test("copy image to clipboard when Ctrl+C is pressed on selected image", async (
   const { editor } = createEditor({
     element: editorElement,
     extensions: {
-      image: ImageNode
+      image: ImageNode,
+      // insertImage delegates to insertAttachment, which this registers.
+      attachment: AttachmentNode
     }
   });
   editor.storage.getAttachmentData = vi.fn().mockResolvedValue(mockImageData);

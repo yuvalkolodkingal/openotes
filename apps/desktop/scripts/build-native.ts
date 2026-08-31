@@ -28,7 +28,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
  *   deno task build:native -- --check verify existing artifacts only
  */
 
-import { join } from "@std/path";
+import { fromFileUrl, join } from "@std/path";
 import { encodeHex } from "@std/encoding/hex";
 
 const SQLITE3MC_VERSION = "2.5.1";
@@ -70,7 +70,9 @@ const COMPILE_DEFINES = [
   "HAVE_USLEEP",
 ];
 
-const ROOT = new URL("../../../", import.meta.url).pathname;
+// fromFileUrl, not URL.pathname: on Windows the latter yields "/D:/…",
+// which the filesystem rejects as "\D:\…" (os error 123).
+const ROOT = fromFileUrl(new URL("../../../", import.meta.url));
 const NATIVE_DIR = join(ROOT, "apps", "desktop", "native");
 const BUILD_DIR = join(ROOT, "apps", "desktop", ".native-build");
 

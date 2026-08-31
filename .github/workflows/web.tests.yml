@@ -1,5 +1,9 @@
 name: Test @notesnook/web
 
+# Upstream ran this with pull_request_target plus an authorization gate,
+# because the suite needed a Notesnook Cloud test account from repository
+# secrets. This fork's suite drives a purely local vault, so there are no
+# secrets to protect and plain `pull_request` is the safe trigger.
 on:
   workflow_dispatch:
   push:
@@ -9,37 +13,21 @@ on:
       - "apps/web/**"
       # re-run workflow if workflow file changes
       - ".github/workflows/web.tests.yml"
-  pull_request_target:
+  pull_request:
     branches:
       - "master"
     paths:
       - "apps/web/**"
       # re-run workflow if workflow file changes
       - ".github/workflows/web.tests.yml"
-    types:
-      - "ready_for_review"
-      - "opened"
-      - "synchronize"
-      - "reopened"
 
 jobs:
-  authorize:
-    environment: ${{ github.event_name == 'pull_request_target' &&
-      github.event.pull_request.head.repo.full_name != github.repository &&
-      'external' || 'internal' }}
-    runs-on: ubuntu-latest
-    steps:
-      - run: echo true
-
   build:
-    needs: authorize
     name: Build
     runs-on: ubuntu-22.04
     steps:
       - name: Checkout
         uses: actions/checkout@v5
-        with:
-          ref: ${{ github.event.pull_request.head.sha || github.ref }}
 
       - name: Setup Node
         uses: ./.github/actions/setup-node-with-cache
@@ -67,8 +55,6 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v5
-        with:
-          ref: ${{ github.event.pull_request.head.sha || github.ref }}
 
       - name: Download build
         uses: actions/download-artifact@v4
@@ -82,7 +68,7 @@ jobs:
       - name: Install packages
         run: |
           npm install --ignore-scripts --prefer-offline --no-audit --no-fund
-          npm install -D @playwright/test otplib dayjs @zip.js/zip.js
+          npm install -D @playwright/test dayjs @zip.js/zip.js
 
       - name: Validate build extraction
         run: ls -ld ./apps/web/build/index.html
@@ -90,13 +76,6 @@ jobs:
       - name: Install Playwright Browsers
         run: npx playwright install chromium --with-deps
         working-directory: apps/web
-
-      - name: Add environment variables
-        run: |
-          echo "USER_EMAIL=${{ secrets.USER_EMAIL }}" >> $GITHUB_ENV
-          echo "USER_PASSWORD=${{ secrets.USER_PASSWORD }}" >> $GITHUB_ENV
-          echo "USER_TOTP_SECRET=${{ secrets.USER_TOTP_SECRET }}" >> $GITHUB_ENV
-          echo "USER_KEY=${{ secrets.USER_KEY }}" >> $GITHUB_ENV
 
       - name: Run tests
         run: npx playwright test --shard=${{ matrix.shard }}/${{ strategy.job-total }}

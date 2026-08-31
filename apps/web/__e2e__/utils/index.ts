@@ -18,8 +18,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
 import fs from "fs";
-import dotenv from "dotenv";
-import path, { join } from "path";
+import { join } from "path";
 import type { Locator, Page } from "@playwright/test";
 import {
   GroupByOptions,
@@ -34,8 +33,6 @@ type Note = {
   title: string;
   content?: string;
 };
-
-dotenv.config({ path: path.join(__dirname, ".env.local") });
 
 const NOTEBOOK: Notebook = {
   title: "Test notebook 1",
@@ -119,7 +116,7 @@ async function uploadFile(page: Page, action: Locator, filename: string) {
     await action.click()
   ]);
 
-  await fileChooser.setFiles(path.join(__dirname, "../data", filename));
+  await fileChooser.setFiles(join(__dirname, "../data", filename));
 }
 
 function isTestAll() {

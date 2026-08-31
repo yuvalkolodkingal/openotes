@@ -1,5 +1,10 @@
 name: "Test @notesnook/core"
 
+# Upstream ran core's end-to-end suite here, which logs into Notesnook
+# Cloud with account secrets. This fork has no cloud account and never
+# contacts that infrastructure, so only the unit suite runs — which is
+# also why plain `pull_request` replaces `pull_request_target`: with no
+# secrets in play, fork PRs need no authorization gate.
 on:
   workflow_dispatch:
   push:
@@ -9,35 +14,19 @@ on:
       - "packages/core/**"
       # re-run workflow if workflow file changes
       - ".github/workflows/core.tests.yml"
-  pull_request_target:
+  pull_request:
     branches:
       - "master"
     paths:
       - "packages/core/**"
       # re-run workflow if workflow file changes
       - ".github/workflows/core.tests.yml"
-    types:
-      - "ready_for_review"
-      - "opened"
-      - "synchronize"
-      - "reopened"
 
 jobs:
-  authorize:
-    environment: ${{ github.event_name == 'pull_request_target' &&
-      github.event.pull_request.head.repo.full_name != github.repository &&
-      'external' || 'internal' }}
-    runs-on: ubuntu-latest
-    steps:
-      - run: echo true
-
   test:
-    needs: authorize
     runs-on: ubuntu-22.04
     steps:
       - uses: actions/checkout@v5
-        with:
-          ref: ${{ github.event.pull_request.head.sha || github.ref }}
 
       - name: Setup Node
         uses: ./.github/actions/setup-node-with-cache
@@ -46,12 +35,6 @@ jobs:
         run: |
           npm install --ignore-scripts --prefer-offline --no-audit --no-fund
           npm run bootstrap -- --scope=core
-      - name: Add environment variables
-        run: |
-          echo "USER_EMAIL=${{ secrets.USER_EMAIL }}" >> $GITHUB_ENV
-          echo "USER_PASSWORD=${{ secrets.USER_PASSWORD }}" >> $GITHUB_ENV
-          echo "USER_TOTP_SECRET=${{ secrets.USER_TOTP_SECRET }}" >> $GITHUB_ENV
-          echo "USER_HASHED_PASSWORD=${{ secrets.USER_HASHED_PASSWORD }}" >> $GITHUB_ENV
 
-      - name: Run all @notesnook/core tests
-        run: npm run tx @notesnook/core:test:e2e
+      - name: Run the @notesnook/core unit tests
+        run: npm run tx @notesnook/core:test
