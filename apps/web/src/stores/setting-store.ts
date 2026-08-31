@@ -41,7 +41,9 @@ class SettingStore extends BaseStore<SettingStore> {
   encryptBackups = Config.get("encryptBackups", false);
   backupReminderOffset = Config.get("backupReminderOffset", 0);
   fullBackupReminderOffset = Config.get("fullBackupReminderOffset", 0);
-  backupStorageLocation = PATHS.backupsDirectory;
+  // The desktop host replaces this with the real OS path at refresh(), so
+  // it must not narrow to the literal default from PATHS.
+  backupStorageLocation: string = PATHS.backupsDirectory;
   doubleSpacedParagraphs = Config.get("doubleSpacedLines", true);
   markdownShortcuts = Config.get("markdownShortcuts", false);
   fontLigatures = Config.get("fontLigatures", false);
