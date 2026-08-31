@@ -13,3 +13,7 @@ node_modules.backup
 .nx
 /*.patch
 .taskcache
+# Deno desktop build artifacts
+apps/desktop/native/
+apps/desktop/.native-build/
+apps/desktop/dist/

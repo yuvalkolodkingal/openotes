@@ -1,0 +1,177 @@
+/*
+This file is part of the Notesnook project (https://notesnook.com/)
+
+Copyright (C) 2023 Streetwriters (Private) Limited
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU General Public License as published by
+the Free Software Foundation, either version 3 of the License, or
+(at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License
+along with this program.  If not, see <http://www.gnu.org/licenses/>.
+*/
+
+/**
+ * The renderer <-> runtime contract.
+ *
+ * Upstream used Electron IPC (electron-trpc) to expose a tRPC router to the
+ * renderer. Deno Desktop has no IPC: the webview calls named bindings
+ * registered with `win.bind()`. To keep the ~50 renderer call sites
+ * unchanged, the whole surface is still addressed by dotted procedure path
+ * ("integration.showNotification"), but it now travels through exactly two
+ * bindings:
+ *
+ *   bindings.rpc({ path, input })  — request/response, renderer -> runtime
+ *   window.__nnDesktopEvent(event, payload) — runtime -> renderer, pushed
+ *                                             with win.executeJs()
+ *
+ * The renderer therefore has *no* general filesystem, shell or network
+ * capability: it can only reach the named procedures listed in
+ * PROCEDURE_NAMES, each of which validates its own input.
+ */
+
+export interface RpcRequest {
+  path: string;
+  input?: unknown;
+}
+
+export type RpcResponse =
+  | { ok: true; result: unknown }
+  | { ok: false; error: { name: string; message: string; code?: string } };
+
+/**
+ * Every procedure the renderer may call. Anything not in this list is
+ * rejected before a handler is looked up, so a compromised renderer cannot
+ * probe for undocumented capabilities.
+ */
+export const PROCEDURE_NAMES = [
+  // --- window ---
+  "window.maximize",
+  "window.restore",
+  "window.minimze", // upstream spelling, kept so the renderer is unchanged
+  "window.maximized",
+  "window.fullscreen",
+  "window.close",
+  "window.setTitle",
+
+  // --- os integration ---
+  "integration.isFlatpak",
+  "integration.isSnap",
+  "integration.isPortable",
+  "integration.backupDirectory",
+  "integration.selectBackupDirectory",
+  "integration.zoomFactor",
+  "integration.setZoomFactor",
+  "integration.privacyMode",
+  "integration.setPrivacyMode",
+  "integration.desktopIntegration",
+  "integration.setDesktopIntegration",
+  "integration.showNotification",
+  "integration.showMenu",
+  "integration.openPath",
+  "integration.openExternal",
+  "integration.revealFile",
+  "integration.restart",
+  "integration.bringToFront",
+  "integration.changeTheme",
+  "integration.systemTheme",
+  "integration.selectDirectory",
+  "integration.selectFile",
+  "integration.saveFile",
+  "integration.readClipboard",
+  "integration.writeClipboard",
+  "integration.appVersion",
+  "integration.about",
+  "integration.openLogDirectory",
+  "integration.logs",
+
+  // --- sqlite ---
+  "sqlite.open",
+  "sqlite.close",
+  "sqlite.run",
+  "sqlite.delete",
+  "sqlite.export",
+
+  // --- backups (streamed file writes) ---
+  "backups.open",
+  "backups.write",
+  "backups.close",
+
+  // --- key storage ---
+  "safeStorage.isEncryptionAvailable",
+  "safeStorage.encryptString",
+  "safeStorage.decryptString",
+
+  // --- compression ---
+  "compress.gzip",
+  "compress.gunzip",
+
+  // --- updates ---
+  "updater.check",
+  "updater.download",
+  "updater.install",
+  "updater.autoUpdates",
+  "updater.toggleAutoUpdates",
+  "updater.releaseTrack",
+  "updater.changeReleaseTrack",
+
+  // --- webdav sync (new in this fork) ---
+  "webdav.getConfig",
+  "webdav.setConfig",
+  "webdav.testConnection",
+  "webdav.connect",
+  "webdav.disconnect",
+  "webdav.syncNow",
+  "webdav.status",
+  "webdav.resetRemoteState",
+  "webdav.rebuildRemote",
+  "webdav.setPassphrase",
+
+  // --- backup engine (new in this fork) ---
+  "backup.getSettings",
+  "backup.setSettings",
+  "backup.createNow",
+  "backup.list",
+  "backup.restore",
+  "backup.selectLocalDirectory",
+  "backup.importFile",
+
+  // --- capabilities ---
+  "capabilities.get",
+
+  // --- lifecycle ---
+  "bridge.ready"
+] as const;
+
+export type ProcedureName = (typeof PROCEDURE_NAMES)[number];
+
+const PROCEDURE_SET: ReadonlySet<string> = new Set(PROCEDURE_NAMES);
+
+export function isKnownProcedure(path: string): path is ProcedureName {
+  return PROCEDURE_SET.has(path);
+}
+
+/** Events pushed from the runtime into the renderer. */
+export const EVENT_NAMES = [
+  "window.stateChanged",
+  "window.close",
+  "integration.themeChanged",
+  "bridge.openLink",
+  "updater.checking",
+  "updater.available",
+  "updater.notAvailable",
+  "updater.downloadProgress",
+  "updater.downloaded",
+  "updater.error",
+  "webdav.status",
+  "webdav.conflict",
+  "backup.completed"
+] as const;
+
+export type EventName = (typeof EVENT_NAMES)[number];

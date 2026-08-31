@@ -19,7 +19,8 @@
     "@std/fs": "jsr:@std/fs@^1.0.9",
     "@std/encoding": "jsr:@std/encoding@^1.0.7",
     "@std/testing": "jsr:@std/testing@^1.0.9",
-    "libsodium-wrappers-sumo": "./packages/sodium/src/libsodium.ts"
+    "libsodium-wrappers-sumo": "./packages/sodium/src/libsodium.ts",
+    "@db/sqlite": "jsr:@db/sqlite@^0.12.0"
   },
   "tasks": {
     "dev": "deno run -A apps/desktop/scripts/dev.ts",
@@ -39,7 +40,9 @@
     "build:rpm": "deno run -A apps/desktop/scripts/build.ts --target x86_64-unknown-linux-gnu --format rpm",
     "build:msi": "deno run -A apps/desktop/scripts/build.ts --target x86_64-pc-windows-msvc --format msi",
     "checksums": "deno run -A apps/desktop/scripts/checksums.ts",
-    "verify:no-electron": "deno run -A apps/desktop/scripts/verify-dependencies.ts"
+    "verify:no-electron": "deno run -A apps/desktop/scripts/verify-dependencies.ts",
+    "build:native": "deno run -A apps/desktop/scripts/build-native.ts",
+    "check:native": "deno run -A apps/desktop/scripts/build-native.ts --check"
   },
   "fmt": {
     "exclude": [
