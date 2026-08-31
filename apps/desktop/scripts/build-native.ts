@@ -101,8 +101,10 @@ function extensionSuffix(os: Target["os"]): string {
 }
 
 function npmPlatform(target: Target): string {
+  // The FTS5 extension packages name their Windows builds "windows-*", not
+  // Node's "win32-*" — sqlite-better-trigram-windows-x64, not -win32-x64.
   const os = target.os === "windows"
-    ? "win32"
+    ? "windows"
     : target.os === "darwin"
     ? "darwin"
     : "linux";

@@ -322,13 +322,17 @@ export class EditorModel {
   }
 
   async attachImage() {
-    await this.page
-      .context()
-      .grantPermissions(["clipboard-read", "clipboard-write"]);
-    // The image is drawn locally rather than fetched from the network: the
-    // test must not depend on an external image host being reachable (it
-    // flakes when the runner is rate-limited), and it matches the app's own
-    // promise not to reach out to third parties.
+    // The image is drawn locally and pasted with a synthetic paste event
+    // rather than fetched from the network and routed through the system
+    // clipboard. Two reasons: the test must not depend on an external image
+    // host (it flakes when the runner is rate-limited, and the app itself
+    // promises to reach no third parties), and a programmatic
+    // clipboard.write()+Ctrl+V does not reliably populate
+    // event.clipboardData.files in headless Chromium — which is exactly what
+    // the editor's paste handler reads (components/editor/tiptap.tsx). A
+    // paste event dispatched straight at the ProseMirror element with a
+    // DataTransfer carrying the file exercises that handler deterministically.
+    await this.page.locator(".ProseMirror").click();
     await this.page.evaluate(async () => {
       const canvas = document.createElement("canvas");
       canvas.width = 150;
@@ -345,13 +349,17 @@ export class EditorModel {
           "image/png"
         )
       );
-      await window.navigator.clipboard.write([
-        new ClipboardItem({ "image/png": blob })
-      ]);
+      const file = new File([blob], "image.png", { type: "image/png" });
+      const data = new DataTransfer();
+      data.items.add(file);
+      const editor = document.querySelector(".ProseMirror");
+      editor?.dispatchEvent(
+        new ClipboardEvent("paste", {
+          clipboardData: data,
+          bubbles: true,
+          cancelable: true
+        })
+      );
     });
-
-    await this.page.keyboard.down("ControlOrMeta");
-    await this.page.keyboard.press("KeyV");
-    await this.page.keyboard.up("ControlOrMeta");
   }
 }

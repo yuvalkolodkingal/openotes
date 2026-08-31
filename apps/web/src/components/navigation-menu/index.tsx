@@ -332,7 +332,7 @@ function NavigationMenu({
                 display: "block"
               }}
             >
-              Notesnook
+              Openotes
             </Text>
           </Flex>
           <Flex sx={{ gap: "small", alignItems: "center" }}>

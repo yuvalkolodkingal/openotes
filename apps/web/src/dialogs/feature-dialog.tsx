@@ -47,7 +47,7 @@ export type FeatureKeys = "highlights";
 const features: Record<FeatureKeys, Feature> = {
   highlights: {
     title: appVersion.isBeta
-      ? "Welcome to Notesnook Beta!"
+      ? "Welcome to Openotes Beta!"
       : "✨ Highlights ✨",
     subtitle: appVersion.isBeta
       ? `v${appVersion.clean}-beta`

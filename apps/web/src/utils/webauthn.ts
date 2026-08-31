@@ -33,7 +33,7 @@ async function registerSecurityKey(userId: BufferSource, username: string) {
     publicKey: {
       challenge: challenge,
       rp: {
-        name: "Notesnook"
+        name: "Openotes"
       },
       user: {
         id: userId,
