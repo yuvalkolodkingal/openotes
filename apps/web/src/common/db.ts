@@ -17,22 +17,13 @@ You should have received a copy of the GNU General Public License
 along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
-import { EventSourcePolyfill as EventSource } from "event-source-polyfill";
 import { DatabasePersistence, NNStorage } from "../interfaces/storage";
-import { database, getFeature, getFeatureLimit } from "@notesnook/common";
+import { database } from "@notesnook/common";
 import { createDialect } from "./sqlite";
 import { isFeatureSupported } from "../utils/feature-check";
 import { generatePassword } from "../utils/password-generator";
 import { deriveKey, useKeyStore } from "../interfaces/key-store";
-import { hosts, SubscriptionPlan, SubscriptionStatus } from "@notesnook/core";
-import Config from "../utils/config";
 import { FileStorage } from "../interfaces/fs";
-
-function getHostUrl(hostUrl: keyof typeof hosts, defaultUrl: string) {
-  if (IS_TESTING) return defaultUrl;
-  const envValue = import.meta.env[`NN_${hostUrl}`];
-  return envValue || defaultUrl;
-}
 
 const db = database;
 async function initializeDatabase(persistence: DatabasePersistence) {
@@ -44,19 +35,9 @@ async function initializeDatabase(persistence: DatabasePersistence) {
     await useKeyStore.getState().setValue("databaseKey", databaseKey);
   }
 
-  db.host({
-    API_HOST: getHostUrl("API_HOST", "https://api.notesnook.com"),
-    AUTH_HOST: getHostUrl("AUTH_HOST", "https://auth.streetwriters.co"),
-    SSE_HOST: getHostUrl("SSE_HOST", "https://events.streetwriters.co"),
-    ISSUES_HOST: getHostUrl("ISSUES_HOST", "https://issues.streetwriters.co"),
-    SUBSCRIPTIONS_HOST: getHostUrl(
-      "SUBSCRIPTIONS_HOST",
-      "https://subscriptions.streetwriters.co"
-    ),
-    MONOGRAPH_HOST: getHostUrl("MONOGRAPH_HOST", "https://monogr.ph"),
-    NOTESNOOK_HOST: getHostUrl("NOTESNOOK_HOST", "https://notesnook.com"),
-    ...Config.get("serverUrls", {})
-  });
+  // Openotes talks to no Notesnook server: there are no hosts to configure.
+  // The only remote this app has is the user's own WebDAV endpoint, which is
+  // configured (and contacted) by the desktop host, not by core.
 
   const storage = new NNStorage(
     "Notesnook",
@@ -93,34 +74,13 @@ async function initializeDatabase(persistence: DatabasePersistence) {
       skipInitialization: !IS_DESKTOP_APP && multiTab
     },
     storage: storage,
-    eventsource: EventSource,
     fs: FileStorage,
     compressor: () =>
       import("../utils/compressor").then(({ Compressor }) => new Compressor()),
-    maxNoteVersions: async () => {
-      const limit = await getFeatureLimit(getFeature("maxNoteVersions"));
-      return typeof limit.caption === "number" ? limit.caption : undefined;
-    },
+    // unlimited: note history is only bounded by local disk space.
+    maxNoteVersions: async () => undefined,
     batchSize: 100
   });
-
-  // if (IS_TESTING) {
-
-  // } else {
-  // db.host({
-  //   API_HOST: "http://localhost:5264",
-  //   AUTH_HOST: "http://localhost:8264",
-  //   SSE_HOST: "http://localhost:7264",
-  // });
-  // const base = `http://localhost`;
-  // db.host({
-  //   API_HOST: `${base}:5264`,
-  //   AUTH_HOST: `${base}:8264`,
-  //   SSE_HOST: `${base}:7264`,
-  //   ISSUES_HOST: `${base}:2624`,
-  //   SUBSCRIPTIONS_HOST: `${base}:9264`
-  // });
-  // }
 
   performance.mark("start:initdb");
   await db.init();
@@ -133,16 +93,6 @@ async function initializeDatabase(persistence: DatabasePersistence) {
   }
 
   performance.mark("end:initializeDatabase");
-
-  if (IS_TESTING && "isPro" in window) {
-    await db.user.setUser({
-      // @ts-expect-error just for testing purposes
-      subscription: {
-        plan: SubscriptionPlan.PRO,
-        status: SubscriptionStatus.ACTIVE
-      }
-    });
-  }
 
   return db;
 }

@@ -1,0 +1,155 @@
+# This file is part of the Notesnook project (https://notesnook.com/)
+#
+# Copyright (C) 2023 Streetwriters (Private) Limited
+# Copyright (C) 2026 Notesnook Deno Desktop contributors
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+# ---------------------------------------------------------------------------
+# Openotes flatpak manifest.
+#
+# This manifest does not build the app. The CI release job builds the Linux
+# tarball first (deno compile + the built web UI + the native SQLite
+# libraries) and drops it next to this file as
+# `openotes-linux-x86_64.tar.gz`; everything below is installation only.
+# See packaging/README.md for the exact tarball contract.
+#
+#   flatpak-builder --force-clean --repo=repo build-dir \
+#       packaging/flatpak/org.openotes.Openotes.yml
+# ---------------------------------------------------------------------------
+
+app-id: org.openotes.Openotes
+
+# WebKitGTK note
+# --------------
+# Openotes does not ship a browser engine. It is a "deno desktop" app: the
+# window is an OS webview, which on Linux is WebKitGTK loaded from the
+# runtime at startup. The runtime therefore has to provide the GTK3 +
+# WebKitGTK stack (libwebkit2gtk-4.1) — org.freedesktop.Platform on its own
+# does not, so the GNOME runtime is used. org.gnome.Platform//48 *is*
+# org.freedesktop.Platform//24.08 plus the GNOME libraries, so this is the
+# freedesktop 24.08 base with the webview added, not a different base.
+# Nothing else in the app needs GNOME.
+runtime: org.gnome.Platform
+runtime-version: "48"
+sdk: org.gnome.Sdk
+command: openotes
+
+# Sandbox permissions. This list is deliberately short: everything the app
+# stores lives in the XDG app directories that flatpak already gives it
+# (~/.var/app/org.openotes.Openotes/{data,config,cache}), so no filesystem
+# permission is needed to run. `--filesystem=host` is never granted.
+finish-args:
+  # Native Wayland window when the session is Wayland.
+  - --socket=wayland
+  # X11 only when there is no Wayland compositor. `fallback-x11` (not `x11`)
+  # so an X11 socket is not handed to the app on a Wayland session.
+  - --socket=fallback-x11
+  # Shared memory with the display server. Required by X11 (MIT-SHM) and by
+  # WebKitGTK's multi-process architecture; without it rendering falls back
+  # to a slow path or fails outright.
+  - --share=ipc
+  # GPU access for WebKitGTK's compositor. Without /dev/dri the webview
+  # falls back to software rendering.
+  - --device=dri
+  # Outbound network. Required for encrypted WebDAV sync (the whole point of
+  # this fork) and for the update check against the release manifest. The app
+  # contacts only the WebDAV server the user configured and the fork's own
+  # release URL; it has no telemetry endpoint (see src/constants.ts).
+  - --share=network
+  # Reminder notifications. The app posts them through the session bus
+  # notification service (Deno's notify API, falling back to notify-send);
+  # both end up calling org.freedesktop.Notifications.
+  - --talk-name=org.freedesktop.Notifications
+  # Backups. The default backup directory is ~/Documents/Openotes/backups
+  # (apps/desktop/src/native/paths.ts:88-96), and a user who picks a
+  # different directory does so through the file-chooser portal, which needs
+  # no permission of its own.
+  - --filesystem=xdg-documents
+
+modules:
+  - name: openotes
+    buildsystem: simple
+
+    build-options:
+      # `deno compile` appends its payload after the ELF sections. Stripping
+      # rewrites the file and drops that payload, producing a binary that
+      # starts and then cannot find its own code. Both flags are required.
+      strip: false
+      no-debuginfo: true
+
+    sources:
+      # The release tarball, placed here by the CI build job. A local path
+      # (not a URL) so the flatpak build needs no network access and no
+      # per-release checksum edit; the tarball is already checksummed by the
+      # release job that produced it.
+      - type: archive
+        path: openotes-linux-x86_64.tar.gz
+        strip-components: 1
+
+      # The shared desktop entry, renamed to the app id as flatpak requires.
+      - type: file
+        path: ../linux/openotes.desktop
+        dest-filename: org.openotes.Openotes.desktop
+
+      - type: file
+        path: ../linux/openotes.1
+
+      - type: file
+        path: org.openotes.Openotes.metainfo.xml
+
+      # /app/bin/openotes. The binary resolves its UI and native libraries
+      # relative to its own path (apps/desktop/main.ts:51-71 and
+      # apps/desktop/src/native/sqlite.ts:63-80), and both resolvers check
+      # the environment override first, so the launcher pins them explicitly
+      # instead of relying on the payload sitting next to /app/bin.
+      - type: script
+        dest-filename: openotes-launcher
+        commands:
+          - 'OPENOTES_UI_ROOT="${OPENOTES_UI_ROOT:-/app/lib/openotes/ui}"'
+          - 'OPENOTES_NATIVE_DIR="${OPENOTES_NATIVE_DIR:-/app/lib/openotes/native}"'
+          - "export OPENOTES_UI_ROOT OPENOTES_NATIVE_DIR"
+          - 'exec /app/lib/openotes/openotes "$@"'
+
+    build-commands:
+      # The application payload: the compiled binary, the built web UI it
+      # serves to the webview, and the SQLite3MC library plus the two FTS5
+      # tokenizer extensions the database schema needs.
+      - install -Dm755 openotes /app/lib/openotes/openotes
+      - cp -r ui /app/lib/openotes/ui
+      - cp -r native /app/lib/openotes/native
+      - chmod -R a+rX /app/lib/openotes
+
+      - install -Dm755 openotes-launcher /app/bin/openotes
+
+      - install -Dm644 org.openotes.Openotes.desktop
+        /app/share/applications/org.openotes.Openotes.desktop
+      # Inside the flatpak the icons are named after the app id, so the
+      # shared `Icon=openotes` line has to be rewritten. Nothing else in the
+      # desktop entry differs between the flatpak and the distro packages.
+      - sed -i 's|^Icon=openotes$|Icon=org.openotes.Openotes|'
+        /app/share/applications/org.openotes.Openotes.desktop
+
+      - install -Dm644 org.openotes.Openotes.metainfo.xml
+        /app/share/metainfo/org.openotes.Openotes.metainfo.xml
+
+      - |
+        for size in 16x16 24x24 32x32 48x48 64x64 128x128 256x256 512x512; do
+          install -Dm644 "icons/${size}.png" \
+            "/app/share/icons/hicolor/${size}/apps/org.openotes.Openotes.png"
+        done
+
+      - install -Dm644 openotes.1 /app/share/man/man1/openotes.1
+      - install -Dm644 LICENSE /app/share/licenses/openotes/LICENSE
+      - install -Dm644 UPSTREAM.md /app/share/licenses/openotes/UPSTREAM.md

@@ -20,20 +20,8 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 import Config from "../utils/config";
 import { hashNavigate, getCurrentHash, navigate } from "../navigation";
 import { db } from "./db";
-import {
-  areFeaturesAvailable,
-  FeatureId,
-  FeatureResult,
-  isFeatureAvailable,
-  sanitizeFilename
-} from "@notesnook/common";
-import { useStore as useUserStore } from "../stores/user-store";
-import { useStore as useAppStore } from "../stores/app-store";
-import {
-  HomePage,
-  ImageCompressionOptions,
-  useStore as useSettingStore
-} from "../stores/setting-store";
+import { FeatureId, FeatureResult, sanitizeFilename } from "@notesnook/common";
+import { HomePage, useStore as useSettingStore } from "../stores/setting-store";
 import { showToast } from "../utils/toast";
 import { readFile, showFilePicker } from "../utils/file-picker";
 import { logger } from "../utils/logger";
@@ -41,11 +29,9 @@ import { TaskManager } from "./task-manager";
 import { EVENTS, parseInternalLink } from "@notesnook/core";
 import { createWritableStream } from "./desktop-bridge";
 import { FeatureDialog, FeatureKeys } from "../dialogs/feature-dialog";
-import { User } from "@notesnook/core";
 import { LegacyBackupFile } from "@notesnook/core";
 import { useEditorStore } from "../stores/editor-store";
 import { formatDate } from "@notesnook/core";
-import { showPasswordDialog } from "../dialogs/password-dialog";
 import { BackupPasswordDialog } from "../dialogs/backup-password-dialog";
 import { Cipher, SerializedKey } from "@notesnook/crypto";
 import { ChunkedStream } from "../utils/streams/chunked-stream";
@@ -54,13 +40,8 @@ import { strings } from "@notesnook/intl";
 import { ABYTES, streamablefs } from "../interfaces/fs";
 import { type ZipEntry } from "../utils/streams/unzip-stream";
 import { ZipFile } from "../utils/streams/zip-stream";
-import { ConfirmDialog, showLogoutConfirmation } from "../dialogs/confirm";
 import { Home } from "../components/icons";
 import { MenuItem } from "@notesnook/ui";
-import { showFeatureNotAllowedToast } from "./toasts";
-import { UpgradeDialog } from "../dialogs/buy-dialog/upgrade-dialog";
-import { setToolbarPreset } from "./toolbar-config";
-import { useKeyStore } from "../interfaces/key-store";
 import { TaskScheduler } from "../utils/task-scheduler";
 import { path } from "@notesnook-importer/core/dist/src/utils/path";
 
@@ -99,25 +80,11 @@ export const DEFAULT_CONTEXT = { colors: [], tags: [], notebook: {} };
 
 export async function createBackup(
   options: {
-    rescueMode?: boolean;
-    noVerify?: boolean;
     mode?: "full" | "partial";
     background?: boolean;
   } = { mode: "partial" }
 ) {
-  const { rescueMode, noVerify, mode, background } = options;
-  const { isLoggedIn } = useUserStore.getState();
-  const { encryptBackups, toggleEncryptBackups } = useSettingStore.getState();
-  if (!isLoggedIn && encryptBackups) toggleEncryptBackups();
-
-  const verified =
-    rescueMode || encryptBackups || noVerify || (await verifyAccount());
-  if (!verified) {
-    showToast("error", `${strings.backupFailed()}: ${strings.verifyFailed()}.`);
-    return false;
-  }
-
-  const encryptedBackups = !rescueMode && isLoggedIn && encryptBackups;
+  const { mode, background } = options;
 
   const filename = sanitizeFilename(
     `${formatDate(Date.now(), {
@@ -142,9 +109,13 @@ export async function createBackup(
       await new ReadableStream<ZipFile>({
         start() {},
         async pull(controller) {
+          // Openotes has no hosted account, and core can only encrypt a
+          // backup with an account master key, so app-level exports are
+          // written in plain form. Encrypted backups are produced by the
+          // WebDAV backup subsystem instead.
           for await (const output of db.backup!.export({
             type: "web",
-            encrypt: encryptedBackups,
+            encrypt: false,
             mode
           })) {
             if (output.type === "file") {
@@ -238,31 +209,6 @@ export async function restoreBackupFile(backupFile: File) {
       "../utils/streams/unzip-stream"
     );
 
-    let skipAttachments = false;
-    if (!useUserStore.getState().isLoggedIn) {
-      let hasAttachments = false;
-      for await (const entry of createUnzipIterator(backupFile)) {
-        if (
-          entry.name.startsWith("attachments/") &&
-          entry.name !== "attachments/.attachments_key"
-        ) {
-          hasAttachments = true;
-          break;
-        }
-      }
-
-      if (hasAttachments) {
-        const result = await ConfirmDialog.show({
-          title: strings.loginToRestoreAttachments(),
-          message: strings.loginToRestoreAttachmentsDesc(),
-          positiveButtonText: strings.yes(),
-          negativeButtonText: strings.no()
-        });
-        if (!result) return;
-        skipAttachments = true;
-      }
-    }
-
     const error = await TaskManager.startTask<Error | void>({
       title: strings.restoringBackup(),
       subtitle: strings.restoringBackupDesc(),
@@ -282,11 +228,11 @@ export async function restoreBackupFile(backupFile: File) {
             isValid = true;
             continue;
           }
-          if (!skipAttachments && entry.name === "attachments/.attachments_key")
+          if (entry.name === "attachments/.attachments_key")
             attachmentsKey = JSON.parse(await entry.text()) as
               | SerializedKey
               | Cipher<"base64">;
-          else if (!skipAttachments && entry.name.startsWith("attachments/"))
+          else if (entry.name.startsWith("attachments/"))
             attachments.push(entry);
           else if (!entry.name.startsWith("attachments/")) entries.push(entry);
         }
@@ -408,35 +354,6 @@ async function restoreWithProgress(
   });
 }
 
-export async function verifyAccount() {
-  if (!(await db.user?.getUser())?.email) return true;
-  return await showPasswordDialog({
-    title: strings.verifyItsYou(),
-    subtitle: strings.enterAccountPasswordDesc(),
-    inputs: {
-      password: {
-        label: strings.password(),
-        autoComplete: "current-password"
-      }
-    },
-    validate: async ({ password }) => {
-      return !!password && (await db.user?.verifyPassword(password));
-    }
-  });
-}
-
-export function totalSubscriptionConsumed(user: User) {
-  if (!user) return 0;
-  const start = user.subscription?.start;
-  const end = user.subscription?.expiry;
-  if (!start || !end) return 0;
-
-  const total = end - start;
-  const consumed = Date.now() - start;
-
-  return Math.round((consumed / total) * 100);
-}
-
 async function restore(
   backup: LegacyBackupFile,
   password?: string,
@@ -452,36 +369,6 @@ async function restore(
       `${strings.backupFailed()}: ${(e as Error).message || e}`
     );
   }
-}
-
-export async function logout() {
-  const result = await showLogoutConfirmation();
-  if (!result) return;
-
-  if (result.checks?.backup) {
-    try {
-      await createBackup({ mode: "partial" });
-    } catch (e) {
-      logger.error(e, "Failed to take backup before logout");
-      if (
-        !(await ConfirmDialog.show({
-          title: strings.failedToTakeBackup(),
-          message: strings.failedToTakeBackupMessage(),
-          negativeButtonText: strings.no(),
-          positiveButtonText: strings.yes()
-        }))
-      )
-        return;
-    }
-  }
-
-  await TaskManager.startTask({
-    type: "modal",
-    title: strings.loggingOut(),
-    subtitle: strings.pleaseWait(),
-    action: () => db.user.logout(true)
-  });
-  showToast("success", strings.loggedOut());
 }
 
 export function createSetDefaultHomepageMenuItem(
@@ -507,89 +394,30 @@ export function createSetDefaultHomepageMenuItem(
   } as MenuItem;
 }
 
+/**
+ * Openotes is local-only: every feature is unlocked and every limit is
+ * unmetered (see `@notesnook/common`'s `is-feature-available`), so there is
+ * nothing left to gate. `checkFeature` and `withFeatureCheck` are kept
+ * because the call sites all over the UI are written around them, but they
+ * no longer consult a plan or open an upgrade dialog.
+ */
 export async function checkFeature<TId extends FeatureId>(
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   idOrFeature: TId | FeatureResult<TId>,
-  { type = "dialog", value }: { value?: number; type?: "toast" | "dialog" } = {}
-) {
-  const result =
-    typeof idOrFeature === "object"
-      ? idOrFeature
-      : await isFeatureAvailable(idOrFeature, value);
-  if (!result.isAllowed) {
-    type === "dialog"
-      ? await UpgradeDialog.show({ feature: result })
-      : showFeatureNotAllowedToast(result);
-    return false;
-  }
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  options: { value?: number; type?: "toast" | "dialog" } = {}
+): Promise<boolean> {
   return true;
 }
 
 export function withFeatureCheck<TId extends FeatureId>(
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   idOrFeature: TId | FeatureResult<TId> | undefined,
   callback: (...args: any[]) => Promise<void> | void
 ) {
   return async (...args: any[]) => {
-    if (idOrFeature && !(await checkFeature(idOrFeature))) return;
     await callback(...args);
   };
-}
-
-export async function resetFeatures() {
-  const features = await areFeaturesAvailable([
-    "customHomepage",
-    "customToolbarPreset",
-    "markdownShortcuts",
-    "fontLigatures",
-    "fullQualityImages",
-    "defaultSidebarTab",
-    "disableTrashCleanup",
-    "syncControls",
-    "fullOfflineMode",
-    "appLock",
-    "defaultNotebookAndTag"
-  ]);
-  if (!features.appLock.isAllowed) {
-    await useKeyStore.getState().disable();
-  }
-
-  if (!features.customHomepage.isAllowed)
-    useSettingStore.getState().setHomepage();
-
-  if (!features.customToolbarPreset.isAllowed)
-    await setToolbarPreset("default");
-
-  if (!features.markdownShortcuts.isAllowed)
-    useSettingStore.getState().toggleMarkdownShortcuts(false);
-
-  if (!features.fontLigatures.isAllowed)
-    useSettingStore.getState().toggleFontLigatures(false);
-
-  if (!features.fullQualityImages.isAllowed)
-    useSettingStore
-      .getState()
-      .setImageCompression(ImageCompressionOptions.ENABLE);
-
-  if (!features.defaultSidebarTab.isAllowed)
-    useSettingStore.getState().setDefaultSidebarTab("home");
-
-  if (!features.disableTrashCleanup.isAllowed)
-    useSettingStore.getState().setTrashCleanupInterval(7);
-
-  if (!features.syncControls.isAllowed) {
-    useAppStore.setState({
-      isSyncEnabled: true,
-      isAutoSyncEnabled: true,
-      isRealtimeSyncEnabled: true
-    });
-  }
-
-  if (!features.fullOfflineMode.isAllowed)
-    useSettingStore.getState().toggleFullOfflineMode(false);
-
-  if (!features.defaultNotebookAndTag.isAllowed) {
-    db.settings.setDefaultNotebook(undefined);
-    db.settings.setDefaultTag(undefined);
-  }
 }
 
 export async function scheduleExpiredNotesDeletion() {

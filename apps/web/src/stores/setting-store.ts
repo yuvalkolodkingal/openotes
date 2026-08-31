@@ -30,14 +30,6 @@ import { ConfirmDialog } from "../dialogs/confirm";
 import * as openpgp from "openpgp";
 import { InboxPGPKeysDialog } from "../dialogs/inbox-pgp-keys-dialog";
 
-export const HostIds = [
-  "API_HOST",
-  "AUTH_HOST",
-  "SSE_HOST",
-  "MONOGRAPH_HOST"
-] as const;
-export type HostId = (typeof HostIds)[number];
-
 export enum ImageCompressionOptions {
   ASK_EVERY_TIME,
   ENABLE,
@@ -59,8 +51,6 @@ class SettingStore extends BaseStore<SettingStore> {
   fontLigatures = Config.get("fontLigatures", false);
   notificationsSettings = Config.get("notifications", { reminder: true });
   isFullOfflineMode = Config.get("fullOfflineMode", false);
-  serverUrls: Partial<Record<HostId, string>> = Config.get("serverUrls", {});
-
   zoomFactor = 1.0;
   privacyMode = false;
   customDns = true;
@@ -281,17 +271,6 @@ class SettingStore extends BaseStore<SettingStore> {
 
     if (!state) db.fs().cancel("offline-mode");
     else db.attachments.cacheAttachments();
-  };
-
-  setServerUrls = (urls?: Partial<Record<HostId, string>>) => {
-    if (!urls) {
-      Config.set("serverUrls", {});
-      this.set({ serverUrls: {} });
-      return;
-    }
-    const serverUrls = this.get().serverUrls;
-    this.set({ serverUrls: { ...serverUrls, ...urls } });
-    Config.set("serverUrls", { ...serverUrls, ...urls });
   };
 
   toggleInbox = async () => {

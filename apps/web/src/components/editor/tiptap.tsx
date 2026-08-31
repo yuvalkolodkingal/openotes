@@ -51,8 +51,7 @@ import {
 import { IEditor, MAX_AUTO_SAVEABLE_WORDS } from "./types";
 import { useEditorConfig, useToolbarConfig, useEditorManager } from "./manager";
 import { useStore as useSettingsStore } from "../../stores/setting-store";
-import { useStore as useUserStore } from "../../stores/user-store";
-import { debounce, useAreFeaturesAvailable } from "@notesnook/common";
+import { debounce } from "@notesnook/common";
 import { ScopedThemeProvider } from "../theme-provider";
 import { useStore as useThemeStore } from "../../stores/theme-store";
 import { writeToClipboard } from "../../utils/clipboard";
@@ -65,9 +64,6 @@ import useTablet from "../../hooks/use-tablet";
 import { TimeFormat } from "@notesnook/core";
 import { EDITOR_ZOOM } from "./common";
 import { ScrollContainer } from "@notesnook/ui";
-import { showFeatureNotAllowedToast } from "../../common/toasts";
-import { UpgradeDialog } from "../../dialogs/buy-dialog/upgrade-dialog";
-import { ConfirmDialog } from "../../dialogs/confirm";
 import { strings } from "@notesnook/intl";
 import { handleInternalLink } from "../../common";
 import { db } from "../../common/db";
@@ -195,44 +191,22 @@ function TipTap(props: TipTapProps) {
 
   const autoSave = useRef(true);
   const { toolbarConfig } = useToolbarConfig();
-  const features = useAreFeaturesAvailable([
-    "callout",
-    "outlineList",
-    "taskList",
-    "exportTableAsCsv",
-    "importCsvToTable"
-  ]);
-
   usePermissionHandler({
+    // Openotes unlocks every editor capability: callouts, outlines, task
+    // lists and CSV tables are all local editing features, and attachments
+    // live in the local vault, so no claim depends on a plan or an account.
     claims: {
-      callout: !!features?.callout?.isAllowed,
-      outlineList: !!features?.outlineList?.isAllowed,
-      taskList: !!features?.taskList?.isAllowed,
-      insertAttachment: !!useUserStore.getState().isLoggedIn,
-      exportTableAsCsv: !!features?.exportTableAsCsv?.isAllowed,
-      importCsvToTable: !!features?.importCsvToTable?.isAllowed
+      callout: true,
+      outlineList: true,
+      taskList: true,
+      insertAttachment: true,
+      exportTableAsCsv: true,
+      importCsvToTable: true
     },
-    onPermissionDenied: (claim, silent) => {
-      if (claim === "insertAttachment") {
-        ConfirmDialog.show({
-          title: strings.notLoggedIn(),
-          message: strings.loginToUploadAttachments(),
-          positiveButtonText: strings.okay()
-        });
-        return;
-      }
-
-      if (silent) {
-        console.log(features, features?.[claim]);
-        if (features?.[claim]) showFeatureNotAllowedToast(features[claim]);
-        return;
-      }
-
-      if (features)
-        UpgradeDialog.show({
-          feature: features[claim]
-        });
-    }
+    onPermissionDenied: (claim) =>
+      console.error(
+        `Editor claim "${claim}" was denied although all editor claims are granted in Openotes.`
+      )
   });
 
   const oldNonce = useRef<number>();
