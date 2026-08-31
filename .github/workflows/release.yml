@@ -22,10 +22,10 @@
 # job depends on it, so a tag whose tests fail publishes nothing at all — no
 # release, no draft, no uploaded asset.
 #
-# SECRETS (spec §35, §43): this workflow has exactly one trigger, a tag push
-# to this repository. There is no `pull_request` or `pull_request_target`
-# trigger, so a pull request from a fork can never run it and can never see
-# the signing key. Authenticode signing is optional: when
+# SECRETS (spec §35, §43): this workflow triggers only on a tag push to this
+# repository or a manual dispatch by someone who can already write to it.
+# There is no `pull_request` or `pull_request_target` trigger, so a pull
+# request from a fork can never run it and can never see the signing key. Authenticode signing is optional: when
 # WINDOWS_SIGNING_CERTIFICATE is not configured — which is the case in every
 # fork — the Windows installers are published unsigned and the release notes
 # say so, rather than the build failing.
@@ -37,8 +37,10 @@ on:
     tags: ["v*"]
   workflow_dispatch:
     inputs:
-      tag:
-        description: "Existing v* tag to build and publish"
+      version:
+        description: "Version to release, e.g. 1.0.0 (a leading v is fine).\
+          Must match APP_VERSION in apps/desktop/src/constants.ts. The v tag\
+          is created for you if it does not exist yet."
         required: true
         type: string
 
@@ -57,6 +59,10 @@ jobs:
   version:
     name: Resolve the version
     runs-on: ubuntu-24.04
+    permissions:
+      # Creating the release tag when a dispatch names a version that does
+      # not have one yet.
+      contents: write
     outputs:
       tag: ${{ steps.resolve.outputs.tag }}
       version: ${{ steps.resolve.outputs.version }}
@@ -66,39 +72,30 @@ jobs:
 
       - name: Resolve and cross-check the version
         id: resolve
-        # The tag arrives through the environment rather than being expanded
-        # into the script: `${{ inputs.tag }}` is attacker-controlled text and
-        # pasting it into bash would make it executable.
+        # The version arrives through the environment rather than being
+        # expanded into the script: `${{ inputs.version }}` is
+        # operator-supplied text and pasting it into bash would make it
+        # executable.
         env:
-          TAG_INPUT: ${{ inputs.tag }}
+          VERSION_INPUT: ${{ inputs.version }}
           REF_NAME: ${{ github.ref_name }}
         run: |
           set -euo pipefail
-          tag="${TAG_INPUT:-$REF_NAME}"
+          # A tag push already names the tag; a dispatch names a version.
+          # Either way normalise to a v-prefixed tag, so "1.0.0" and "v1.0.0"
+          # are both accepted from the dispatch form.
+          if [ -n "${VERSION_INPUT:-}" ]; then
+            tag="v${VERSION_INPUT#v}"
+          else
+            tag="$REF_NAME"
+          fi
           case "$tag" in
-            v*) ;;
-            *) echo "Refusing to release from \"$tag\": tags must start with v" >&2
+            v[0-9]*) ;;
+            *) echo "Refusing to release \"$tag\": expected a version like" \
+                    "1.0.0 (or the tag v1.0.0)." >&2
                exit 1 ;;
           esac
           version="${tag#v}"
-
-          # A workflow_dispatch run checks out the ref it was started on, not
-          # the tag named in the input — and `uses: ./.github/workflows/...`
-          # resolves the called workflows at that same ref. So a dispatch
-          # could build one commit and publish it under a tag that points at
-          # another. Refuse unless the two are the same commit; the fix is to
-          # pick the tag itself as the ref the run starts on.
-          if [ -n "${TAG_INPUT:-}" ]; then
-            git fetch --no-tags --depth=1 origin "+refs/tags/$tag:refs/tags/$tag"
-            tagged=$(git rev-parse "refs/tags/$tag^{commit}")
-            if [ "$tagged" != "$GITHUB_SHA" ]; then
-              echo "Tag $tag points at $tagged but this run checked out" \
-                   "$GITHUB_SHA, so the artifacts would not be built from" \
-                   "the tagged commit." >&2
-              echo "Re-run the workflow with $tag selected as the ref." >&2
-              exit 1
-            fi
-          fi
 
           declared=$(sed -n 's/^export const APP_VERSION = "\(.*\)";$/\1/p' \
             apps/desktop/src/constants.ts)
@@ -108,6 +105,34 @@ jobs:
             echo "The version the application reports about itself and the" \
                  "version on the release have to agree." >&2
             exit 1
+          fi
+
+          # The artifacts must be built from the commit the tag points at.
+          # A dispatch checks out the ref it was started on, and
+          # `uses: ./.github/workflows/...` resolves the called workflows at
+          # that same ref — so publishing under a tag that points somewhere
+          # else would ship one commit's binaries under another's name.
+          # Rather than demand the tag already exist (which left no way to
+          # cut a first release at all), create it here when it is missing:
+          # it then points at this very commit by construction.
+          if [ -n "${VERSION_INPUT:-}" ]; then
+            if git ls-remote --exit-code --tags origin "refs/tags/$tag" >/dev/null 2>&1; then
+              git fetch --no-tags --depth=1 origin "+refs/tags/$tag:refs/tags/$tag"
+              tagged=$(git rev-parse "refs/tags/$tag^{commit}")
+              if [ "$tagged" != "$GITHUB_SHA" ]; then
+                echo "Tag $tag already exists and points at $tagged, but this" \
+                     "run checked out $GITHUB_SHA, so the artifacts would not" \
+                     "be built from the tagged commit." >&2
+                echo "Re-run the workflow with $tag selected as the ref, or" \
+                     "bump APP_VERSION and release the new version." >&2
+                exit 1
+              fi
+              echo "Tag $tag already exists and matches this commit."
+            else
+              echo "Creating tag $tag at $GITHUB_SHA"
+              git tag "$tag" "$GITHUB_SHA"
+              git push origin "refs/tags/$tag"
+            fi
           fi
 
           case "$version" in
