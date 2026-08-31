@@ -18,12 +18,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
 import type { Page } from "@playwright/test";
-import {
-  downloadAndReadFile,
-  getTestId,
-  IS_DESKTOP_TESTS,
-  uploadFile
-} from "../utils";
+import { downloadAndReadFile, getTestId, uploadFile } from "../utils";
 import {
   confirmDialog,
   fillConfirmPasswordDialog,
@@ -32,8 +27,6 @@ import {
   waitToHaveText
 } from "./utils";
 import { NavigationMenuModel } from "./navigation-menu.model";
-import { AppModel } from "./app.model";
-import { readFile } from "node:fs/promises";
 
 export class SettingsViewModel {
   private readonly page: Page;
@@ -133,30 +126,7 @@ export class SettingsViewModel {
       if (password) await fillPasswordDialog(this.page, password);
     };
 
-    if (IS_DESKTOP_TESTS) {
-      const { getAppFromPage } = await import(
-        "../../../desktop/__tests__/electron-test/utils"
-      );
-
-      await saveBackup();
-      const toast = new AppModel(this.page).toasts.toasts.locator(
-        getTestId("toast-message")
-      );
-      await toast.waitFor();
-      const backupPath = (await toast.textContent())
-        ?.replace("Backup saved at", "")
-        .trim();
-      if (!backupPath)
-        throw new Error("Backup path not found in toast message");
-      const app = getAppFromPage(this.page);
-      const resolvedDocumentPath = await app.evaluate(({ app }) =>
-        app.getPath("documents")
-      );
-      const resolvedBackupPath = backupPath.startsWith("documents")
-        ? backupPath.replace("documents", resolvedDocumentPath)
-        : backupPath;
-      return await readFile(resolvedBackupPath, "utf-8");
-    } else return await downloadAndReadFile(this.page, saveBackup, "utf-8");
+    return await downloadAndReadFile(this.page, saveBackup, "utf-8");
   }
 
   async restoreData(filename: string, password?: string) {

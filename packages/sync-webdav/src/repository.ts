@@ -274,9 +274,19 @@ export class SyncRepository {
   }
 
   /**
-   * Append one immutable batch to this device's journal. Refuses to
-   * overwrite an existing sequence file (If-None-Match), so two processes
-   * writing the same sequence cannot silently destroy each other's records.
+   * Append one immutable batch to this device's journal.
+   *
+   * Journal entries are immutable, so overwriting one would destroy records
+   * another run already published. Two defences, because servers differ:
+   *
+   *  1. If-None-Match, which a conforming server answers with 412; and
+   *  2. an explicit existence check first, because some servers (dufs, for
+   *     one) accept the header and ignore it — verified against real
+   *     servers in the integration suite. Without this check those servers
+   *     would silently clobber the entry.
+   *
+   * Both report the same "precondition-failed" so the caller can advance to
+   * the next free sequence either way.
    */
   async writeBatch(
     syncKey: SerializedKey,
@@ -284,6 +294,16 @@ export class SyncRepository {
     sequence: number,
     records: SyncRecord[]
   ): Promise<void> {
+    const path = changePath(deviceId, sequence);
+
+    if (await this.client.exists(path)) {
+      throw new SyncError(
+        `Journal entry ${deviceId}/${sequence} already exists on the server`,
+        "precondition-failed",
+        412
+      );
+    }
+
     const envelope: ChangeBatchEnvelope = {
       protocolVersion: PROTOCOL_VERSION,
       deviceId,
@@ -291,7 +311,6 @@ export class SyncRepository {
       cipher: await this.crypto.encryptJson(syncKey, records)
     };
     const body = new TextEncoder().encode(JSON.stringify(envelope));
-    const path = changePath(deviceId, sequence);
     await this.client.put(path, body, { ifNoneMatch: true });
     // Verify the remote object before the caller marks anything synced.
     await this.client.verifyUpload(path, body.length);

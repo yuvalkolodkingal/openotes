@@ -162,6 +162,5 @@ On Android 8 and above this opens the system notification channel settings for N
 ## Related pages
 
 - [Note actions](/notes/note-actions) — pin, duplicate, read-only, print and more
-- [Pin to notifications](/mobile-integration/pin-notes-to-notifications) — a note that lives in your shade
 - [Task lists](/rich-text-editor/task-and-todo-lists) — to-do lists inside a note
 - [Plans & limits](/plans-and-limits) — what each plan unlocks and the exact limits

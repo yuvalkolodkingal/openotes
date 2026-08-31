@@ -104,7 +104,8 @@ function createFeature(feature: {
     id: feature.id,
     title: feature.title,
     used: feature.used,
-    error: feature.error ?? (() => `${feature.title} is available without limits.`),
+    error:
+      feature.error ?? (() => `${feature.title} is available without limits.`),
     availability: {
       free: limit,
       essential: limit,
@@ -360,6 +361,7 @@ export function planToAvailability(plan: SubscriptionPlan) {
 
 export function getFeaturesTable() {
   // Feature  FREE  ESSENTIAL  PRO   BELIEVER
+  // (the four columns are kept for layout compatibility; they are identical)
   const rows: [string, Limit, Limit, Limit, Limit][] = [];
   for (const key in features) {
     const feature = features[key as FeatureId];

@@ -14,7 +14,7 @@ schema: howto
 In both mobile and desktop/web apps, you can install themes directly from a JSON theme file.
 
 ::: info You cannot currently import CSS for a code block.
-[Themes must be published](/custom-themes/publish-a-theme) in order for you to use custom CSS for code blocks.
+Custom CSS for code blocks only applies to themes that have been published to a theme store.
 
 :::
 
@@ -29,5 +29,4 @@ In both mobile and desktop/web apps, you can install themes directly from a JSON
 ## Related pages
 
 - [Using themes](/custom-themes/using-themes) — light, dark and the theme store
-- [Theme Builder](/custom-themes/create-a-theme-with-theme-builder) — building a theme visually
 - [How themes work](/custom-themes/introduction) — scopes, variants and colors

@@ -41,10 +41,6 @@ features:
     details: What to do when you forget your password, and what your recovery key protects.
     link: /recovering-your-account
     linkText: Recover an account
-  - title: Publish with Monographs
-    details: Share a note as a link — optionally encrypted with a password only your reader knows.
-    link: /publish-notes-with-monographs
-    linkText: Publish a note
 ---
 
 <div class="vp-doc nn-home-note">

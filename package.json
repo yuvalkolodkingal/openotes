@@ -13,7 +13,6 @@
     "start:web": "npm run tx web:start",
     "start:editor": "npm run tx editor:start",
     "build:intl": "npm run tx intl:build",
-    "start:intl": "npm run tx intl:start",
     "test:web": "npm run tx web:test",
     "test:core": "npm run tx core:test",
     "tx": "node scripts/execute.mjs"

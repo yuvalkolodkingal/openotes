@@ -130,7 +130,7 @@ An embed is a live frame from another website, so opening a note that contains o
 
 ## Read a web clip inside a note
 
-Pages saved with the [Notesnook Web Clipper](/web-clipper/clipping-your-first-web-page-with-web-clipper) appear in the note as a self-contained clip with the page title in its header. Select it for:
+Pages saved with a web clipper appear in the note as a self-contained clip with the page title in its header. Select it for:
 
 - `{{fullscreen}}` — expand the clip to fill the screen; press `Esc` to come back
 - `{{openLink}}` — open the saved copy of the page
@@ -143,5 +143,4 @@ On mobile these live under `{{webclipSettings}}` in the toolbar, which offers `{
 - [Editor toolbar](/rich-text-editor/rich-text-editor-toolbar) — every formatting tool and how to customize the toolbar
 - [Attachments and files](/attachments-and-files) — managing, downloading and cleaning up everything you've attached
 - [Plans & limits](/plans-and-limits) — storage, maximum file size and full-quality images
-- [Clipping your first web page](/web-clipper/clipping-your-first-web-page-with-web-clipper) — how clips get into a note
 - [Tabs & panes](/rich-text-editor/editor-tabs-and-panes) — the PDF preview pane beside the editor

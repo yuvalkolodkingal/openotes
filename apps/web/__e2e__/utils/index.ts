@@ -30,8 +30,6 @@ import {
 import { tmpdir } from "os";
 import { AppModel } from "../models/app.model";
 
-export const IS_DESKTOP_TESTS = process.env.TEST_DESKTOP === "true";
-
 type Note = {
   title: string;
   content?: string;

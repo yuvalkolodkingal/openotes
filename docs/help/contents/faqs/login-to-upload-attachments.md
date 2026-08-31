@@ -25,7 +25,7 @@ Everything that lives on your device: notes, notebooks, tags, colors, the [edito
 
 ## What counts as an attachment
 
-Images, files, audio recordings and [web clips](/web-clipper/clipping-your-first-web-page-with-web-clipper) all go through the same pipeline, so all of them need you signed in. See [attachments and files](/attachments-and-files) for the size and storage limits on each plan.
+Images, files, audio recordings and web clips all go through the same pipeline, so all of them need you signed in. See [attachments and files](/attachments-and-files) for the size and storage limits on each plan.
 
 ## Related pages
 

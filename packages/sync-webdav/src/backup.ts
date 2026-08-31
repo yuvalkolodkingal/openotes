@@ -256,6 +256,27 @@ export class BackupEngine {
   }
 }
 
+/**
+ * A backup file name must be a single, literal file name. The character
+ * class alone is not enough: "." and ".." are made entirely of allowed
+ * characters and would resolve to a directory, so they are rejected
+ * explicitly rather than left to the filesystem to refuse.
+ */
+export function assertSafeBackupName(name: string): string {
+  if (
+    !name ||
+    name === "." ||
+    name === ".." ||
+    !/^[A-Za-z0-9._-]+$/.test(name)
+  ) {
+    throw new SyncError(
+      `Unsafe backup file name: ${JSON.stringify(name)}`,
+      "corrupt-data"
+    );
+  }
+  return name;
+}
+
 /** Backups stored in the WebDAV `backups/` directory. */
 export class WebDavBackupTarget implements BackupTarget {
   constructor(
@@ -264,10 +285,7 @@ export class WebDavBackupTarget implements BackupTarget {
   ) {}
 
   private path(name: string) {
-    if (!/^[A-Za-z0-9._-]+$/.test(name)) {
-      throw new SyncError(`Unsafe backup file name: ${name}`, "corrupt-data");
-    }
-    return `${this.directory}/${name}`;
+    return `${this.directory}/${assertSafeBackupName(name)}`;
   }
 
   async list(): Promise<BackupEntry[]> {
@@ -317,10 +335,7 @@ export class LocalBackupTarget implements BackupTarget {
   ) {}
 
   private path(name: string) {
-    if (!/^[A-Za-z0-9._-]+$/.test(name)) {
-      throw new SyncError(`Unsafe backup file name: ${name}`, "corrupt-data");
-    }
-    return this.fs.join(this.directory, name);
+    return this.fs.join(this.directory, assertSafeBackupName(name));
   }
 
   async list(): Promise<BackupEntry[]> {

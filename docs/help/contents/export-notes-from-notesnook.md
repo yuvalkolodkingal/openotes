@@ -93,5 +93,4 @@ On desktop and web, PDF is only offered when you export a **single note** — mu
 
 - [Backup and restore](/backup-and-restore-notes-in-notesnook) — encrypted backups you can restore into Notesnook, as opposed to exports for other apps
 - [Importing notes](/importing-notes/) — moving notes in from another app
-- [Publishing with monographs](/publish-notes-with-monographs) — sharing a single note as a link instead of a file
 - [Attachments & files](/attachments-and-files) — what happens to files attached to exported notes
