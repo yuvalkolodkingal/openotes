@@ -129,6 +129,11 @@ jobs:
               fi
               echo "Tag $tag already exists and matches this commit."
             else
+              # Pushing this tag does NOT start a second Release run: GitHub
+              # does not raise workflow-triggering events for pushes made with
+              # the default GITHUB_TOKEN. That is the only thing keeping the
+              # `on: push: tags` trigger from firing here — swap this for a
+              # PAT or a deploy key and every dispatch would publish twice.
               echo "Creating tag $tag at $GITHUB_SHA"
               git tag "$tag" "$GITHUB_SHA"
               git push origin "refs/tags/$tag"
