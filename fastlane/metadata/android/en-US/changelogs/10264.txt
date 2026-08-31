@@ -1,5 +1,0 @@
-- Allow all users to take encrypted backups of their data
-- Disable auto backup by default enabled for logged in users
-- Bug fixes and performance improvements
-
-Thank you for using Notesnook!

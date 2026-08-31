@@ -1,6 +1,0 @@
-- Fix crash when launching Notesnook from Notification tiles
-- Fix app crashing on background on boot
-- Fix self-hosted server urls not working
-- Bug fixes and small improvements
-
-Thank you for using Notesnook!

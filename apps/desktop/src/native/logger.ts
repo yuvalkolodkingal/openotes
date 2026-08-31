@@ -274,14 +274,14 @@ export class Logger {
   }
 }
 
-const envLevel = Deno.env.get("NOTESNOOK_DENO_LOG_LEVEL") as LogLevel | undefined;
+const envLevel = Deno.env.get("OPENOTES_LOG_LEVEL") as LogLevel | undefined;
 
 /** Production default is `info` (spec §29). */
 export const logger = new Logger({
   level:
     envLevel && envLevel in LEVEL_ORDER
       ? envLevel
-      : Deno.env.get("NOTESNOOK_DENO_DEV") === "1"
+      : Deno.env.get("OPENOTES_DEV") === "1"
       ? "debug"
       : "info"
 });

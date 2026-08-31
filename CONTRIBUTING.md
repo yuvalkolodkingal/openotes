@@ -63,9 +63,9 @@ Once you are done, [open a new pull request](https://docs.github.com/en/pull-req
 1. Fork [the repository](https://github.com/streetwriters/notesnook) and create your branch from `master` (you can name your branch anything).
 2. Run `npm run bootstrap` in the repository root.
 3. If you've fixed a bug or added code that should be tested, add tests!
-4. Ensure the test suite passes (`npm run test`).
-5. Format your code with prettier (`npm run prettier`).
-6. Make sure your code lints (`npm run lint`). Tip: `npm run linc` to only check changed files.
+4. Ensure the test suite passes (`deno task test`).
+5. Format your code (`deno task fmt`).
+6. Make sure your code lints (`deno task lint`).
 7. Read & follow the commit guidelines.
 8. Read & follow the style guidelines.
 
@@ -97,22 +97,22 @@ All commits must include valid scopes in the commit message. **Valid commit scop
 
 **Apps:**
 
-1. `mobile`: changes related to mobile clients
-2. `web`: changes related to the web client
-3. `desktop`: changes related to the desktop client
+1. `web`: changes related to the UI bundle in `apps/web`
+2. `desktop`: changes related to the desktop host in `apps/desktop`
 
 **Packages:**
 
 1. `crypto`: changes related to the cryptographic core
-2. `editor`: changes related to the editor (including `@notesnook/editor-mobile`)
+2. `editor`: changes related to the editor
 3. `logger`: changes related to the logger
 4. `theme`: changes related to the theme
+5. `sync`: changes related to the WebDAV sync & backup engine
 
 **Repo maintenance:**
 
-1. `config`: changes related to config of installed tools in the repo (e.g. eslint rules)
+1. `config`: changes related to config of installed tools in the repo (e.g. `deno.json` lint rules)
 2. `ci`: changes related to CI
-3. `setup`: setting up something new in the repo (e.g. eslint, commitlint)
+3. `setup`: setting up something new in the repo
 4. `docs`: changes related to documentation (README etc.)
 5. `misc`: miscellaneous changes like package-lock.json updates
 6. `global`: changes related to the whole repo
@@ -127,9 +127,9 @@ crypto: update libsodium version
 
 ## Style guidelines
 
-We use an automatic code formatter called [Prettier](https://prettier.io/). Run `npm run prettier` after making any changes to the code.
+We use Deno's built-in formatter. Run `deno task fmt` after making any changes to the code.
 
-Then, our linter will catch most issues that may exist in your code. You can check the status of your code styling by simply running `npm run lint`.
+Then, `deno task lint` will catch most issues that may exist in your code.
 
 However, there are still some styles that the linter cannot pick up. If you are unsure about something, looking at [Airbnb's Style Guide](https://github.com/airbnb/javascript) will guide you in the right direction.
 

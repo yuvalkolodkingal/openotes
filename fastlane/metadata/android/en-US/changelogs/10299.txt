@@ -1,4 +1,0 @@
-- Much improved and faster sync
-- Note pinned in notifications will update automatically when content changes
-- Quick notes from notifications now respect paragraph spacing settings.
-- Many bug fixes and small improvements

@@ -36,7 +36,7 @@ function homeDir(): string {
 
 /** Per-OS application data directory. Portable mode overrides it. */
 export function appDataDir(): string {
-  const override = Deno.env.get("NOTESNOOK_DENO_DATA_DIR");
+  const override = Deno.env.get("OPENOTES_DATA_DIR");
   if (override) return resolve(override);
 
   if (isPortable()) {
@@ -110,7 +110,7 @@ export function isSnap(): boolean {
 
 /** Portable Windows/Linux builds keep their data next to the executable. */
 export function isPortable(): boolean {
-  return Deno.env.get("NOTESNOOK_DENO_PORTABLE") === "1";
+  return Deno.env.get("OPENOTES_PORTABLE") === "1";
 }
 
 export function dirname(path: string): string {

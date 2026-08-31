@@ -175,49 +175,6 @@ export const sidebar = [
     ]
   },
   {
-    text: "Publishing",
-    collapsed: false,
-    items: [{ text: "Monographs", link: "/publish-notes-with-monographs" }]
-  },
-  {
-    text: "Web clipper",
-    collapsed: false,
-    items: [
-      { text: "Installation", link: "/web-clipper/installation" },
-      {
-        text: "Clipping your first page",
-        link: "/web-clipper/clipping-your-first-web-page-with-web-clipper"
-      },
-      { text: "Troubleshooting", link: "/web-clipper/troubleshooting" }
-    ]
-  },
-  {
-    text: "Mobile",
-    collapsed: false,
-    items: [
-      {
-        text: "Home screen widgets",
-        link: "/mobile-integration/home-screen-widgets"
-      },
-      {
-        text: "Android quick actions",
-        link: "/mobile-integration/android-quick-actions"
-      },
-      {
-        text: "Pin to notifications",
-        link: "/mobile-integration/pin-notes-to-notifications"
-      },
-      {
-        text: "Quick notes",
-        link: "/mobile-integration/quick-note-from-notification"
-      },
-      {
-        text: "Share from other apps",
-        link: "/mobile-integration/share-things-from-other-apps"
-      }
-    ]
-  },
-  {
     text: "Desktop",
     collapsed: false,
     items: [
@@ -251,16 +208,8 @@ export const sidebar = [
         items: [
           { text: "How themes work", link: "/custom-themes/introduction" },
           {
-            text: "Theme Builder",
-            link: "/custom-themes/create-a-theme-with-theme-builder"
-          },
-          {
             text: "Install from file",
             link: "/custom-themes/install-a-theme-from-file"
-          },
-          {
-            text: "Publish a new theme",
-            link: "/custom-themes/publish-a-theme"
           }
         ]
       }

@@ -1,3 +1,0 @@
-- Fixed reminders notifications on android
-
-Thank you for using Notesnook!

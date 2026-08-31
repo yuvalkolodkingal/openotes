@@ -1,5 +1,0 @@
-- Improved editor UI for better usability
-- Improved UX for creating and editing reminders
-- Minor bug fixes and improvements
-
-Thank you for using Notesnook!

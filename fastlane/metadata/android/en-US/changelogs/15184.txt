@@ -1,3 +1,0 @@
-- Small bug fixes and improvements
-
-Thank you for using Notesnook!
