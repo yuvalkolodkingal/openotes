@@ -24,9 +24,12 @@ import {
   FeatureResult,
   isFeatureAvailable
 } from "../utils/index.js";
-import { EVENTS } from "@notesnook/core";
-import { database } from "../database.js";
 
+/**
+ * Availability is derived from a static capability declaration (see
+ * `utils/is-feature-available.ts`), so it is resolved once and never
+ * invalidated — there is no subscription that could change it.
+ */
 export function useIsFeatureAvailable<TId extends FeatureId>(
   id: TId | undefined,
   value?: number
@@ -36,17 +39,14 @@ export function useIsFeatureAvailable<TId extends FeatureId>(
   useEffect(() => {
     if (!id) return;
 
-    isFeatureAvailable(id, value).then((result) => setResult(result));
-    const userSubscriptionUpdated = database.eventManager.subscribe(
-      EVENTS.userSubscriptionUpdated,
-      () => {
-        isFeatureAvailable(id, value).then((result) => setResult(result));
-      }
-    );
+    let cancelled = false;
+    isFeatureAvailable(id, value).then((result) => {
+      if (!cancelled) setResult(result);
+    });
     return () => {
-      userSubscriptionUpdated.unsubscribe();
+      cancelled = true;
     };
-  }, []);
+  }, [id, value]);
 
   return result;
 }
@@ -59,17 +59,14 @@ export function useAreFeaturesAvailable<TIds extends FeatureId[]>(
     useState<{ [K in TIds[number]]: FeatureResult<K> }>();
 
   useEffect(() => {
-    areFeaturesAvailable(ids, values).then((result) => setResult(result));
-    const userSubscriptionUpdated = database.eventManager.subscribe(
-      EVENTS.userSubscriptionUpdated,
-      () => {
-        areFeaturesAvailable(ids, values).then((result) => setResult(result));
-      }
-    );
+    let cancelled = false;
+    areFeaturesAvailable(ids, values).then((result) => {
+      if (!cancelled) setResult(result);
+    });
     return () => {
-      userSubscriptionUpdated.unsubscribe();
+      cancelled = true;
     };
-  }, []);
+  }, [ids.join(","), values.join(",")]);
 
   return result;
 }

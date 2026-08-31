@@ -22,7 +22,7 @@ import { existsSync } from "fs";
 import path from "path";
 import { Listr } from "listr2";
 
-const allPackages = await glob(["packages/**", "apps/**", "extensions/**"], {
+const allPackages = await glob(["packages/**", "apps/**"], {
   deep: 1,
   onlyDirectories: true
 });

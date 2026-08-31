@@ -44,7 +44,7 @@ jobs:
 
       - name: Prepare environment
         run: |
-          npm ci --ignore-scripts --prefer-offline --no-audit
+          npm install --ignore-scripts --prefer-offline --no-audit --no-fund
           npm run bootstrap -- --scope=core
       - name: Add environment variables
         run: |

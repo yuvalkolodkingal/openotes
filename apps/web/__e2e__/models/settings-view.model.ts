@@ -18,22 +18,9 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
 import type { Page } from "@playwright/test";
-import {
-  downloadAndReadFile,
-  getTestId,
-  IS_DESKTOP_TESTS,
-  uploadFile
-} from "../utils";
-import {
-  confirmDialog,
-  fillConfirmPasswordDialog,
-  fillPasswordDialog,
-  waitForDialog,
-  waitToHaveText
-} from "./utils";
+import { downloadAndReadFile, getTestId, uploadFile } from "../utils";
+import { fillConfirmPasswordDialog, fillPasswordDialog } from "./utils";
 import { NavigationMenuModel } from "./navigation-menu.model";
-import { AppModel } from "./app.model";
-import { readFile } from "node:fs/promises";
 
 export class SettingsViewModel {
   private readonly page: Page;
@@ -51,77 +38,7 @@ export class SettingsViewModel {
     await this.page.waitForTimeout(1000);
   }
 
-  async logout() {
-    const item = await this.navigation.findItem("Profile");
-    await item?.click();
-
-    const logoutButton = this.page
-      .locator(getTestId("setting-logout"))
-      .locator("button");
-
-    await logoutButton.click();
-    await confirmDialog(this.page.locator(getTestId("confirm-dialog")));
-
-    await this.page
-      .locator(getTestId("progress-dialog"))
-      .waitFor({ state: "hidden" });
-
-    await this.page
-      .locator(getTestId("logged-in"))
-      .waitFor({ state: "hidden" });
-  }
-
-  async getRecoveryKey(password: string) {
-    const item = await this.navigation.findItem("Profile");
-    await item?.click();
-
-    const backupRecoveryKeyButton = this.page
-      .locator(getTestId("setting-recovery-key"))
-      .locator("button");
-
-    await backupRecoveryKeyButton.click();
-    await fillPasswordDialog(this.page, password);
-
-    await waitToHaveText(this.page, "recovery-key");
-
-    const key = await this.page
-      .locator(getTestId("recovery-key"))
-      .textContent();
-
-    const dialog = this.page.locator(getTestId("recovery-key-dialog"));
-    await confirmDialog(dialog);
-    return key;
-  }
-
-  async isLoggedIn() {
-    const loggedInButton = this.page.locator(getTestId("logged-in"));
-    return await loggedInButton.isVisible();
-  }
-
-  async isBackupEncryptionEnabled(state: boolean) {
-    const encyptBackups = this.page
-      .locator(getTestId("setting-encrypt-backups"))
-      .locator(
-        state ? `input[data-checked="true"]` : `input[data-checked="false"]`
-      );
-    await encyptBackups.waitFor({ state: "visible" });
-    return (await encyptBackups.getAttribute("data-checked")) === "true";
-  }
-
-  async toggleBackupEncryption(password?: string) {
-    const item = await this.navigation.findItem("Backup & export");
-    await item?.click();
-
-    const encyptBackups = this.page
-      .locator(getTestId("setting-encrypt-backups"))
-      .locator("label");
-
-    await encyptBackups.click();
-
-    if (password) await fillPasswordDialog(this.page, password);
-  }
-
-  async createBackup(password?: string) {
+  async createBackup() {
     const item = await this.navigation.findItem("Backup & export");
     await item?.click();
 
@@ -130,33 +47,9 @@ export class SettingsViewModel {
         .locator(getTestId("setting-create-backup"))
         .locator("select");
       await backupData.selectOption({ value: "partial", label: "Backup" });
-      if (password) await fillPasswordDialog(this.page, password);
     };
 
-    if (IS_DESKTOP_TESTS) {
-      const { getAppFromPage } = await import(
-        "../../../desktop/__tests__/electron-test/utils"
-      );
-
-      await saveBackup();
-      const toast = new AppModel(this.page).toasts.toasts.locator(
-        getTestId("toast-message")
-      );
-      await toast.waitFor();
-      const backupPath = (await toast.textContent())
-        ?.replace("Backup saved at", "")
-        .trim();
-      if (!backupPath)
-        throw new Error("Backup path not found in toast message");
-      const app = getAppFromPage(this.page);
-      const resolvedDocumentPath = await app.evaluate(({ app }) =>
-        app.getPath("documents")
-      );
-      const resolvedBackupPath = backupPath.startsWith("documents")
-        ? backupPath.replace("documents", resolvedDocumentPath)
-        : backupPath;
-      return await readFile(resolvedBackupPath, "utf-8");
-    } else return await downloadAndReadFile(this.page, saveBackup, "utf-8");
+    return await downloadAndReadFile(this.page, saveBackup, "utf-8");
   }
 
   async restoreData(filename: string, password?: string) {
@@ -182,7 +75,7 @@ export class SettingsViewModel {
     await imageCompressionDropdown.selectOption(option);
   }
 
-  async enableAppLock(userPassword: string, appLockPassword: string) {
+  async enableAppLock(appLockPassword: string) {
     const item = await this.navigation.findItem("App lock");
     await item?.click();
 
@@ -191,7 +84,6 @@ export class SettingsViewModel {
       .locator("label");
 
     await appLockSwitch.click();
-    await fillPasswordDialog(this.page, userPassword);
     await this.page.waitForTimeout(500);
     await fillConfirmPasswordDialog(this.page, appLockPassword);
     await this.page.waitForTimeout(500);

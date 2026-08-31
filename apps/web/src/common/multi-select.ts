@@ -49,7 +49,7 @@ async function moveNotesToTrash(ids: string[], confirm = true) {
       return;
   }
 
-  const items = ids.filter((id) => !db.monographs.isPublished(id));
+  const items = ids;
 
   await TaskManager.startTask({
     type: "status",

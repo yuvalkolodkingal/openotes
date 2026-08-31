@@ -22,7 +22,6 @@ import { appVersion } from "../../utils/version";
 import { writeText } from "clipboard-polyfill";
 import { showToast } from "../../utils/toast";
 import { checkForUpdate, downloadUpdate } from "../../utils/updater";
-import { isMacStoreApp } from "../../utils/platform";
 import { clearLogs, downloadLogs } from "../../utils/logger";
 import { useAutoUpdateStore } from "../../hooks/use-auto-updater";
 import { IssueDialog } from "../issue-dialog";
@@ -121,9 +120,10 @@ export const AboutSettings: SettingsGroup[] = [
             },
             async onSelectionChanged(value) {
               if (IS_DESKTOP_APP) {
-                return await desktop?.updater.changeReleaseTrack.mutate({
+                await desktop?.updater.changeReleaseTrack.mutate({
                   track: value
                 });
+                return;
               }
               const registration =
                 await navigator.serviceWorker.getRegistration();
@@ -165,7 +165,7 @@ export const AboutSettings: SettingsGroup[] = [
             type: "button",
             action: () => {
               window.open(
-                "https://github.com/streetwriters/notesnook",
+                "https://github.com/yuvalkolodkingal/notesnook",
                 "_blank"
               );
             },
@@ -177,36 +177,17 @@ export const AboutSettings: SettingsGroup[] = [
       {
         key: "roadmap",
         title: strings.roadmap(),
-        description: strings.roadmapDesc(),
-        components: [
-          {
-            type: "button",
-            action: () =>
-              void window.open("https://notesnook.com/roadmap", "_blank"),
-            title: strings.checkRoadmap(),
-            variant: "secondary"
-          }
-        ]
-      },
-      {
-        key: "available-on-mobile",
-        title: isMacStoreApp()
-          ? strings.availableOnIOS()
-          : strings.availableOnIOSAndAndroid(),
-        description: isMacStoreApp()
-          ? strings.availableOnIOSDescription()
-          : strings.availableOnIOSAndAndroidDescription(),
+        description:
+          "Planned work and open proposals are tracked as GitHub issues.",
         components: [
           {
             type: "button",
             action: () =>
               void window.open(
-                isMacStoreApp()
-                  ? "https://apps.apple.com/us/app/notesnook-take-private-notes/id1544027013"
-                  : "https://notesnook.com/downloads",
+                "https://github.com/yuvalkolodkingal/notesnook/issues",
                 "_blank"
               ),
-            title: strings.network.download(),
+            title: strings.open(),
             variant: "secondary"
           }
         ]
@@ -219,59 +200,19 @@ export const AboutSettings: SettingsGroup[] = [
     header: strings.community(),
     settings: [
       {
-        key: "telegram",
-        title: strings.joinTelegram(),
-        description: strings.joinTelegramDesc(),
-        components: [
-          {
-            type: "button",
-            action: () => void window.open("https://t.me/notesnook", "_blank"),
-            title: strings.joinTelegram(),
-            variant: "secondary"
-          }
-        ]
-      },
-      {
-        key: "mastodon",
-        title: strings.joinMastodon(),
-        description: strings.joinMastodonDesc(),
-        components: [
-          {
-            type: "button",
-            action: () =>
-              void window.open("https://fosstodon.org/@notesnook", "_blank"),
-            title: strings.follow(),
-            variant: "secondary"
-          }
-        ]
-      },
-      {
-        key: "twitter",
-        title: strings.followOnX(),
-        description: strings.followOnXDesc(),
-        components: [
-          {
-            type: "button",
-            action: () =>
-              void window.open("https://twitter.com/notesnook", "_blank"),
-            title: strings.follow(),
-            variant: "secondary"
-          }
-        ]
-      },
-      {
-        key: "discord",
-        title: strings.joinDiscord(),
-        description: strings.joinDiscordDesc(),
+        key: "github",
+        title: "Openotes on GitHub",
+        description:
+          "Report bugs, suggest features and follow development. This fork has no chat channels — everything happens in the repository.",
         components: [
           {
             type: "button",
             action: () =>
               void window.open(
-                "https://discord.com/invite/zQBK97EE22",
+                "https://github.com/yuvalkolodkingal/notesnook",
                 "_blank"
               ),
-            title: strings.joinCommunity(),
+            title: strings.open(),
             variant: "secondary"
           }
         ]
@@ -289,26 +230,16 @@ export const LegalSettings: SettingsGroup[] = [
       {
         key: "privacy-policy",
         title: strings.privacyPolicy(),
-        description: strings.privacyPolicyDesc(),
+        description:
+          "There is no service behind this application, so its privacy story is its security document: what is stored, where it goes, and what is never transmitted.",
         components: [
           {
             type: "button",
             action: () =>
-              void window.open("https://notesnook.com/privacy", "_blank"),
-            title: strings.open(),
-            variant: "secondary"
-          }
-        ]
-      },
-      {
-        key: "tos",
-        title: strings.tos(),
-        description: strings.tosDesc(),
-        components: [
-          {
-            type: "button",
-            action: () =>
-              void window.open("https://notesnook.com/terms", "_blank"),
+              void window.open(
+                "https://github.com/yuvalkolodkingal/notesnook/blob/master/SECURITY.md",
+                "_blank"
+              ),
             title: strings.open(),
             variant: "secondary"
           }
@@ -323,7 +254,7 @@ export const LegalSettings: SettingsGroup[] = [
             type: "button",
             action: () =>
               void window.open(
-                "https://github.com/streetwriters/notesnook/blob/master/LICENSE",
+                "https://github.com/yuvalkolodkingal/notesnook/blob/master/LICENSE",
                 "_blank"
               ),
             title: strings.open(),
@@ -355,30 +286,6 @@ export const SupportSettings: SettingsGroup[] = [
         ]
       },
       {
-        key: "email-us",
-        title: strings.emailSupport(),
-        description: strings.emailSupportDesc(),
-        components: [
-          {
-            type: "button",
-            action: async () => {
-              await navigator.clipboard.writeText("support@streetwriters.co");
-              showToast("info", strings.copied());
-            },
-            title: strings.copy(),
-            variant: "secondary"
-          },
-          {
-            type: "button",
-            action: () => {
-              window.open("mailto:support@streetwriters.co", "_blank");
-            },
-            title: strings.send(),
-            variant: "secondary"
-          }
-        ]
-      },
-      {
         key: "docs",
         title: strings.documentation(),
         description: strings.documentationDesc(),
@@ -386,7 +293,10 @@ export const SupportSettings: SettingsGroup[] = [
           {
             type: "button",
             action: () =>
-              void window.open("https://notesnook.com/help/", "_blank"),
+              void window.open(
+                "https://github.com/yuvalkolodkingal/notesnook#readme",
+                "_blank"
+              ),
             title: strings.open(),
             variant: "secondary"
           }

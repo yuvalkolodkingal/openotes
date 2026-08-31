@@ -5,7 +5,6 @@ dist
 .DS_STORE
 nx-cloud.env
 .idea
-.eslintcache
 .env.local
 .nyc_output
 site
@@ -13,3 +12,12 @@ node_modules.backup
 .nx
 /*.patch
 .taskcache
+# Deno desktop build artifacts
+apps/desktop/native/
+apps/desktop/.native-build/
+apps/desktop/dist/
+# The release tarball CI drops beside the flatpak manifest before building
+packaging/flatpak/*.tar.gz
+apps/desktop/.build/
+apps/desktop/ui/
+dist/

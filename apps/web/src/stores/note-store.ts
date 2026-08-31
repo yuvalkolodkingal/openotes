@@ -169,7 +169,5 @@ export function notesFromContext(context: Context) {
       return db.notes.favorites;
     case "archive":
       return db.notes.archived;
-    case "monographs":
-      return db.monographs.all;
   }
 }

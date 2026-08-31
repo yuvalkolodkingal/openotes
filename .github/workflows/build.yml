@@ -1,0 +1,546 @@
+# This file is part of the Notesnook project (https://notesnook.com/)
+#
+# Copyright (C) 2023 Streetwriters (Private) Limited
+# Copyright (C) 2026 Openotes contributors
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+# Builds every distributable artifact and uploads them as workflow
+# artifacts. Nothing here is published or signed — release.yml calls the same
+# jobs through workflow_call and does that part.
+#
+# HOW THE WINDOWS ARTIFACTS ARE BUILT
+#
+# `deno desktop --target x86_64-pc-windows-msvc` cross-compiles the
+# application from Linux, but apps/desktop/scripts/build-native.ts compiles
+# SQLite3MultipleCiphers with the *host* toolchain, so `sqlite3mc.dll` can
+# only be produced on Windows. The Windows job therefore builds the three
+# DLLs and uploads them; the Linux packaging job downloads them and produces
+# the .exe, .msi and .zip with makensis and wixl, both of which run on Linux.
+# That keeps every Windows installer reproducible from one job with one set
+# of tools, and still proves on a real Windows runner that the binary starts.
+
+name: Build
+
+on:
+  push:
+    branches: ["main", "master"]
+  pull_request:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version to stamp on the artifacts (default: APP_VERSION)"
+        required: false
+        type: string
+  workflow_call:
+    inputs:
+      version:
+        description: "Version to stamp on the artifacts"
+        required: false
+        type: string
+    outputs:
+      version:
+        description: "The version the artifacts were built with"
+        value: ${{ jobs.version.outputs.version }}
+
+permissions:
+  contents: read
+
+concurrency:
+  group: build-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  DENO_VERSION: "2.9.6"
+  DENO_DIR: ${{ github.workspace }}/.deno-cache
+  # `deno run -A .../build.ts --version <v>` when set, otherwise APP_VERSION
+  # from apps/desktop/src/constants.ts.
+  VERSION_INPUT: ${{ inputs.version }}
+
+jobs:
+  # -------------------------------------------------------------------------
+  # One place decides what the artifacts are called. Resolved in its own job
+  # so a matrix leg cannot overwrite it, and so every packaging job agrees.
+  # -------------------------------------------------------------------------
+  version:
+    name: Resolve the version
+    runs-on: ubuntu-24.04
+    outputs:
+      version: ${{ steps.resolve.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: resolve
+        run: |
+          set -euo pipefail
+          if [ -n "${VERSION_INPUT:-}" ]; then
+            version="$VERSION_INPUT"
+          else
+            # The single source of truth is APP_VERSION in constants.ts, which
+            # is also what build.ts falls back to.
+            version=$(sed -n 's/^export const APP_VERSION = "\(.*\)";$/\1/p' \
+              apps/desktop/src/constants.ts)
+          fi
+          if [ -z "$version" ]; then
+            echo "Could not determine the version" >&2
+            exit 1
+          fi
+          # The version flows into artifact names and shell commands in
+          # later jobs; a dispatch input is operator-controlled, so pin the
+          # alphabet here at the single point every job reads from.
+          case "$version" in
+            *[!0-9A-Za-z._-]*)
+              echo "Version \"$version\" contains characters outside" \
+                   "[0-9A-Za-z._-]; refusing." >&2
+              exit 1 ;;
+          esac
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "Building version $version"
+
+  # -------------------------------------------------------------------------
+  # The web bundle. Built once and shared by every packaging job: it is
+  # platform independent, and building it four times would quadruple the
+  # slowest step in the pipeline.
+  # -------------------------------------------------------------------------
+  interface:
+    name: Build the user interface
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: ${{ env.DENO_VERSION }}
+
+      # Vite itself runs under Deno — build-ui.ts executes vite's Node entry
+      # point directly — but the nine `file:` workspace packages apps/web
+      # imports are compiled by the repository's own npm task runner, a
+      # build-time-only dependency recorded in PORTING_NOTES.md §11.1.
+      # build-ui.ts installs them itself; setup-node is here for the cache.
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+
+      - name: Build the interface
+        run: deno task build:ui
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: openotes-ui
+          path: apps/desktop/ui
+          retention-days: 7
+          if-no-files-found: error
+
+  # -------------------------------------------------------------------------
+  # Native SQLite for Windows. The only thing that has to happen on Windows.
+  # -------------------------------------------------------------------------
+  windows-native:
+    name: Native libraries (windows-${{ matrix.arch }})
+    runs-on: windows-2022
+    strategy:
+      fail-fast: false
+      matrix:
+        arch: [x86_64]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: ${{ env.DENO_VERSION }}
+
+      # build-native.ts calls cl.exe; this puts the MSVC environment on PATH.
+      - uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: ${{ matrix.arch == 'x86_64' && 'x64' || 'arm64' }}
+
+      - name: Build the native libraries
+        run: deno task build:native
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: openotes-native-windows-${{ matrix.arch }}
+          path: apps/desktop/native
+          retention-days: 7
+          if-no-files-found: error
+
+  # -------------------------------------------------------------------------
+  # Windows installers, cross-built on Linux from the DLLs above.
+  # -------------------------------------------------------------------------
+  windows-packages:
+    name: Windows packages (${{ matrix.arch }})
+    needs: [version, interface, windows-native]
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        arch: [x86_64]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: ${{ env.DENO_VERSION }}
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: openotes-ui
+          path: apps/desktop/ui
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: openotes-native-windows-${{ matrix.arch }}
+          path: native-windows
+
+      # nsis  -> Openotes-<version>-windows-<arch>.exe (the installer)
+      # wixl  -> Openotes-<version>-windows-<arch>.msi (GNOME msitools)
+      # zip   -> Openotes-<version>-windows-<arch>.zip (the portable build)
+      - name: Install the packaging tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install --no-install-recommends -y nsis wixl zip
+
+      - name: Build
+        run: >
+          deno run -A apps/desktop/scripts/build.ts
+          --target ${{ matrix.arch }}-pc-windows-msvc
+          --format exe,msi,zip
+          --native-dir native-windows
+          --skip-ui
+          --version ${{ needs.version.outputs.version }}
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: openotes-windows-${{ matrix.arch }}
+          path: |
+            dist/*.exe
+            dist/*.msi
+            dist/*.zip
+          retention-days: 7
+          if-no-files-found: error
+
+  # -------------------------------------------------------------------------
+  # Proof that the Windows build actually runs on Windows. The zip is the
+  # same application directory the installers lay down, so starting it here
+  # exercises the real payload.
+  # -------------------------------------------------------------------------
+  windows-smoke-test:
+    name: Start the Windows build on Windows
+    needs: windows-packages
+    runs-on: windows-2022
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: ${{ env.DENO_VERSION }}
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: openotes-windows-x86_64
+          path: dist
+
+      - name: Unpack the portable build
+        shell: pwsh
+        run: |
+          $zip = Get-ChildItem dist/*.zip | Select-Object -First 1
+          Expand-Archive -Path $zip.FullName -DestinationPath unpacked -Force
+          Get-ChildItem -Recurse -Depth 1 unpacked | Select-Object FullName
+
+      - name: Smoke test
+        shell: pwsh
+        run: |
+          $app = Get-ChildItem unpacked -Directory | Select-Object -First 1
+          deno run -A apps/desktop/scripts/smoke-test.ts --app $app.FullName
+
+  # -------------------------------------------------------------------------
+  # Linux: AppImage, deb, rpm, tarball and the plain application directory.
+  #
+  # aarch64 is built on ubuntu-24.04-arm — a GitHub-hosted arm64 runner, so
+  # the native libraries are compiled natively rather than emulated. The
+  # release requires only x86_64 artifacts (release.yml's completeness
+  # check), so the arm64 leg is continue-on-error: fail-fast alone would
+  # only stop sibling cancellation, while the leg's failure would still fail
+  # the job, skip flatpak/arch (needs: linux) and block the release.
+  # -------------------------------------------------------------------------
+  linux:
+    name: Linux packages (${{ matrix.arch }})
+    needs: [version, interface]
+    runs-on: ${{ matrix.runner }}
+    continue-on-error: ${{ matrix.arch == 'aarch64' }}
+    env:
+      VERSION: ${{ needs.version.outputs.version }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: x86_64
+            runner: ubuntu-24.04
+          - arch: aarch64
+            runner: ubuntu-24.04-arm
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: ${{ env.DENO_VERSION }}
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: openotes-ui
+          path: apps/desktop/ui
+
+      # build-essential + unzip: build-native.ts compiles the SQLite
+      # amalgamation and unpacks the release archive.
+      # squashfs-tools: repacking Deno Desktop's AppImage.
+      # rpm + cpio: rebuilding its .rpm with the resource directories added.
+      - name: Install the build and packaging tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install --no-install-recommends -y \
+            build-essential unzip squashfs-tools rpm cpio \
+            libwebkit2gtk-4.1-0 libgtk-3-0 xvfb
+
+      - name: Build the native libraries
+        run: deno task build:native
+
+      - name: Build
+        run: >
+          deno run -A apps/desktop/scripts/build.ts
+          --target ${{ matrix.arch }}-unknown-linux-gnu
+          --format dir,tar.gz,appimage,deb,rpm
+          --skip-ui
+          --version ${{ needs.version.outputs.version }}
+
+      # The packages are only useful if the interface and the native
+      # libraries actually travelled inside them. Check the two formats that
+      # are assembled rather than copied.
+      - name: Verify the packages carry ui/ and native/
+        run: |
+          set -euo pipefail
+          version="$VERSION"
+          arch='${{ matrix.arch }}'
+          deb="dist/Openotes-$version-linux-$arch.deb"
+          rpm="dist/Openotes-$version-linux-$arch.rpm"
+          appimage="dist/Openotes-$version-linux-$arch.AppImage"
+
+          # Listed into files first: `dpkg-deb -c … | grep -q` closes the pipe
+          # on the first match, and under `set -o pipefail` the resulting
+          # SIGPIPE would be reported as a missing file.
+          listing=$(mktemp -d)
+          dpkg-deb -c "$deb" | awk '{print $NF}' > "$listing/deb.txt"
+          rpm -qlp "$rpm" > "$listing/rpm.txt"
+
+          for required in \
+            "./usr/lib/openotes/ui/index.html" \
+            "./usr/lib/openotes/native/libsqlite3mc.so" \
+            "./usr/lib/openotes/openotes.so"; do
+            grep -qxF -- "$required" "$listing/deb.txt" \
+              || { echo "$deb is missing $required" >&2; exit 1; }
+          done
+
+          for required in \
+            "/usr/lib/openotes/ui/index.html" \
+            "/usr/lib/openotes/native/libsqlite3mc.so" \
+            "/usr/lib/openotes/openotes.so"; do
+            grep -qxF -- "$required" "$listing/rpm.txt" \
+              || { echo "$rpm is missing $required" >&2; exit 1; }
+          done
+
+          workdir=$(mktemp -d)
+          (cd "$workdir" && "$GITHUB_WORKSPACE/$appimage" --appimage-extract >/dev/null)
+          for required in ui/index.html native/libsqlite3mc.so openotes.so openotes; do
+            test -e "$workdir/squashfs-root/$required" \
+              || { echo "$appimage is missing $required" >&2; exit 1; }
+          done
+          echo "All three packages carry the interface and the native libraries."
+
+      - name: Smoke test the AppImage
+        run: >
+          deno run -A apps/desktop/scripts/smoke-test.ts
+          --app dist/Openotes-${{ needs.version.outputs.version }}-linux-${{ matrix.arch }}.AppImage
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: openotes-linux-${{ matrix.arch }}
+          path: |
+            dist/*.AppImage
+            dist/*.deb
+            dist/*.rpm
+            dist/*.tar.gz
+          retention-days: 7
+          if-no-files-found: error
+
+  # -------------------------------------------------------------------------
+  # Flatpak, from packaging/flatpak/. The manifest installs the release
+  # tarball built above; it does not compile anything.
+  # -------------------------------------------------------------------------
+  flatpak:
+    name: Flatpak (x86_64)
+    needs: [version, linux]
+    runs-on: ubuntu-24.04
+    container:
+      image: ghcr.io/flathub-infra/flatpak-github-actions:gnome-48
+      options: --privileged
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: openotes-linux-x86_64
+          path: dist
+
+      # packaging/README.md: CI drops the tarball beside the manifest under a
+      # version-less name so the manifest needs no per-release edit.
+      - name: Stage the release tarball for the manifest
+        run: |
+          set -eu
+          cp "dist/Openotes-${{ needs.version.outputs.version }}-linux-x86_64.tar.gz" \
+             packaging/flatpak/openotes-linux-x86_64.tar.gz
+
+      - name: flatpak-builder
+        run: |
+          set -eu
+          flatpak-builder --force-clean --disable-rofiles-fuse --repo=repo \
+            build-dir packaging/flatpak/org.openotes.Openotes.yml
+          flatpak build-bundle repo \
+            "Openotes-${{ needs.version.outputs.version }}-linux-x86_64.flatpak" \
+            org.openotes.Openotes
+
+      - name: Verify the flatpak carries the payload
+        run: |
+          set -eu
+          for required in \
+            lib/openotes/openotes \
+            lib/openotes/openotes.so \
+            lib/openotes/ui/index.html \
+            lib/openotes/native/libsqlite3mc.so \
+            bin/openotes; do
+            test -e "build-dir/files/$required" \
+              || { echo "the flatpak is missing /app/$required" >&2; exit 1; }
+          done
+          echo "The flatpak carries the launcher, the payload, ui/ and native/."
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: openotes-flatpak-x86_64
+          path: "*.flatpak"
+          retention-days: 7
+          if-no-files-found: error
+
+  # -------------------------------------------------------------------------
+  # Arch package, from packaging/arch/PKGBUILD, in an archlinux container.
+  # makepkg refuses to run as root, hence the unprivileged build user.
+  # -------------------------------------------------------------------------
+  arch:
+    name: Arch package (x86_64)
+    needs: [version, linux]
+    runs-on: ubuntu-24.04
+    container:
+      image: archlinux:base-devel
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: openotes-linux-x86_64
+          path: dist
+
+      - name: Prepare the build user
+        run: |
+          set -eu
+          pacman -Sy --noconfirm --needed sudo python
+          useradd -m builder
+          echo "builder ALL=(ALL) NOPASSWD: ALL" > /etc/sudoers.d/builder
+
+      # Two substitutions the packaging README already expects (pkgver and
+      # sha256sums), plus one this pipeline needs: `source` points at the
+      # local tarball instead of a release URL, because the release does not
+      # exist yet at build time.
+      - name: Stage the PKGBUILD
+        run: |
+          set -eu
+          version='${{ needs.version.outputs.version }}'
+          tarball="Openotes-$version-linux-x86_64.tar.gz"
+          mkdir -p arch-build
+          cp "dist/$tarball" "arch-build/openotes-$version-linux-x86_64.tar.gz"
+          digest=$(sha256sum "arch-build/openotes-$version-linux-x86_64.tar.gz" | cut -d' ' -f1)
+
+          python3 - "$version" "$digest" <<'PY'
+          import sys
+          version, digest = sys.argv[1], sys.argv[2]
+          text = open("packaging/arch/PKGBUILD").read()
+
+          def require(needle):
+              if needle not in text:
+                  sys.exit(f"PKGBUILD no longer contains: {needle!r}")
+
+          require("pkgver=")
+          require("source=(")
+          require("sha256sums=('SKIP')")
+          require('install -Dm755 "${_src}/openotes" "${_libdir}/openotes"')
+
+          out = []
+          for line in text.splitlines(keepends=True):
+              if line.startswith("pkgver="):
+                  out.append(f"pkgver={version}\n")
+              elif line.startswith("source=("):
+                  out.append('source=("${_tarball}")\n')
+              elif line.startswith("sha256sums=("):
+                  out.append(f"sha256sums=('{digest}')\n")
+              else:
+                  out.append(line)
+          text = "".join(out)
+
+          open("arch-build/PKGBUILD", "w").write(text)
+          print("staged PKGBUILD for", version)
+          PY
+          grep -q 'openotes.so' arch-build/PKGBUILD
+
+      - name: makepkg
+        run: |
+          set -eu
+          chown -R builder arch-build
+          cd arch-build
+          # --nodeps: the runtime dependencies (webkit2gtk-4.1, gtk3) are not
+          # needed to assemble a package out of a prebuilt tarball, and
+          # installing them would add minutes for nothing.
+          sudo -u builder makepkg --noconfirm --nodeps --skipinteg
+          ls -la ./*.pkg.tar.zst
+
+      - name: Verify the package carries the payload
+        run: |
+          set -eu
+          package=$(ls arch-build/*.pkg.tar.zst)
+          # Listed once into a file: piping into `grep -q` closes the pipe on
+          # the first match, and the resulting SIGPIPE reads as a failure.
+          # The leading ./ is stripped so the same list works whichever tar
+          # produced the package.
+          tar --list --file "$package" | sed 's|^\./||' > /tmp/arch-package.txt
+          for required in \
+            usr/lib/openotes/openotes \
+            usr/lib/openotes/openotes.so \
+            usr/lib/openotes/ui/index.html \
+            usr/lib/openotes/native/libsqlite3mc.so \
+            usr/bin/openotes; do
+            grep -qxF -- "$required" /tmp/arch-package.txt \
+              || { echo "$package is missing $required" >&2; exit 1; }
+          done
+          echo "The Arch package carries the launcher, the payload, ui/ and native/."
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: openotes-arch-x86_64
+          path: arch-build/*.pkg.tar.zst
+          retention-days: 7
+          if-no-files-found: error

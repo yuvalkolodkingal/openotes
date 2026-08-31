@@ -38,12 +38,6 @@ body:
         - Windows
         - macOS
         - Linux
-        - iOS
-        - Android
-        - Chrome/Chromium
-        - Firefox
-        - Safari
-        - Other browser
     validations:
       required: true
   - type: textarea

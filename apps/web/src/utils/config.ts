@@ -18,9 +18,21 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
 import { tryParse } from "./parse";
+import {
+  clearConfigValues,
+  persistConfigValue,
+  removeConfigValue
+} from "./config-persistence";
+
+// localStorage is the synchronous source of truth for one session; on the
+// desktop every mutation is also mirrored to the runtime's durable store,
+// because the page's origin — and its localStorage — changes each launch.
+// See utils/config-persistence.ts.
 
 function set<T>(key: string, value: T) {
-  window.localStorage.setItem(key, JSON.stringify(value));
+  const raw = JSON.stringify(value);
+  window.localStorage.setItem(key, raw);
+  persistConfigValue(key, raw);
   return value;
 }
 
@@ -32,10 +44,12 @@ function get<T>(key: string, def?: T): T {
 
 function remove(key: string) {
   window.localStorage.removeItem(key);
+  removeConfigValue(key);
 }
 
 function clear() {
   window.localStorage.clear();
+  clearConfigValues();
 }
 
 function all<T>(): Record<string, T> {
@@ -57,31 +71,5 @@ function has(predicate: (key: string) => boolean) {
   return false;
 }
 
-function logout() {
-  const toKeep = [
-    "editorConfig",
-    "backupStorageLocation",
-    "serverUrls",
-    "corsProxy",
-    "theme:light",
-    "theme:dark",
-    "colorScheme",
-    "followSystemTheme",
-    "doubleSpacedLines"
-  ];
-  const vals = {} as Record<string, any>;
-
-  for (const keep of toKeep) {
-    const val = get(keep);
-    if (val !== undefined) vals[keep] = val;
-  }
-
-  clear();
-
-  for (const key in vals) {
-    set(key, vals[key]);
-  }
-}
-
-const Config = { set, get, clear, all, has, remove, logout };
+const Config = { set, get, clear, all, has, remove };
 export default Config;

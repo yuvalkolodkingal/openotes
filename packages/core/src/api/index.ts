@@ -37,19 +37,16 @@ import UserManager from "./user-manager.js";
 import http from "../utils/http.js";
 import { Monographs } from "./monographs.js";
 import { Monographs as MonographsCollection } from "../collections/monographs.js";
-import { Offers } from "./offers.js";
 import { Attachments } from "../collections/attachments.js";
 import { Debug } from "./debug.js";
 import { Mutex } from "async-mutex";
 import { NoteHistory } from "../collections/note-history.js";
 import MFAManager from "./mfa-manager.js";
 import EventManager from "../utils/event-manager.js";
-import { Pricing } from "./pricing.js";
 import { logger } from "../logger.js";
 import { Shortcuts } from "../collections/shortcuts.js";
 import { Reminders } from "../collections/reminders.js";
 import { Relations } from "../collections/relations.js";
-import Subscriptions from "./subscriptions.js";
 import { InboxItemsHistory } from "../collections/inbox-items-history.js";
 import {
   CompressorAccessor,
@@ -83,7 +80,6 @@ import { NNMigrationProvider } from "../database/migrations.js";
 import { ConfigStorage } from "../database/config.js";
 import { LazyPromise } from "../utils/lazy-promise.js";
 import { InboxApiKeys } from "./inbox-api-keys.js";
-import { Circle } from "./circle.js";
 import { Wrapped } from "./wrapped.js";
 
 type EventSourceConstructor = new (
@@ -198,11 +194,7 @@ class Database {
 
   tokenManager = new TokenManager(this.kv, this.eventManager);
   mfa = new MFAManager(this.tokenManager);
-  subscriptions = new Subscriptions(this);
-  circle = new Circle(this);
-  offers = Offers;
   debug = new Debug();
-  pricing = Pricing;
 
   user = new UserManager(this);
   syncer = new Sync(this);
@@ -412,15 +404,6 @@ class Database {
           const message = JSON.parse(event.data);
           const data = JSON.parse(message.data);
           switch (message.type) {
-            case "upgrade": {
-              const user = await this.user.getUser();
-              if (!user) break;
-              user.subscription = data;
-              await this.user.setUser(user);
-              this.eventManager.publish(EVENTS.userSubscriptionUpdated, data);
-              await this.tokenManager._refreshToken(true);
-              break;
-            }
             case "logout": {
               await this.user.logout(true, data.reason || "Unknown.");
               break;
@@ -481,13 +464,6 @@ class Database {
 
   version() {
     return http.get(`${Hosts.API_HOST}/version`);
-  }
-
-  async announcements() {
-    let url = `${Hosts.API_HOST}/announcements/active`;
-    const user = await this.user.getUser();
-    if (user) url += `?userId=${user.id}`;
-    return http.get(url);
   }
 }
 

@@ -30,15 +30,10 @@ const args = parser(process.argv, { alias: { scope: ["s"], offline: ["o"] } });
 const IS_CI = process.env.CI;
 const THREADS = Math.max(4, process.env.THREADS || os.cpus().length / 2);
 const scopes = {
-  mobile: "apps/mobile",
   web: "apps/web",
-  monograph: "apps/monograph",
-  vericrypt: "apps/vericrypt",
   desktop: "apps/desktop",
   core: "packages/core",
   editor: "packages/editor",
-  themes: "servers/themes",
-  themebuilder: "apps/theme-builder",
   help: "docs/help"
 };
 // packages that we should run npm rebuild for
@@ -60,10 +55,10 @@ if (IS_BOOTSTRAP_ALL) {
     await new fdir()
       .onlyDirs()
       .withMaxDepth(2)
-      .glob("packages/**", "apps/**", "extensions/**", "servers/**")
+      .glob("packages/**", "apps/**")
       .crawl(".")
       .withPromise()
-  ).slice(4);
+  ).slice(2);
 
   const dependencies = Array.from(
     new Set(

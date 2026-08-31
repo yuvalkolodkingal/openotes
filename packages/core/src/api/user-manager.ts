@@ -43,8 +43,7 @@ const ENDPOINTS = {
   verifyUser: "/account/verify",
   revoke: "/connect/revocation",
   recoverAccount: "/account/recover",
-  resetUser: "/users/reset",
-  activateTrial: "/subscriptions/trial"
+  resetUser: "/users/reset"
 };
 
 class UserManager {
@@ -250,17 +249,6 @@ class UserManager {
       { refresh_token },
       access_token
     );
-  }
-
-  async activateTrial() {
-    const token = await this.tokenManager.getAccessToken();
-    if (!token) return false;
-    await http.post(
-      `${constants.SUBSCRIPTIONS_HOST}${ENDPOINTS.activateTrial}`,
-      null,
-      token
-    );
-    return true;
   }
 
   async logout(revoke = true, reason?: string) {

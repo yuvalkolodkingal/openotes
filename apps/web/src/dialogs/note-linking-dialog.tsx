@@ -40,7 +40,6 @@ import { BaseDialogProps, DialogManager } from "../common/dialog-manager";
 import { strings } from "@notesnook/intl";
 import { Virtuoso } from "react-virtuoso";
 import { CustomScrollbarsVirtualList } from "../components/list-container";
-import { UpgradeDialog } from "./buy-dialog/upgrade-dialog";
 
 export type NoteLinkingDialogProps = BaseDialogProps<LinkAttributes | false> & {
   attributes?: LinkAttributes;
@@ -200,20 +199,7 @@ export const NoteLinkingDialog = DialogManager.register(
                 </>
               ) : (
                 <Text variant="body" sx={{ mt: 1 }}>
-                  {blockLinkingAvailability?.error}{" "}
-                  <Button
-                    onClick={() =>
-                      blockLinkingAvailability
-                        ? UpgradeDialog.show({
-                            feature: blockLinkingAvailability
-                          })
-                        : null
-                    }
-                    variant="anchor"
-                  >
-                    Upgrade now
-                  </Button>
-                  .
+                  {blockLinkingAvailability?.error}
                 </Text>
               )}
             </>

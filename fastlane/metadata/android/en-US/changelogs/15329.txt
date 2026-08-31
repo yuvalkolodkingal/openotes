@@ -1,4 +1,0 @@
-- Fix crash on android devices upgraded to android 16
-- Minor bug fixes and improvements
-
-Thank you for using Notesnook!

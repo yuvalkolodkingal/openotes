@@ -30,7 +30,6 @@ import {
   Notebook as NotebookItem,
   Tag as TagType,
   createInternalLink,
-  hosts,
   isReminderActive,
   isReminderToday
 } from "@notesnook/core";
@@ -50,11 +49,9 @@ import { CreateColorDialog } from "../../dialogs/create-color-dialog";
 import { MoveNoteDialog } from "../../dialogs/move-note-dialog";
 import { navigate } from "../../navigation";
 import { useEditorStore } from "../../stores/editor-store";
-import { useStore as useMonographStore } from "../../stores/monograph-store";
 import { store } from "../../stores/note-store";
 import { store as selectionStore } from "../../stores/selection-store";
 import { store as tagStore } from "../../stores/tag-store";
-import { store as userstore } from "../../stores/user-store";
 import { store as appStore } from "../../stores/app-store";
 import { useStore as useSettingStore } from "../../stores/setting-store";
 import { writeToClipboard } from "../../utils/clipboard";
@@ -86,7 +83,6 @@ import {
   Text as Plaintext,
   Plus,
   Print,
-  Publish,
   Readonly,
   Reminder,
   RemoveShortcutLink,
@@ -97,12 +93,10 @@ import {
   SyncOff,
   Tag2,
   Tag as TagIcon,
-  Trash,
-  Update
+  Trash
 } from "../icons";
 import { Context } from "../list-container/types";
 import ListItem from "../list-item";
-import { PublishDialog } from "../publish-view";
 import TimeAgo from "../time-ago";
 import { NoteExpiryDateDialog } from "../../dialogs/note-expiry-date-dialog";
 import { withFeatureCheck } from "../../common";
@@ -467,67 +461,6 @@ export const noteMenuItems: (
     },
     {
       type: "button",
-      key: "publish",
-      isDisabled: !db.monographs.isPublished(note.id) && context?.locked,
-      icon: Publish.path,
-      title: strings.publish(),
-      menu: db.monographs.isPublished(note.id)
-        ? {
-            items: [
-              {
-                type: "button",
-                key: "open",
-                title: strings.open(),
-                icon: OpenInNew.path,
-                onClick: async () => {
-                  const url = `${hosts.MONOGRAPH_HOST}/${note.id}`;
-                  window.open(url, "_blank");
-                }
-              },
-              {
-                type: "button",
-                key: "copy-link",
-                title: strings.copyLink(),
-                icon: Copy.path,
-                onClick: async () => {
-                  const url = `${hosts.MONOGRAPH_HOST}/${note.id}`;
-                  await writeToClipboard({
-                    "text/plain": url,
-                    "text/html": `<a href="${url}">${note.title}</a>`,
-                    "text/markdown": `[${note.title}](${url})`
-                  });
-                  showToast("success", strings.linkCopied());
-                }
-              },
-              {
-                type: "button",
-                key: "update",
-                title: strings.update(),
-                icon: Update.path,
-                onClick: () => {
-                  PublishDialog.show({ note });
-                }
-              },
-              {
-                type: "separator",
-                key: "sep"
-              },
-              {
-                type: "button",
-                key: "unpublish",
-                title: strings.unpublish(),
-                icon: Publish.path,
-                onClick: async () => {
-                  await useMonographStore.getState().unpublish(note.id);
-                }
-              }
-            ]
-          }
-        : undefined,
-      onClick: () => PublishDialog.show({ note })
-    },
-    {
-      type: "button",
       key: "export",
       title: strings.exportAs(),
       icon: Export.path,
@@ -609,7 +542,6 @@ export const noteMenuItems: (
     {
       type: "button",
       key: "local-only",
-      isHidden: !userstore.get().isLoggedIn,
       //isDisabled: !isSynced,
       title: strings.syncOff(),
       isChecked: note.localOnly,
@@ -681,7 +613,6 @@ export const noteMenuItems: (
       title: strings.moveToTrash(),
       variant: "dangerous",
       icon: Trash.path,
-      isDisabled: ids.length === 1 && db.monographs.isPublished(note.id),
       onClick: () => Multiselect.moveNotesToTrash(ids, ids.length > 1),
       multiSelect: true
     }

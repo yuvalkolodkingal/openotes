@@ -18,10 +18,10 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
 import { AppModel } from "./models/app.model";
-import { APP_LOCK_PASSWORD, USER } from "./utils";
+import { APP_LOCK_PASSWORD } from "./utils";
 import { test, expect } from "@nn/test";
 
-test("don't show status bar lock app button to unauthenticated user", async ({
+test("don't show status bar lock app button when app lock is disabled", async ({
   page
 }) => {
   const app = new AppModel(page);
@@ -30,26 +30,14 @@ test("don't show status bar lock app button to unauthenticated user", async ({
   expect(await app.lockAppButton()).toBeHidden();
 });
 
-test("don't show status bar lock app button to authenticated user", async ({
+test("show status bar lock app button when app lock is enabled", async ({
   page
 }) => {
-  const app = new AppModel(page);
-  await app.auth.goto();
-
-  await app.auth.login(USER.CURRENT);
-
-  expect(await app.lockAppButton()).toBeHidden();
-});
-
-test("show status bar lock app button to authenticated user if app lock is enabled", async ({
-  page
-}) => {
-  await page.exposeBinding("isPro", () => true);
   const app = new AppModel(page);
   await app.goto();
 
   const settings = await app.goToSettings();
-  await settings.enableAppLock(USER.CURRENT.password!, APP_LOCK_PASSWORD);
+  await settings.enableAppLock(APP_LOCK_PASSWORD);
   await settings.close();
 
   expect(await app.lockAppButton()).toBeVisible();
@@ -58,12 +46,11 @@ test("show status bar lock app button to authenticated user if app lock is enabl
 test("clicking on status bar lock app button should lock app", async ({
   page
 }) => {
-  await page.exposeBinding("isPro", () => true);
   const app = new AppModel(page);
   await app.goto();
 
   const settings = await app.goToSettings();
-  await settings.enableAppLock(USER.CURRENT.password!, APP_LOCK_PASSWORD);
+  await settings.enableAppLock(APP_LOCK_PASSWORD);
   await settings.close();
   const lockAppButton = await app.lockAppButton();
   await lockAppButton.waitFor({ state: "visible" });
@@ -75,12 +62,11 @@ test("clicking on status bar lock app button should lock app", async ({
 test("disabling app lock setting should remove status bar lock app button", async ({
   page
 }) => {
-  await page.exposeBinding("isPro", () => true);
   const app = new AppModel(page);
   await app.goto();
 
   let settings = await app.goToSettings();
-  await settings.enableAppLock(USER.CURRENT.password!, APP_LOCK_PASSWORD);
+  await settings.enableAppLock(APP_LOCK_PASSWORD);
   await settings.close();
   (await app.lockAppButton()).waitFor({ state: "visible" });
   settings = await app.goToSettings();

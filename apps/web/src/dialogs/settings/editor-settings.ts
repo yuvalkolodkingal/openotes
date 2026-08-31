@@ -25,12 +25,8 @@ import {
 } from "../../components/editor/manager";
 import { useStore as useSettingStore } from "../../stores/setting-store";
 import { getFonts } from "@notesnook/editor";
-import { useSpellChecker } from "../../hooks/use-spell-checker";
-import { SpellCheckerLanguages } from "./components/spell-checker-languages";
 import { CustomizeToolbar } from "./components/customize-toolbar";
-import { DictionaryWords } from "./components/dictionary-words";
 import { strings } from "@notesnook/intl";
-import { isMac } from "../../utils/platform";
 import { EDITOR_LINE_HEIGHT } from "../../components/editor/common";
 
 export const EditorSettings: SettingsGroup[] = [
@@ -154,54 +150,6 @@ export const EditorSettings: SettingsGroup[] = [
             type: "toggle",
             isToggled: () => useSettingStore.getState().fontLigatures,
             toggle: () => useSettingStore.getState().toggleFontLigatures()
-          }
-        ]
-      }
-    ]
-  },
-  {
-    key: "spell-check",
-    section: "editor",
-    header: strings.spellCheck(),
-    isHidden: () => !IS_DESKTOP_APP,
-    onRender: () => {
-      useSpellChecker.getState().refresh();
-    },
-    settings: [
-      {
-        key: "enable-spellchecker",
-        title: strings.enableSpellChecker(),
-        onStateChange: (listener) =>
-          useSpellChecker.subscribe((c) => c.enabled, listener),
-        components: [
-          {
-            type: "toggle",
-            isToggled: () => useSpellChecker.getState().enabled,
-            toggle: () => useSpellChecker.getState().toggleSpellChecker()
-          }
-        ]
-      },
-      {
-        key: "spell-checker-languages",
-        title: strings.languages(),
-        description: strings.spellCheckerLanguagesDescription(),
-        isHidden: () => !useSpellChecker.getState().enabled || isMac(),
-        onStateChange: (listener) =>
-          useSpellChecker.subscribe((c) => c.enabled, listener),
-        components: [
-          {
-            type: "custom",
-            component: SpellCheckerLanguages
-          }
-        ]
-      },
-      {
-        key: "custom-dictionay-words",
-        title: strings.customDictionaryWords(),
-        components: [
-          {
-            type: "custom",
-            component: DictionaryWords
           }
         ]
       }

@@ -17,11 +17,15 @@ You should have received a copy of the GNU General Public License
 along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
+const RELEASE_REPOSITORY = "yuvalkolodkingal/notesnook";
+
 export async function getChangelog(tag: string) {
   try {
     if (!tag) return "No changelog found.";
 
-    const url = `https://api.github.com/repos/streetwriters/notesnook/releases/tags/v${tag}`;
+    // Release notes come from this fork's own repository; the upstream
+    // Notesnook repository is not contacted.
+    const url = `https://api.github.com/repos/${RELEASE_REPOSITORY}/releases/tags/v${tag}`;
     const response = await fetch(url, {
       headers: { Accept: "application/json" }
     });

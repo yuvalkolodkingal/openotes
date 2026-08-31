@@ -43,7 +43,6 @@ import {
   useStore as useAppStore,
   store as appstore
 } from "../../stores/app-store";
-import { useStore as useUserStore } from "../../stores/user-store";
 import { useStore as useSearchStore } from "../../stores/search-store";
 import { AppEventManager, AppEvents } from "../../common/app-events";
 import { FlexScrollContainer } from "../scroll-container";
@@ -80,7 +79,6 @@ import { onPageVisibilityChanged } from "../../utils/page-visibility";
 import { Pane, SplitPane } from "../split-pane";
 import { TITLE_BAR_HEIGHT } from "../title-bar";
 import { isMobile } from "../../hooks/use-mobile";
-import { ConfirmDialog } from "../../dialogs/confirm";
 
 const PDFPreview = React.lazy(() => import("../pdf-preview"));
 
@@ -558,9 +556,6 @@ export function Editor(props: EditorProps) {
         readonly={readonly}
         spellcheck={spellcheck}
         content={content}
-        downloadOptions={{
-          corsHost: Config.get("corsProxy", "https://cors.notesnook.com")
-        }}
         onLoad={(editor) => {
           editor = editor || useEditorManager.getState().getEditor(id)?.editor;
           if (editor) restoreSelection(editor, id);
@@ -610,15 +605,6 @@ export function Editor(props: EditorProps) {
           }
         }}
         onInsertAttachment={async (type) => {
-          if (!useUserStore.getState().isLoggedIn) {
-            ConfirmDialog.show({
-              title: strings.notLoggedIn(),
-              message: strings.loginToUploadAttachments(),
-              positiveButtonText: strings.okay()
-            });
-            return;
-          }
-
           const mime = type === "file" ? "*/*" : "image/*";
           await insertAttachments(mime, (attachments) => {
             const editor = useEditorManager.getState().getEditor(id)?.editor;

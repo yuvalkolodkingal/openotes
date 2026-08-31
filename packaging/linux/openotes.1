@@ -1,0 +1,224 @@
+.\" This file is part of the Notesnook project (https://notesnook.com/)
+.\"
+.\" Copyright (C) 2023 Streetwriters (Private) Limited
+.\" Copyright (C) 2026 Openotes contributors
+.\"
+.\" This program is free software: you can redistribute it and/or modify
+.\" it under the terms of the GNU General Public License as published by
+.\" the Free Software Foundation, either version 3 of the License, or
+.\" (at your option) any later version.
+.\"
+.\" This program is distributed in the hope that it will be useful,
+.\" but WITHOUT ANY WARRANTY; without even the implied warranty of
+.\" MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+.\" GNU General Public License for more details.
+.\"
+.\" You should have received a copy of the GNU General Public License
+.\" along with this program.  If not, see <http://www.gnu.org/licenses/>.
+.\"
+.TH OPENOTES 1 "2026-08-31" "Openotes 1.0.0" "User Commands"
+.SH NAME
+openotes \- offline-first, end-to-end-encrypted notes with WebDAV sync
+.SH SYNOPSIS
+.B openotes
+.RI [ options ]
+.br
+.B openotes new
+.BR note | notebook | reminder
+.br
+.B openotes open note
+.B \-\-id
+.I ID
+.br
+.B openotes open notebook
+.B \-\-id
+.I ID
+.br
+.B openotes
+.I openotes://URI
+.SH DESCRIPTION
+.B Openotes
+is a desktop notes application. Notes are stored in an encrypted SQLite
+database on the local machine and are never sent to a hosted service.
+Synchronisation between devices is end-to-end encrypted and goes to a WebDAV
+server the user supplies; backups are written locally or to that same server.
+There is no account and no subscription.
+.PP
+Openotes is a fork of Notesnook by Streetwriters (Private) Limited, with
+Notesnook Cloud replaced by WebDAV sync. It is not affiliated with, endorsed
+by, or supported by Streetwriters.
+.PP
+Running
+.B openotes
+with no arguments opens the main window, or raises the window of an already
+running instance. Arguments that Openotes does not recognise are ignored
+rather than treated as an error, because desktop launchers and the desktop
+environment add arguments of their own.
+.SH OPTIONS
+.TP
+.B \-\-hidden
+Start without showing a window. The window is shown the next time
+.B openotes
+is run, or when an
+.B openotes://
+link is opened. Desktop environments use this for autostart entries, so that
+the application is already running when the user first opens it.
+.TP
+.BR \-v ", " \-\-version
+Print the version and exit.
+.TP
+.BR \-h ", " \-\-help
+Print a usage summary and exit.
+.SH COMMANDS
+A command is applied when Openotes starts: the window opens directly on the
+note, notebook or dialog named. If Openotes is already running, the second
+launch raises the existing window and exits; only an
+.B openotes://
+URI is handed over to it, not a command.
+.TP
+.B new note
+Open a new, empty note in the editor.
+.TP
+.B new notebook
+Open the new-notebook dialog.
+.TP
+.B new reminder
+Open the new-reminder dialog.
+.TP
+.BI "open note \-\-id " ID
+Open the note with the given identifier. The command is ignored if
+.B \-\-id
+is missing.
+.TP
+.BI "open notebook \-\-id " ID
+Open the notebook with the given identifier. The command is ignored if
+.B \-\-id
+is missing.
+.SH URI SCHEME
+Openotes registers the
+.B openotes://
+URI scheme with the desktop environment. A URI passed on the command line, or
+opened from another application, is handed to the running instance instead of
+starting a second copy.
+.SH ENVIRONMENT
+.TP
+.B OPENOTES_DATA_DIR
+Absolute path to use as the application data directory, overriding the
+XDG location below. Useful for keeping notes on removable media.
+.TP
+.B OPENOTES_PORTABLE
+Set to
+.B 1
+to keep application data in a
+.I data
+directory next to the executable instead of in the user's home directory.
+.B OPENOTES_DATA_DIR
+takes precedence over this.
+.TP
+.B OPENOTES_UI_ROOT
+Directory holding the built user interface. Packages set this so the
+interface can live outside
+.IR /usr/bin .
+When unset, Openotes looks for a
+.I ui
+directory next to the executable.
+.TP
+.B OPENOTES_NATIVE_DIR
+Directory holding the bundled native libraries: the encrypted SQLite build and
+the two full-text-search tokenizer extensions. When unset, Openotes looks for
+a
+.I native
+directory next to the executable.
+.TP
+.B OPENOTES_LOG_LEVEL
+Log verbosity: one of
+.BR error ", " warn ", " info ", " debug " or " trace .
+The default is
+.BR info .
+.TP
+.B OPENOTES_UI_PORT
+Loopback port the interface is served on, an integer between
+.B 1024
+and
+.BR 65535 .
+The default is
+.BR 49732 .
+The origin decides which webview storage a profile sees, so a given profile
+must always use the same port; change it only to run a second profile
+alongside the first, together with its own
+.BR OPENOTES_DATA_DIR .
+.TP
+.B XDG_DATA_HOME
+Base directory for application data. Defaults to
+.IR ~/.local/share .
+.TP
+.B XDG_CONFIG_HOME
+Base directory for configuration. Defaults to
+.IR ~/.config .
+.TP
+.B XDG_CACHE_HOME
+Base directory for the cache and the log files. Defaults to
+.IR ~/.cache .
+.TP
+.B XDG_DOCUMENTS_DIR
+Documents directory, used to derive the default backup location. Defaults to
+.IR ~/Documents .
+.PP
+Openotes also reads
+.BR APPIMAGE ", " FLATPAK_ID " and " SNAP ,
+which the respective runtimes set, to detect how it was packaged. They are not
+meant to be set by hand.
+.SH FILES
+.TP
+.I ~/.local/share/openotes/
+Application data. Honours
+.B XDG_DATA_HOME
+and is overridden by
+.BR OPENOTES_DATA_DIR .
+.TP
+.I ~/.local/share/openotes/profiles/default/notesnook.db
+The encrypted notes database. The file keeps its upstream name.
+.TP
+.I ~/.local/share/openotes/attachments/
+Encrypted attachment blobs.
+.TP
+.I ~/.config/openotes/settings.json
+Application settings, including the WebDAV server configuration. Credentials
+are not stored here.
+.TP
+.I ~/.cache/openotes/logs/app.log
+The current log file. Older logs are rotated alongside it.
+.TP
+.I ~/Documents/Openotes/backups/
+Default directory for local backups.
+.PP
+Under Flatpak these paths are inside
+.IR ~/.var/app/org.openotes.Openotes/ ,
+except backups, which stay in the real documents directory.
+.SH EXIT STATUS
+.B openotes
+exits
+.B 0
+on success, including after
+.B \-\-help
+and
+.BR \-\-version ,
+and non-zero if the application cannot start.
+.SH SEE ALSO
+.BR flatpak (1),
+.BR xdg\-open (1)
+.PP
+Project documentation:
+.I https://github.com/yuvalkolodkingal/notesnook
+.SH BUGS
+Report bugs at
+.IR https://github.com/yuvalkolodkingal/notesnook/issues .
+Do not report them to the upstream Notesnook project.
+.SH COPYRIGHT
+Copyright (C) 2023 Streetwriters (Private) Limited.
+Copyright (C) 2026 Openotes contributors.
+.PP
+License GPLv3+: GNU GPL version 3 or later
+.RI < https://gnu.org/licenses/gpl.html >.
+This is free software: you are free to change and redistribute it. There is NO
+WARRANTY, to the extent permitted by law.

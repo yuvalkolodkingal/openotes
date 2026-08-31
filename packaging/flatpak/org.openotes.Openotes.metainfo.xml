@@ -1,0 +1,112 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+This file is part of the Notesnook project (https://notesnook.com/)
+
+Copyright (C) 2023 Streetwriters (Private) Limited
+Copyright (C) 2026 Openotes contributors
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU General Public License as published by
+the Free Software Foundation, either version 3 of the License, or
+(at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License
+along with this program.  If not, see <http://www.gnu.org/licenses/>.
+-->
+<component type="desktop-application">
+  <id>org.openotes.Openotes</id>
+  <name>Openotes</name>
+  <summary>Offline-first encrypted notes that sync over your own WebDAV server</summary>
+
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>GPL-3.0-or-later</project_license>
+
+  <developer id="org.openotes">
+    <name>Openotes contributors</name>
+  </developer>
+
+  <!--
+    Matches the desktop entry installed by the flatpak. The shared entry in
+    packaging/linux is named openotes.desktop and is renamed to the app id
+    during the flatpak build, as flatpak requires.
+  -->
+  <launchable type="desktop-id">org.openotes.Openotes.desktop</launchable>
+
+  <description>
+    <p>
+      Openotes is a notes application that keeps every note on your own
+      machine and encrypts it end to end. There is no account to create and
+      no hosted service behind it: notes live in an encrypted local database,
+      and synchronising between your own devices happens over a WebDAV server
+      you already control, such as Nextcloud, ownCloud or a plain WebDAV
+      share.
+    </p>
+    <p>
+      Openotes is a fork of Notesnook, the GPL-3.0 notes application by
+      Streetwriters (Private) Limited. It keeps the editor, the note model and
+      the encryption of the original, and replaces Notesnook Cloud with
+      encrypted WebDAV sync. It is not affiliated with, endorsed by, or
+      supported by Streetwriters, and it never contacts Notesnook servers.
+    </p>
+    <p>Features:</p>
+    <ul>
+      <li>Rich text notes, notebooks, tags, colours and reminders</li>
+      <li>Notes encrypted at rest in a local SQLite database</li>
+      <li>Full-text search across every note</li>
+      <li>End-to-end encrypted sync over any WebDAV server</li>
+      <li>Encrypted backups, locally or to the same WebDAV server</li>
+      <li>No account, no subscription, no telemetry</li>
+    </ul>
+  </description>
+
+  <categories>
+    <category>Office</category>
+    <category>Utility</category>
+  </categories>
+
+  <keywords>
+    <keyword>notes</keyword>
+    <keyword>notebook</keyword>
+    <keyword>markdown</keyword>
+    <keyword>encryption</keyword>
+    <keyword>webdav</keyword>
+    <keyword>sync</keyword>
+    <keyword>offline</keyword>
+  </keywords>
+
+  <url type="homepage">https://github.com/yuvalkolodkingal/notesnook</url>
+  <url type="bugtracker">https://github.com/yuvalkolodkingal/notesnook/issues</url>
+  <url type="vcs-browser">https://github.com/yuvalkolodkingal/notesnook</url>
+
+  <provides>
+    <binary>openotes</binary>
+  </provides>
+
+  <supports>
+    <control>pointing</control>
+    <control>keyboard</control>
+    <control>touch</control>
+  </supports>
+
+  <!-- Nothing in the app warrants a rating; an empty element means "none". -->
+  <content_rating type="oars-1.1" />
+
+  <releases>
+    <release version="1.0.0" date="2026-08-31">
+      <description>
+        <p>
+          First release of the Openotes fork: the Notesnook desktop app
+          rebuilt on Deno with an OS webview instead of Electron, with
+          Notesnook Cloud replaced by end-to-end encrypted WebDAV sync and
+          encrypted local or WebDAV backups. Accounts, subscriptions and
+          telemetry are gone.
+        </p>
+      </description>
+    </release>
+  </releases>
+</component>

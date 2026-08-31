@@ -18,12 +18,12 @@
 ### If tests were not added, explain why
 <!-- explanation -->
 
-## Platform
-<!-- Describe which platforms this PR is related to -->
+## Area
+<!-- Describe which part of the app this PR is related to -->
 
-- [ ] Web
-- [ ] Mobile
-- [ ] Desktop
+- [ ] Desktop host (Deno)
+- [ ] UI (apps/web)
+- [ ] Shared packages
 
 ## Sign-off
 - [ ] QA passed

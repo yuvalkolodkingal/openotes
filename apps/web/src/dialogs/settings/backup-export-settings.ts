@@ -17,14 +17,13 @@ You should have received a copy of the GNU General Public License
 along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
-import { createBackup, verifyAccount, importBackup } from "../../common";
+import { createBackup, importBackup } from "../../common";
 import { db } from "../../common/db";
 import { exportNotes } from "../../common/export";
 import { SettingsGroup } from "./types";
 import { strings } from "@notesnook/intl";
 import { useStore as useSettingStore } from "../../stores/setting-store";
 import { useStore as useAppStore } from "../../stores/app-store";
-import { useStore as useUserStore } from "../../stores/user-store";
 import { desktop } from "../../common/desktop-bridge";
 
 const getDesktopBackupsDirectoryPath = () =>
@@ -34,7 +33,9 @@ export const BackupExportSettings: SettingsGroup[] = [
   {
     key: "backup",
     section: "backup-export",
-    header: strings.backups(),
+    // "Backups" proper is the encrypted snapshot engine in backup-settings.ts;
+    // this group is the portable file format you can carry elsewhere.
+    header: "Portable backup files",
     settings: [
       {
         key: "create-backup",
@@ -93,13 +94,9 @@ export const BackupExportSettings: SettingsGroup[] = [
             selectedOption: () =>
               useSettingStore.getState().backupReminderOffset.toString(),
             onSelectionChanged: async (value) => {
-              const verified =
-                useSettingStore.getState().encryptBackups ||
-                (await verifyAccount());
-              if (verified)
-                useSettingStore
-                  .getState()
-                  .setBackupReminderOffset(parseInt(value));
+              useSettingStore
+                .getState()
+                .setBackupReminderOffset(parseInt(value));
             }
           }
         ]
@@ -124,40 +121,9 @@ export const BackupExportSettings: SettingsGroup[] = [
             selectedOption: () =>
               useSettingStore.getState().fullBackupReminderOffset.toString(),
             onSelectionChanged: async (value) => {
-              const verified =
-                useSettingStore.getState().encryptBackups ||
-                (await verifyAccount());
-              if (verified)
-                useSettingStore
-                  .getState()
-                  .setFullBackupReminderOffset(parseInt(value));
-            }
-          }
-        ]
-      },
-      {
-        key: "encrypt-backups",
-        title: strings.backupEncryption(),
-        description: strings.backupEncryptionDesc(),
-        isHidden: () => !useUserStore.getState().isLoggedIn,
-        onStateChange: (listener) => {
-          const subscriptions = [
-            useUserStore.subscribe((s) => s.isLoggedIn, listener),
-            useSettingStore.subscribe((s) => s.encryptBackups, listener)
-          ];
-          return () => subscriptions.forEach((s) => s());
-        },
-        components: [
-          {
-            type: "toggle",
-            isToggled: () =>
-              !!useUserStore.getState().isLoggedIn &&
-              useSettingStore.getState().encryptBackups,
-            toggle: async () => {
-              const verified =
-                !useSettingStore.getState().encryptBackups ||
-                (await verifyAccount());
-              if (verified) useSettingStore.getState().toggleEncryptBackups();
+              useSettingStore
+                .getState()
+                .setFullBackupReminderOffset(parseInt(value));
             }
           }
         ]
@@ -175,11 +141,6 @@ export const BackupExportSettings: SettingsGroup[] = [
             type: "button",
             title: strings.select(),
             action: async () => {
-              const verified =
-                useSettingStore.getState().encryptBackups ||
-                (await verifyAccount());
-              if (!verified) return;
-
               await desktop?.integration.selectBackupDirectory.query();
 
               useSettingStore.setState({
@@ -218,11 +179,10 @@ export const BackupExportSettings: SettingsGroup[] = [
             selectedOption: () => "-",
             onSelectionChanged: async (value) => {
               if (!db.notes || value === "-") return;
-              if (await verifyAccount())
-                await exportNotes(
-                  value as "txt" | "md" | "html" | "md-frontmatter",
-                  db.notes.exportable
-                );
+              await exportNotes(
+                value as "txt" | "md" | "html" | "md-frontmatter",
+                db.notes.exportable
+              );
             }
           }
         ]

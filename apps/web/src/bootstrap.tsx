@@ -17,9 +17,7 @@ You should have received a copy of the GNU General Public License
 along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
-import { getCurrentHash, getCurrentPath, makeURL } from "./navigation";
-import Config from "./utils/config";
-import type { AuthProps } from "./views/auth";
+import { getCurrentPath } from "./navigation";
 import {
   initializeFeatureChecks,
   isFeatureSupported
@@ -27,151 +25,43 @@ import {
 import { initializeLogger, logger } from "./utils/logger";
 import { shouldShowWrapped } from "./utils/should-show-wrapped";
 
-type Route<TProps = null> = {
-  component: () => Promise<{
-    default: TProps extends null
-      ? () => JSX.Element
-      : (props: TProps) => JSX.Element;
-  }>;
-  props: TProps | null;
+type Route = {
+  component: () => Promise<{ default: () => JSX.Element }>;
 };
 
-type RouteWithPath<T = null> = {
-  route: Route<T>;
+type RouteWithPath = {
+  route: Route;
   path: Routes;
 };
 
 export type Routes = keyof typeof routes;
-// | "/account/recovery"
-// | "/account/verified"
-// | "/signup"
-// | "/login"
-// | "/sessionexpired"
-// | "/recover"
-// | "/mfa/code"
-// | "/mfa/select"
-// | "default";
 
+/**
+ * Openotes has no account, so there are no login, signup, recovery, MFA,
+ * session-expiry or checkout routes to dispatch to: the app always boots
+ * straight into the local vault. First-run setup happens inside the app
+ * (see `OnboardingDialog`), not on a separate route.
+ */
 const routes = {
-  "/plans": {
-    component: () => import("./views/plans")
-  },
   "/wrapped": {
     component: () => import("./views/wrapped")
   },
-  "/checkout": {
-    component: () => import("./views/checkout")
-  },
-  "/payments": {
-    component: () => import("./views/payments"),
-    props: {}
-  },
-  "/account/recovery": {
-    component: () => import("./views/recovery"),
-    props: { route: "methods" }
-  },
-  "/account/verified": {
-    component: () => import("./views/email-confirmed"),
-    props: {}
-  },
-  "/signup": {
-    component: () => import("./views/auth"),
-    props: { route: "signup" }
-  },
-  "/sessionexpired": {
-    component: () => import("./views/auth"),
-    props: { route: "sessionExpiry" }
-  },
-  "/login": {
-    component: () => import("./views/auth"),
-    props: { route: "login:email" }
-  },
-  "/login/password": {
-    component: () => import("./views/auth"),
-    props: { route: "login:email" }
-  },
-  "/recover": {
-    component: () => import("./views/auth"),
-    props: { route: "recover" }
-  },
-  "/login/mfa/code": {
-    component: () => import("./views/auth"),
-    props: { route: "login:email" }
-  },
-  "/login/mfa/select": {
-    component: () => import("./views/auth"),
-    props: { route: "login:email" }
-  },
-  default: { component: () => import("./app"), props: null }
+  default: { component: () => import("./app") }
 } as const;
 
-const sessionExpiryExceptions: Routes[] = [
-  "/payments",
-  "/recover",
-  "/account/recovery",
-  "/sessionexpired",
-  "/login/mfa/code",
-  "/login/mfa/select",
-  "/login/password"
-];
+function getRoute(): RouteWithPath {
+  const path = getCurrentPath() as Routes;
+  const route = routes[path] ? { route: routes[path], path } : null;
 
-function getRoute(): RouteWithPath<AuthProps> | RouteWithPath {
-  let path = getCurrentPath() as Routes;
-  // logger.info(`Getting route for path: ${path}`);
+  if (!route || (route.path === "/wrapped" && !shouldShowWrapped()))
+    return { route: routes.default, path: "default" };
 
-  const isAccountRecovery = isAccountRecoveryRoute(path);
-  if (isAccountRecovery) path = "/account/recovery";
-
-  const signup = redirectToRegistration(path);
-  const sessionExpired = isSessionExpired(path);
-  const fallback = fallbackRoute();
-  const route = (
-    routes[path] ? { route: routes[path], path } : null
-  ) as RouteWithPath<AuthProps> | null;
-
-  if (route?.path === "/wrapped" && !shouldShowWrapped())
-    return {
-      route: routes.default,
-      path: "default"
-    };
-
-  return signup || sessionExpired || route || fallback;
-}
-
-function isAccountRecoveryRoute(path: Routes): boolean {
-  return path.startsWith("/account/recovery");
-}
-
-function fallbackRoute(): RouteWithPath {
-  return { route: routes.default, path: "default" };
-}
-
-function redirectToRegistration(path: Routes): RouteWithPath<AuthProps> | null {
-  if (!IS_TESTING && !shouldSkipInitiation() && !routes[path]) {
-    window.history.replaceState({}, "", makeURL("/signup", getCurrentHash()));
-    return { route: routes["/signup"], path: "/signup" };
-  }
-  return null;
-}
-
-function isSessionExpired(path: Routes): RouteWithPath<AuthProps> | null {
-  const isSessionExpired = Config.get("sessionExpired", false);
-  if (isSessionExpired && !sessionExpiryExceptions.includes(path)) {
-    // logger.info(`User session has expired. Routing to /sessionexpired`);
-
-    window.history.replaceState(
-      {},
-      "",
-      makeURL("/sessionexpired", getCurrentHash())
-    );
-    return { route: routes["/sessionexpired"], path: "/sessionexpired" };
-  }
-  return null;
+  return route;
 }
 
 function checkPrerequisites() {
   if (!window.isSecureContext)
-    throw new Error("Please run Notesnook in a secure (https) context.");
+    throw new Error("Please run Openotes in a secure (https) context.");
   if (!navigator.locks)
     throw new Error("Your browser does not support the Web Locks API.");
   if (!crypto.subtle)
@@ -194,17 +84,11 @@ export async function init() {
     initializeLogger()
   ]);
 
-  const persistence = isAccountRecoveryRoute(path)
-    ? ("memory" as const)
-    : ("db" as const);
+  const persistence = "db" as const;
 
   logger.info(
     `Initializing key store with persistence: ${persistence} for path: ${path}`
   );
 
-  return { Component, path, props: route.props, persistence };
-}
-
-function shouldSkipInitiation() {
-  return IS_THEME_BUILDER || localStorage.getItem("skipInitiation") || false;
+  return { Component, path, persistence };
 }

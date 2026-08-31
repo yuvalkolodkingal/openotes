@@ -158,7 +158,12 @@ export default defineConfig({
                 "**/node_modules/**/*",
                 "**/code-lang-*.js",
                 "pdf.worker.min.js"
-              ]
+              ],
+              // The main chunk is ~2.3 MB, over workbox's 2 MiB default, and
+              // exceeding that default is a hard build *error*, not a warning:
+              // it is what makes `npm run build:test` exit non-zero and so
+              // leaves the Playwright suite with nothing to serve.
+              maximumFileSizeToCacheInBytes: 8 * 1024 * 1024
             }
           })
         ]),

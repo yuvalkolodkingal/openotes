@@ -17,7 +17,12 @@ You should have received a copy of the GNU General Public License
 along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
-import { IKVStore, IndexedDBKVStore, MemoryKVStore } from "./key-value";
+import {
+  DesktopKVStore,
+  IKVStore,
+  IndexedDBKVStore,
+  MemoryKVStore
+} from "./key-value";
 import { isFeatureSupported } from "../utils/feature-check";
 import { desktop } from "../common/desktop-bridge";
 import { SecurityKeyConfig } from "../utils/webauthn";
@@ -149,16 +154,31 @@ class KeyStore extends BaseStore<KeyStore> {
   init = async (
     config: { persistence: "memory" | "db" } = { persistence: "db" }
   ) => {
+    // On the desktop runtime the interface's origin changes every launch
+    // (the runtime assigns the port), so IndexedDB does not survive a
+    // restart — the key store would lose the database key and with it the
+    // vault. Persist through the runtime instead; the safeStorage path
+    // wraps the key before it ever gets here.
+    const isDesktopRuntime =
+      IS_DESKTOP_APP &&
+      typeof (globalThis as { bindings?: { rpc?: unknown } }).bindings?.rpc ===
+        "function";
     this.#metadataStore =
-      isFeatureSupported("indexedDB") &&
-      isFeatureSupported("clonableCryptoKey") &&
-      config.persistence !== "memory"
+      config.persistence === "memory"
+        ? new MemoryKVStore()
+        : isDesktopRuntime
+        ? new DesktopKVStore(`${this.dbName}-metadata`)
+        : isFeatureSupported("indexedDB") &&
+          isFeatureSupported("clonableCryptoKey")
         ? new IndexedDBKVStore(`${this.dbName}-metadata`, "metadata")
         : new MemoryKVStore();
     this.#secretStore =
-      isFeatureSupported("indexedDB") &&
-      isFeatureSupported("clonableCryptoKey") &&
-      config.persistence !== "memory"
+      config.persistence === "memory"
+        ? new MemoryKVStore()
+        : isDesktopRuntime
+        ? new DesktopKVStore(`${this.dbName}-secrets`)
+        : isFeatureSupported("indexedDB") &&
+          isFeatureSupported("clonableCryptoKey")
         ? new IndexedDBKVStore(`${this.dbName}-secrets`, "secrets")
         : new MemoryKVStore();
 

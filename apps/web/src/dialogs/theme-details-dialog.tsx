@@ -18,7 +18,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
 import { strings } from "@notesnook/intl";
-import { ThemeMetadata } from "@notesnook/themes-server";
+import { ThemeMetadata } from "../common/themes";
 import { Flex, Link, Text } from "@theme-ui/components";
 import { BaseDialogProps, DialogManager } from "../common/dialog-manager";
 import Dialog from "../components/dialog";
@@ -64,11 +64,6 @@ export const ThemeDetailsDialog = DialogManager.register(
           <Text variant="subBody" sx={{ fontSize: "subtitle" }}>
             {theme.authors.map((author) => author.name).join(", ")}
           </Text>
-          {theme.totalInstalls && theme.totalInstalls > 0 ? (
-            <Text variant="subBody" sx={{ fontSize: "subtitle" }}>
-              {theme.totalInstalls} {strings.installs()}
-            </Text>
-          ) : null}
           <Text variant="subBody" sx={{ fontSize: "subtitle" }}>
             {strings.licenseUnder(theme.license)}
           </Text>
@@ -81,16 +76,6 @@ export const ThemeDetailsDialog = DialogManager.register(
                 sx={{ fontSize: "subtitle", color: "accent" }}
               >
                 {strings.website()}
-              </Link>
-            )}
-            {theme.sourceURL && (
-              <Link
-                href={theme.sourceURL}
-                target="_blank"
-                variant="text.subBody"
-                sx={{ fontSize: "subtitle", color: "accent" }}
-              >
-                Source
               </Link>
             )}
           </Flex>

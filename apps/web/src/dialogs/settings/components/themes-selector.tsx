@@ -16,108 +16,43 @@ GNU General Public License for more details.
 You should have received a copy of the GNU General Public License
 along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
-import { httpBatchLink } from "@trpc/client";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { useCallback, useState } from "react";
-import { Box, Button, Flex, Input, Text } from "@theme-ui/components";
+import { Box, Button, Flex, Text } from "@theme-ui/components";
 import { CheckCircleOutline, Loading } from "../../../components/icons";
 import {
-  THEME_COMPATIBILITY_VERSION,
+  ThemeDefinition,
   getPreviewColors,
   validateTheme
 } from "@notesnook/theme";
-import { debounce } from "@notesnook/common";
 import { useStore as useThemeStore } from "../../../stores/theme-store";
-import { useStore as useUserStore } from "../../../stores/user-store";
-import {
-  ThemesRouter,
-  THEME_SERVER_URL,
-  ThemesTRPC
-} from "../../../common/themes-router";
-import { ThemeMetadata } from "@notesnook/themes-server";
+import { ThemeMetadata } from "../../../common/themes";
 import { ThemePreview } from "../../../components/theme-preview";
-import { Loader } from "../../../components/loader";
 import { showToast } from "../../../utils/toast";
 import { showFilePicker, readFile } from "../../../utils/file-picker";
 import { VirtualizedGrid } from "../../../components/virtualized-grid";
 import { ThemeDetailsDialog } from "../../theme-details-dialog";
 import { strings } from "@notesnook/intl";
 
-const ThemesClient = ThemesTRPC.createClient({
-  links: [
-    httpBatchLink({
-      url: THEME_SERVER_URL
-    })
-  ]
-});
-const ThemesQueryClient = new QueryClient();
-
+/**
+ * Openotes ships without the hosted theme marketplace: the only themes are
+ * the two bundled defaults and whatever theme file the user loads from disk.
+ */
 export function ThemesSelector() {
-  return (
-    <ThemesTRPC.Provider client={ThemesClient} queryClient={ThemesQueryClient}>
-      <QueryClientProvider client={ThemesQueryClient}>
-        <ThemesList />
-      </QueryClientProvider>
-    </ThemesTRPC.Provider>
-  );
+  return <ThemesList />;
 }
 
-const COLOR_SCHEMES = [
-  { id: "all", title: strings.all() },
-  { id: "dark", title: strings.dark() },
-  { id: "light", title: strings.light() }
-] as const;
-
 function ThemesList() {
-  const [searchQuery, setSearchQuery] = useState<string>();
-  const [colorScheme, setColorScheme] = useState<"all" | "dark" | "light">(
-    "all"
-  );
-
   const [isApplying, setIsApplying] = useState(false);
   const setCurrentTheme = useThemeStore((store) => store.setTheme);
-  const user = useUserStore((store) => store.user);
   const darkTheme = useThemeStore((store) => store.darkTheme);
   const lightTheme = useThemeStore((store) => store.lightTheme);
   const isThemeCurrentlyApplied = useThemeStore(
     (store) => store.isThemeCurrentlyApplied
   );
-  const filters = [];
-  if (searchQuery) filters.push({ type: "term" as const, value: searchQuery });
-  if (colorScheme !== "all")
-    filters.push({ type: "colorScheme" as const, value: colorScheme });
 
-  const themes = ThemesTRPC.themes.useInfiniteQuery(
-    {
-      limit: 10,
-      compatibilityVersion: THEME_COMPATIBILITY_VERSION,
-      filters
-    },
-    {
-      keepPreviousData: true,
-      select: (themes) => ({
-        pageParams: themes.pageParams,
-        pages: themes.pages.map((page) => ({
-          nextCursor: page.nextCursor,
-          themes: page.themes.filter(
-            (theme) => !isThemeCurrentlyApplied(theme.id)
-          )
-        }))
-      }),
-      getNextPageParam: (lastPage) => lastPage.nextCursor
-    }
-  );
-
-  const items = [
-    {
-      ...darkTheme,
-      previewColors: getPreviewColors(darkTheme)
-    },
-    {
-      ...lightTheme,
-      previewColors: getPreviewColors(lightTheme)
-    },
-    ...(themes.data?.pages.flatMap((a) => a.themes) || [])
+  const items: ThemeMetadata[] = [
+    { ...darkTheme, previewColors: getPreviewColors(darkTheme) },
+    { ...lightTheme, previewColors: getPreviewColors(lightTheme) }
   ];
 
   const setTheme = useCallback(
@@ -125,13 +60,7 @@ function ThemesList() {
       if (isThemeCurrentlyApplied(theme.id)) return;
       setIsApplying(true);
       try {
-        const fullTheme = await ThemesRouter.installTheme.query({
-          id: theme.id,
-          compatibilityVersion: THEME_COMPATIBILITY_VERSION,
-          userId: user?.id
-        });
-        if (!fullTheme) return;
-        setCurrentTheme(fullTheme);
+        setCurrentTheme(theme);
       } catch (e) {
         console.error(e);
         if (e instanceof Error)
@@ -143,105 +72,54 @@ function ThemesList() {
         setIsApplying(false);
       }
     },
-    [isThemeCurrentlyApplied, setCurrentTheme, user?.id]
+    [isThemeCurrentlyApplied, setCurrentTheme]
   );
 
   return (
     <>
-      <Input
-        placeholder={strings.searchThemes()}
-        sx={{ mt: 2 }}
-        onChange={debounce((e) => setSearchQuery(e.target.value), 500)}
-      />
-      <Flex sx={{ justifyContent: "space-between", alignItems: "center" }}>
-        <Flex sx={{ mt: 2, gap: 1 }}>
-          {COLOR_SCHEMES.map((filter) => (
-            <Button
-              key={filter.id}
-              variant="secondary"
-              onClick={() => {
-                setColorScheme(filter.id);
-              }}
-              sx={{
-                borderRadius: 100,
-                minWidth: 50,
-                py: 1,
-                px: 2,
-                flexShrink: 0,
-                bg: colorScheme === filter.id ? "shade" : "transparent",
-                color: colorScheme === filter.id ? "accent" : "paragraph"
-              }}
-            >
-              {filter.title}
-            </Button>
-          ))}
-        </Flex>
+      <Flex sx={{ justifyContent: "end", alignItems: "center" }}>
+        <Button
+          variant="secondary"
+          onClick={async () => {
+            const [file] = await showFilePicker({
+              acceptedFileTypes: "application/json"
+            });
+            if (!file) return;
+            const theme = JSON.parse(await readFile(file)) as ThemeDefinition;
+            const { error } = validateTheme(theme);
+            if (error) return showToast("error", error);
 
-        <Flex sx={{ mt: 2, gap: 1 }}>
-          <Button
-            variant="secondary"
-            onClick={async () => {
-              const [file] = await showFilePicker({
-                acceptedFileTypes: "application/json"
-              });
-              if (!file) return;
-              const theme = JSON.parse(await readFile(file));
-              const { error } = validateTheme(theme);
-              if (error) return showToast("error", error);
-
-              if (
-                await ThemeDetailsDialog.show({
-                  theme: {
-                    ...theme,
-                    totalInstalls: 0,
-                    previewColors: getPreviewColors(theme)
-                  }
-                })
-              ) {
-                setCurrentTheme(theme);
-              }
-            }}
-            sx={{
-              px: 3,
-              flexShrink: 0
-            }}
-          >
-            {strings.loadFromFile()}
-          </Button>
-        </Flex>
+            if (
+              await ThemeDetailsDialog.show({
+                theme: { ...theme, previewColors: getPreviewColors(theme) }
+              })
+            ) {
+              setCurrentTheme(theme);
+            }
+          }}
+          sx={{ mt: 2, px: 3, flexShrink: 0 }}
+        >
+          {strings.loadFromFile()}
+        </Button>
       </Flex>
 
-      <Box
-        sx={{
-          mt: 2
-        }}
-      >
-        {themes.isInitialLoading ? (
-          <Loader title={strings.loadingThemes()} />
-        ) : (
-          <VirtualizedGrid
-            columns={2}
-            items={items}
-            getItemKey={(index) => items[index].id}
-            estimatedSize={285}
-            mode="dynamic"
-            onEndReached={() =>
-              themes.hasNextPage ? themes.fetchNextPage() : null
-            }
-            renderItem={({ item: theme }) => (
-              <ThemeItem
-                key={theme.id}
-                theme={theme}
-                isApplied={isThemeCurrentlyApplied(theme.id)}
-                isApplying={isApplying}
-                setTheme={setTheme}
-              />
-            )}
-          />
-        )}
-        {!themes.isInitialLoading && themes.isFetching ? (
-          <Loading color="accent" sx={{ mt: 2 }} />
-        ) : null}
+      <Box sx={{ mt: 2 }}>
+        <VirtualizedGrid
+          columns={2}
+          items={items}
+          getItemKey={(index) => items[index].id}
+          estimatedSize={285}
+          mode="dynamic"
+          renderItem={({ item: theme }) => (
+            <ThemeItem
+              key={theme.id}
+              theme={theme}
+              isApplied={isThemeCurrentlyApplied(theme.id)}
+              isApplying={isApplying}
+              setTheme={setTheme}
+            />
+          )}
+        />
       </Box>
     </>
   );
@@ -285,8 +163,6 @@ function ThemeItem(props: ThemeItemProps) {
       <Flex sx={{ justifyContent: "space-between", alignItems: "center" }}>
         <Text variant="subBody">
           {theme.colorScheme === "dark" ? "Dark" : "Light"}
-          &nbsp;&nbsp;
-          {theme.totalInstalls ? `${theme.totalInstalls} installs` : ""}
         </Text>
         {isApplied ? (
           <CheckCircleOutline color="accent" size={20} />

@@ -1,0 +1,166 @@
+{
+  "name": "@notesnook-deno/workspace",
+  "version": "1.0.0",
+  "license": "GPL-3.0-or-later",
+  "nodeModulesDir": "auto",
+  "unstable": [
+    "sloppy-imports"
+  ],
+  "workspace": [
+    "./apps/desktop",
+    "./packages/sync-webdav"
+  ],
+  "imports": {
+    "@notesnook/crypto": "./packages/crypto/src/index.ts",
+    "@notesnook/sodium": "./packages/sodium/src/browser.ts",
+    "@notesnook/sync-webdav": "./packages/sync-webdav/src/index.ts",
+    "@std/assert": "jsr:@std/assert@^1.0.10",
+    "@std/path": "jsr:@std/path@^1.0.8",
+    "@std/fs": "jsr:@std/fs@^1.0.9",
+    "@std/encoding": "jsr:@std/encoding@^1.0.7",
+    "@std/testing": "jsr:@std/testing@^1.0.9",
+    "libsodium-wrappers-sumo": "./packages/sodium/src/libsodium.ts",
+    "@db/sqlite": "jsr:@db/sqlite@^0.12.0",
+    "@std/cli": "jsr:@std/cli@^1.0.9"
+  },
+  "tasks": {
+    "dev": "deno run -A apps/desktop/scripts/dev.ts",
+    "fmt": "deno fmt",
+    "lint": "deno lint",
+    "check": "deno check apps/desktop/main.ts packages/sync-webdav/src/index.ts",
+    "test": "deno test -A packages/sync-webdav/tests/ apps/desktop/tests/ --ignore=packages/sync-webdav/tests/integration",
+    "test:webdav": "deno run -A packages/sync-webdav/tests/run-integration.ts",
+    "test:ui": "deno run -A --node-modules-dir=auto npm:vitest@3.2.4 run --root apps/web",
+    "bench": "deno run -A apps/desktop/scripts/benchmark.ts",
+    "build:ui": "deno run -A apps/desktop/scripts/build-ui.ts",
+    "build": "deno run -A apps/desktop/scripts/build.ts",
+    "build:windows": "deno run -A apps/desktop/scripts/build.ts --target x86_64-pc-windows-msvc",
+    "build:linux": "deno run -A apps/desktop/scripts/build.ts --target x86_64-unknown-linux-gnu",
+    "build:appimage": "deno run -A apps/desktop/scripts/build.ts --target x86_64-unknown-linux-gnu --format appimage",
+    "build:deb": "deno run -A apps/desktop/scripts/build.ts --target x86_64-unknown-linux-gnu --format deb",
+    "build:rpm": "deno run -A apps/desktop/scripts/build.ts --target x86_64-unknown-linux-gnu --format rpm",
+    "build:msi": "deno run -A apps/desktop/scripts/build.ts --target x86_64-pc-windows-msvc --format msi",
+    "build:tar": "deno run -A apps/desktop/scripts/build.ts --target x86_64-unknown-linux-gnu --format tar.gz",
+    "build:exe": "deno run -A apps/desktop/scripts/build.ts --target x86_64-pc-windows-msvc --format exe",
+    "build:zip": "deno run -A apps/desktop/scripts/build.ts --target x86_64-pc-windows-msvc --format zip",
+    "build:all": "deno run -A apps/desktop/scripts/build.ts --all",
+    "smoke": "deno run -A apps/desktop/scripts/smoke-test.ts",
+    "checksums": "deno run -A apps/desktop/scripts/checksums.ts",
+    "checksums:check": "deno run -A apps/desktop/scripts/checksums.ts dist --check",
+    "verify:no-electron": "deno run -A apps/desktop/scripts/verify-dependencies.ts",
+    "build:native": "deno run -A apps/desktop/scripts/build-native.ts",
+    "check:native": "deno run -A apps/desktop/scripts/build-native.ts --check",
+    "test:sync": "deno test -A packages/sync-webdav/tests/client_test.ts packages/sync-webdav/tests/sync_test.ts packages/sync-webdav/tests/backup_test.ts",
+    "test:desktop": "deno test -A apps/desktop/tests/"
+  },
+  "fmt": {
+    "include": [
+      "apps/desktop/main.ts",
+      "apps/desktop/src",
+      "apps/desktop/scripts",
+      "apps/desktop/types",
+      "packages/sync-webdav/src",
+      "packages/sync-webdav/tests"
+    ],
+    "exclude": [
+      "apps/web/src/common/sqlite/*.js",
+      "apps/web/build",
+      "apps/desktop/ui",
+      "**/node_modules",
+      "**/dist",
+      "**/build"
+    ]
+  },
+  "lint": {
+    "include": [
+      "apps/desktop/main.ts",
+      "apps/desktop/src",
+      "apps/desktop/scripts",
+      "packages/sync-webdav/src",
+      "packages/sync-webdav/tests"
+    ],
+    "rules": {
+      "tags": [
+        "recommended"
+      ],
+      "exclude": [
+        "no-explicit-any"
+      ]
+    }
+  },
+  "compilerOptions": {
+    "lib": [
+      "deno.window",
+      "dom",
+      "dom.iterable",
+      "esnext"
+    ],
+    "strict": true
+  },
+  "exclude": [
+    "apps/web/build",
+    "apps/web/node_modules",
+    "node_modules",
+    "**/dist"
+  ],
+  "permissions": {
+    "app": {
+      "env": [
+        "DENO_SERVE_ADDRESS",
+        "OPENOTES_DATA_DIR",
+        "OPENOTES_UI_ROOT",
+        "OPENOTES_NATIVE_DIR",
+        "OPENOTES_LOG_LEVEL",
+        "OPENOTES_DEV",
+        "OPENOTES_PORTABLE",
+        "OPENOTES_UI_PORT",
+        "OPENOTES_SQLITE3MC_SHA256",
+        "DENO_SQLITE_PATH",
+        "HOME",
+        "USERPROFILE",
+        "APPDATA",
+        "TMPDIR",
+        "TEMP",
+        "TMP",
+        "XDG_DATA_HOME",
+        "XDG_CONFIG_HOME",
+        "XDG_CACHE_HOME",
+        "XDG_DOCUMENTS_DIR",
+        "GTK_THEME",
+        "APPIMAGE",
+        "FLATPAK_ID",
+        "SNAP",
+        "CI",
+        "DENO_SQLITE_LOCAL",
+        "DENO_DIR"
+      ],
+      "run": [
+        "xdg-open",
+        "open",
+        "explorer",
+        "cmd",
+        "notify-send",
+        "osascript",
+        "zenity",
+        "kdialog",
+        "wl-copy",
+        "wl-paste",
+        "xclip",
+        "dbus-send"
+      ],
+      "read": true,
+      "write": true,
+      "net": true,
+      "ffi": true,
+      "sys": [
+        "hostname",
+        "osRelease",
+        "uid"
+      ],
+      "import": false
+    }
+  },
+  "exports": {
+    ".": "./apps/desktop/main.ts"
+  }
+}

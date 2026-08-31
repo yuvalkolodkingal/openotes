@@ -31,8 +31,6 @@ import {
   Pin,
   Plus,
   Properties,
-  Publish,
-  Published,
   Readonly,
   Redo,
   Search,
@@ -70,10 +68,6 @@ import {
 import { CSS } from "@dnd-kit/utilities";
 import { AppEventManager, AppEvents } from "../../common/app-events";
 import { useWindowControls } from "../../hooks/use-window-controls";
-import { useStore as useMonographStore } from "../../stores/monograph-store";
-import { useStore as useUserStore } from "../../stores/user-store";
-import { db } from "../../common/db";
-import { showPublishView } from "../publish-view";
 import { restrictToHorizontalAxis } from "@dnd-kit/modifiers";
 import useMobile from "../../hooks/use-mobile";
 import { strings } from "@notesnook/intl";
@@ -104,16 +98,10 @@ export function EditorActionBar() {
   const editorManager = useEditorManager((store) =>
     activeSession?.id ? store.editors[activeSession?.id] : undefined
   );
-  const isLoggedIn = useUserStore((store) => store.isLoggedIn);
   const arePropertiesVisible = useEditorStore(
     (store) => store.arePropertiesVisible
   );
   const isTOCVisible = useEditorStore((store) => store.isTOCVisible);
-  const monographs = useMonographStore((store) => store.monographs);
-  const isNotePublished =
-    activeSession &&
-    "note" in activeSession &&
-    db.monographs.isPublished(activeSession.note.id);
   const isMobile = useMobile();
   const isTablet = useTablet();
 
@@ -137,24 +125,6 @@ export function EditorActionBar() {
       enabled: editorManager?.canRedo,
       onClick: () => editorManager?.editor?.redo(),
       hidden: activeSession?.type === "readonly"
-    },
-    {
-      title: isNotePublished ? strings.published() : strings.publish(),
-      icon: isNotePublished ? Published : Publish,
-      hidden: !isLoggedIn,
-      hideOnMobile: true,
-      enabled:
-        activeSession &&
-        (activeSession.type === "default" || activeSession.type === "readonly"),
-      onClick: (e) => {
-        if (
-          !activeSession ||
-          (activeSession.type !== "default" &&
-            activeSession.type !== "readonly")
-        )
-          return;
-        showPublishView(activeSession.note, e.target as HTMLElement);
-      }
     },
     {
       title: strings.toc(),

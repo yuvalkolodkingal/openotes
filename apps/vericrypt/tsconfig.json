@@ -1,9 +1,0 @@
-{
-  "extends": "../../tsconfig",
-  "compilerOptions": {
-    "lib": ["dom", "dom.iterable", "esnext"],
-    "jsx": "react-jsx",
-    "noEmit": true
-  },
-  "include": ["src"]
-}

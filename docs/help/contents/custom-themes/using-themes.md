@@ -73,7 +73,7 @@ So to have both: install a light theme, install a dark theme, and set `{{colorSc
 
 ## Load a theme from a file
 
-If you have a `theme.json` file — one you built with the [Theme Builder](/custom-themes/create-a-theme-with-theme-builder), or one that isn't published yet — you can apply it directly.
+If you have a `theme.json` file you can apply it directly.
 
 1. Open the theme list as above.
 2. Click or tap `{{loadFromFile}}`.
@@ -84,12 +84,10 @@ If the file is missing required fields or isn't a valid theme, the app tells you
 
 ## Where do the themes come from?
 
-The theme store is an open collection. Themes are submitted as JSON files to the [notesnook-themes](https://github.com/streetwriters/notesnook-themes) repository, and once merged they appear in the store for everyone. If you have made a theme you like, you can [publish it](/custom-themes/publish-a-theme) the same way.
+Upstream Notesnook keeps an open theme collection: themes are submitted as JSON files to the [notesnook-themes](https://github.com/streetwriters/notesnook-themes) repository. You can download any of those `theme.json` files and load them from disk.
 
 ## Related pages
 
-- [Publish a theme](/custom-themes/publish-a-theme) — get your theme into the store
-- [Create a theme with the Theme Builder](/custom-themes/create-a-theme-with-theme-builder) — build one without writing JSON
 - [Install a theme from file](/custom-themes/install-a-theme-from-file) — apply a `theme.json` directly
 - [Theme engine introduction](/custom-themes/introduction) — how scopes, variants and colors fit together
 - [Customizing the app](/customizing-notesnook) — home screen, side menu and list density

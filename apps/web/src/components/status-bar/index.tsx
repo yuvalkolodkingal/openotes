@@ -20,27 +20,18 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 import { Button, Flex, Text } from "@theme-ui/components";
 import EditorFooter from "../editor/footer";
 import {
-  Circle,
-  Sync,
   Loading,
   Update,
-  SyncError,
-  Alert,
-  SyncOff,
-  Icon,
   Unlock,
   CellphoneLock,
   ConsoleLine
 } from "../icons";
-import { useStore as useUserStore } from "../../stores/user-store";
 import { useStore as useAppStore } from "../../stores/app-store";
-import { hardNavigate, hashNavigate } from "../../navigation";
+import { WebDavSyncStatus } from "./webdav-sync-status";
 import { useAutoUpdater, UpdateStatus } from "../../hooks/use-auto-updater";
 import useStatus, { statusToString } from "../../hooks/use-status";
 import { ScopedThemeProvider } from "../theme-provider";
 import { checkForUpdate, installUpdate } from "../../utils/updater";
-import { getTimeAgo, toTitleCase } from "@notesnook/common";
-import { User } from "@notesnook/core";
 import { showUpdateAvailableNotice } from "../../dialogs/confirm";
 import { strings } from "@notesnook/intl";
 import { useVault } from "../../hooks/use-vault";
@@ -49,8 +40,6 @@ import { STATUS_BAR_HEIGHT } from "../../common/constants";
 import { CommandPaletteDialog } from "../../dialogs/command-palette";
 
 function StatusBar() {
-  const user = useUserStore((state) => state.user);
-  const isLoggedIn = useUserStore((state) => state.isLoggedIn);
   const statuses = useStatus();
   const updateStatus = useAutoUpdater();
   const isFocusMode = useAppStore((state) => state.isFocusMode);
@@ -89,40 +78,7 @@ function StatusBar() {
           >
             <ConsoleLine size={12} />
           </Button>
-          {isLoggedIn ? (
-            <>
-              {user?.isEmailConfirmed ? (
-                <Circle
-                  size={7}
-                  color={"var(--icon-success)"}
-                  sx={{ p: "small" }}
-                  data-test-id="logged-in"
-                />
-              ) : (
-                <Button
-                  onClick={() => hashNavigate("/email/verify")}
-                  variant="statusitem"
-                  sx={{
-                    alignItems: "center",
-                    justifyContent: "center",
-                    display: "flex",
-                    height: "100%"
-                  }}
-                >
-                  <Circle
-                    size={7}
-                    color={"var(--icon-error)"}
-                    data-test-id="logged-in"
-                  />
-                  <Text variant="subBody" ml={1} sx={{ color: "paragraph" }}>
-                    {strings.emailNotConfirmed()}
-                  </Text>
-                </Button>
-              )}
-
-              <SyncStatus />
-            </>
-          ) : null}
+          <WebDavSyncStatus />
           {activeCredentials().length > 0 && (
             <Button
               variant="statusitem"
@@ -232,132 +188,3 @@ function statusToInfoText(status: UpdateStatus) {
     : "";
 }
 
-function SyncStatus() {
-  const syncStatus = useAppStore((state) => state.syncStatus);
-  const lastSynced = useAppStore((state) => state.lastSynced);
-  const isSyncEnabled = useAppStore((state) => state.isSyncEnabled);
-  const sync = useAppStore((state) => state.sync);
-  const user = useUserStore((state) => state.user);
-
-  const status = syncStatusFilters.find((f) =>
-    f.isActive(syncStatus.key, user, lastSynced)
-  );
-
-  if (!status) return null;
-  return (
-    <Button
-      variant="statusitem"
-      onClick={() => (isSyncEnabled ? sync() : null)}
-      sx={{
-        alignItems: "center",
-        justifyContent: "center",
-        display: "flex",
-        color: "paragraph",
-        height: "100%"
-      }}
-      title={
-        (status.text
-          ? status.text({ lastSynced, type: syncStatus.type })
-          : status.tooltip) +
-        (syncStatus.progress ? ` (${syncStatus.progress})` : "")
-      }
-      data-test-id={`sync-status-${status.key}`}
-    >
-      <status.icon
-        size={12}
-        rotate={status.loading}
-        rotateDirection="counterclockwise"
-        color={status.iconColor}
-      />
-    </Button>
-  );
-}
-
-type SyncStatus =
-  | "synced"
-  | "syncing"
-  | "conflicts"
-  | "failed"
-  | "completed"
-  | "offline"
-  | "disabled";
-type SyncStatusFilter = {
-  key: SyncStatus | "emailNotConfirmed";
-  icon: Icon;
-  isActive: (
-    syncStatus: SyncStatus,
-    user: User | undefined,
-    lastSynced: number
-  ) => boolean;
-  text?: (props: {
-    type?: "download" | "upload" | "sync";
-    lastSynced: number;
-  }) => string;
-  tooltip: string;
-  iconColor?: string;
-  loading?: boolean;
-};
-
-const syncStatusFilters: SyncStatusFilter[] = [
-  {
-    key: "synced",
-    isActive: (syncStatus) =>
-      syncStatus === "synced" || syncStatus === "completed",
-    icon: Sync,
-    text: ({ lastSynced }) =>
-      lastSynced
-        ? `Synced ${getTimeAgo(lastSynced, "en_short", { minInterval: 1000 })}`
-        : "click to sync",
-    tooltip: "All changes are synced."
-  },
-  {
-    key: "syncing",
-    isActive: (syncStatus) => syncStatus === "syncing",
-    icon: Sync,
-    loading: true,
-    text: ({ type }) => `${toTitleCase(type || "sync")}ing`,
-    tooltip: "Syncing your notes..."
-  },
-  {
-    key: "conflicts",
-    isActive: (syncStatus) => syncStatus === "conflicts",
-    icon: Alert,
-    iconColor: "var(--icon-error)",
-    text: () => "Merge conflicts",
-    tooltip: "Please resolve all merge conflicts and run the sync again."
-  },
-  {
-    key: "emailNotConfirmed",
-    isActive: (_syncStatus, user) => !user?.isEmailConfirmed,
-    icon: Alert,
-    iconColor: "var(--icon-error)",
-    text: () => "Sync disabled",
-    tooltip: "Please confirm your email to start syncing."
-  },
-  {
-    key: "failed",
-    isActive: (syncStatus) => syncStatus === "failed",
-    icon: SyncError,
-    iconColor: "var(--icon-error)",
-    text: () => "Sync failed",
-    tooltip: "Sync failed to completed. Please try again."
-  },
-  {
-    key: "offline",
-    isActive: (syncStatus) => syncStatus === "offline",
-    icon: SyncOff,
-    text: ({ lastSynced }) =>
-      `Synced ${getTimeAgo(lastSynced, "en_short", {
-        minInterval: 1000
-      })} (offline)`,
-    tooltip: "You are offline."
-  },
-  {
-    key: "disabled",
-    iconColor: "var(--icon-disabled)",
-    isActive: (syncStatus) => syncStatus === "disabled",
-    icon: SyncOff,
-    text: () => "Sync disabled",
-    tooltip: "Sync is disabled."
-  }
-];

@@ -46,7 +46,7 @@ jobs:
 
       - name: Install packages
         run: |
-          npm ci --ignore-scripts --prefer-offline --no-audit
+          npm install --ignore-scripts --prefer-offline --no-audit --no-fund
           npm run bootstrap -- --scope=web
 
       - name: Generate test build
@@ -81,7 +81,7 @@ jobs:
 
       - name: Install packages
         run: |
-          npm ci --ignore-scripts --prefer-offline --no-audit
+          npm install --ignore-scripts --prefer-offline --no-audit --no-fund
           npm install -D @playwright/test otplib dayjs @zip.js/zip.js
 
       - name: Validate build extraction

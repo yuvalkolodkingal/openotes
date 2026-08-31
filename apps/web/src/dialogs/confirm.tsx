@@ -195,33 +195,6 @@ export function showMultiPermanentDeleteConfirmation(length: number) {
   });
 }
 
-export async function showLogoutConfirmation() {
-  return await ConfirmDialog.show({
-    title: strings.logout(),
-    message: strings.logoutConfirmation(),
-    positiveButtonText: strings.yes(),
-    negativeButtonText: strings.no(),
-    warnings: (await db.hasUnsyncedChanges())
-      ? [strings.unsyncedChangesWarning()]
-      : [],
-    checks: {
-      backup: {
-        text: strings.backupDataBeforeLogout(),
-        default: true
-      }
-    }
-  });
-}
-
-export function showClearSessionsConfirmation() {
-  return ConfirmDialog.show({
-    title: strings.logoutAllOtherDevices(),
-    message: strings.logoutAllOtherDevicesDescription(),
-    positiveButtonText: strings.yes(),
-    negativeButtonText: strings.no()
-  });
-}
-
 export async function showUpdateAvailableNotice({
   version
 }: {

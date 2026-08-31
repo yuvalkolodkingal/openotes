@@ -1,4 +1,0 @@
-Subtotal: $200
-Sales tax: $0
-Discount: -$200
-Total: $200

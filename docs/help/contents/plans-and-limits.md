@@ -28,7 +28,7 @@ faqs:
 
 Notesnook has four plans — **Free**, **Essential**, **Pro** and **Believer** — plus an **Education** plan and a grandfathered **Pro (legacy)** plan for long-time subscribers.
 
-Everything that makes Notesnook _Notesnook_ is on the free plan: unlimited notes, unlimited devices, end-to-end encryption, sync, backups, the [private vault](/lock-notes-with-private-vault), and [publishing with monographs](/publish-notes-with-monographs). Paid plans raise the storage limits and unlock conveniences on top.
+Everything that makes Notesnook _Notesnook_ is on the free plan: unlimited notes, unlimited devices, end-to-end encryption, sync, backups and the [private vault](/lock-notes-with-private-vault). Paid plans raise the storage limits and unlock conveniences on top.
 
 ::: tip Plans are cumulative
 Each plan includes everything from the plans below it. A feature marked <PlanTag plan="essential" /> works on Essential, Pro **and** Believer. A feature marked <PlanTag plan="pro" /> works on Pro **and** Believer.
@@ -62,7 +62,6 @@ Storage counts **attachments only**, meaning images, files, audio and web clips.
 - [Recurring reminders](/reminders) — daily, weekly, monthly and yearly
 - [Full offline mode](/sync/sync-settings) — keep every attachment downloaded on your device
 - [Customizable side menu](/organizing-notes/side-menu-shortcuts) — reorder and hide items
-- Links and embeds inside [published monographs](/publish-notes-with-monographs)
 - Notesnook Circle — discounts from privacy-focused partner products
 
 ## Features unlocked by Pro
@@ -74,12 +73,10 @@ Storage counts **attachments only**, meaning images, files, audio and web clips.
 - [Full-quality images](/attachments-and-files) — upload without compression
 - [Sync controls](/sync/sync-settings) — turn off automatic, realtime or all syncing
 - [Import and export tables as CSV](/rich-text-editor/tables)
-- [Monograph view counts](/publish-notes-with-monographs)
 - [Two-factor authentication by SMS](/two-factor-authentication)
 - Disable [automatic trash cleanup](/trash)
 - Font ligatures in the editor
 - Save a custom [editor toolbar](/rich-text-editor/rich-text-editor-toolbar) layout
-- On Android: [pin a note to your notifications](/mobile-integration/pin-notes-to-notifications), [write notes from the notification drawer](/mobile-integration/quick-note-from-notification), and pin notes to your launcher
 
 ## Believer
 

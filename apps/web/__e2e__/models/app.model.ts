@@ -19,8 +19,6 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 import type { Locator, Page } from "@playwright/test";
 import { getTestId } from "../utils";
-import { AuthModel } from "./auth.model";
-import { CheckoutModel } from "./checkout.model";
 import { ItemsViewModel } from "./items-view.model";
 import { NavigationMenuModel } from "./navigation-menu.model";
 import { NotebooksViewModel } from "./notebooks-view.model";
@@ -36,8 +34,6 @@ export class AppModel {
   readonly page: Page;
   readonly toasts: ToastsModel;
   readonly navigation: NavigationMenuModel;
-  readonly auth: AuthModel;
-  readonly checkout: CheckoutModel;
   readonly routeHeader: Locator;
   private readonly profileDropdown: ContextMenuModel;
 
@@ -45,19 +41,13 @@ export class AppModel {
     this.page = page;
     this.toasts = new ToastsModel(page);
     this.navigation = new NavigationMenuModel(page, "navigation-menu");
-    this.auth = new AuthModel(page);
-    this.checkout = new CheckoutModel(page);
     this.routeHeader = this.page.locator(getTestId("routeHeader"));
     this.profileDropdown = new ContextMenuModel(this.page);
   }
 
-  async goto(isLoggedIn = false) {
+  async goto() {
     await this.page.goto("/");
     await this.routeHeader.waitFor({ state: "visible" });
-    if (!isLoggedIn)
-      await this.page
-        .locator(getTestId("logged-in"))
-        .waitFor({ state: "hidden" });
   }
 
   async goToNotes() {
@@ -136,21 +126,6 @@ export class AppModel {
     if (!(await this.routeHeader.isVisible())) return;
 
     return await this.routeHeader.getAttribute("data-header");
-  }
-
-  async isSynced() {
-    return (
-      (await this.page
-        .locator(getTestId("sync-status-completed"))
-        .isVisible()) ||
-      (await this.page.locator(getTestId("sync-status-synced")).isVisible())
-    );
-  }
-
-  async waitForSync(state: "completed" | "synced" | "syncing" = "completed") {
-    await this.page
-      .locator(getTestId(`sync-status-${state}`))
-      .waitFor({ state: "visible" });
   }
 
   async lockAppButton() {

@@ -25,41 +25,53 @@ import { getServiceWorkerVersion } from "./utils/version";
 import { register as registerStreamSaver } from "./utils/stream-saver/mitm";
 import { ThemeDark, ThemeLight, themeToCSS } from "@notesnook/theme";
 import Config from "./utils/config";
+import { hydrateDesktopConfig } from "./utils/config-persistence";
 import { setI18nGlobal, Messages } from "@notesnook/intl";
 import { i18n } from "@lingui/core";
 
-const colorScheme = JSON.parse(
-  window.localStorage.getItem("colorScheme") || '"light"'
-);
-const root = document.querySelector("html");
-if (root) root.setAttribute("data-theme", colorScheme);
+// On desktop, persisted settings live on the runtime because this page's
+// origin (and its localStorage) changes every launch. They must be seeded
+// into localStorage before anything reads Config — the theme below, and the
+// stores loaded through import("./root"), which read Config at module
+// evaluation. On the web this resolves immediately.
+hydrateDesktopConfig()
+  .catch(() => {
+    /* already logged; the app runs on defaults for this session */
+  })
+  .then(() => {
+    const colorScheme = JSON.parse(
+      window.localStorage.getItem("colorScheme") || '"light"'
+    );
+    const root = document.querySelector("html");
+    if (root) root.setAttribute("data-theme", colorScheme);
 
-const theme =
-  colorScheme === "dark"
-    ? Config.get("theme:dark", ThemeDark)
-    : Config.get("theme:light", ThemeLight);
-const stylesheet = document.getElementById("theme-colors");
-if (theme) {
-  const css = themeToCSS(theme);
-  if (stylesheet) stylesheet.innerHTML = css;
-} else stylesheet?.remove();
+    const theme =
+      colorScheme === "dark"
+        ? Config.get("theme:dark", ThemeDark)
+        : Config.get("theme:light", ThemeLight);
+    const stylesheet = document.getElementById("theme-colors");
+    if (theme) {
+      const css = themeToCSS(theme);
+      if (stylesheet) stylesheet.innerHTML = css;
+    } else stylesheet?.remove();
 
-const locale = import.meta.env.DEV
-  ? import("@notesnook/intl/locales/$pseudo-LOCALE.json")
-  : import("@notesnook/intl/locales/$en.json");
-locale.then(({ default: locale }) => {
-  i18n.load({
-    en: locale.messages as unknown as Messages
+    const locale = import.meta.env.DEV
+      ? import("@notesnook/intl/locales/$pseudo-LOCALE.json")
+      : import("@notesnook/intl/locales/$en.json");
+    locale.then(({ default: locale }) => {
+      i18n.load({
+        en: locale.messages as unknown as Messages
+      });
+      i18n.activate("en");
+
+      performance.mark("import:root");
+      import("./root").then(({ startApp }) => {
+        performance.mark("start:app");
+        startApp();
+      });
+    });
+    setI18nGlobal(i18n);
   });
-  i18n.activate("en");
-
-  performance.mark("import:root");
-  import("./root").then(({ startApp }) => {
-    performance.mark("start:app");
-    startApp();
-  });
-});
-setI18nGlobal(i18n);
 
 if (!IS_DESKTOP_APP) {
   //   logger.info("Initializing service worker...");

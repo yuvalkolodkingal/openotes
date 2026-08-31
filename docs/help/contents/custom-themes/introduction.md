@@ -169,11 +169,8 @@ Each variant further contains a total of 13 colors. The **Transparent** column s
 
 ## Further reading
 
-- [Build your own theme using the Theme Builder](/custom-themes/create-a-theme-with-theme-builder).
 
 ## Related pages
 
 - [Using themes](/custom-themes/using-themes) — light, dark and the theme store
-- [Theme Builder](/custom-themes/create-a-theme-with-theme-builder) — building a theme visually
-- [Publish a theme](/custom-themes/publish-a-theme) — sharing a theme with everyone
 - [Customizing the app](/customizing-notesnook) — home screen, sidebar, sorting and formats

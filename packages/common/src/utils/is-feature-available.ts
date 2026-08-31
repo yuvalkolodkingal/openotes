@@ -20,6 +20,22 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 import { SubscriptionPlan } from "@notesnook/core";
 import { database as db } from "../database.js";
 
+/**
+ * Openotes is a local-only desktop fork of Notesnook: there is no hosted
+ * account, no billing and therefore no tiers. Instead of asking a server
+ * which plan the user is on, every gate in the app is answered from this
+ * single capability declaration.
+ *
+ * Everything the app can do locally is available and unmetered, so every
+ * feature check resolves to "allowed" and every quota resolves to
+ * "unlimited". The module keeps the shape of the upstream feature matrix
+ * (ids, titles, per-plan availability records) so that call sites across
+ * the UI keep compiling and rendering unchanged.
+ */
+export const capabilities = {
+  allLocalFeatures: true
+} as const;
+
 type CaptionValue = ("infinity" | (string & {})) | boolean | number;
 type Limit<TCaption extends CaptionValue = CaptionValue> = {
   caption: TCaption;
@@ -50,63 +66,53 @@ export type FeatureResult<TId extends FeatureId = FeatureId> = {
   error: string;
 };
 
-type CaptionsFromAvailability<A> = A extends Record<
-  string,
-  { caption: infer C }
->
-  ? C
-  : never;
-
-function createFeature<A extends FeatureAvailability>(
-  feature: Omit<Feature, "error" | "availability"> & {
-    error?: Feature["error"];
-    availability: A;
-  }
-): Feature<CaptionsFromAvailability<A>> {
+/**
+ * A capability that is simply on, e.g. app lock or callouts.
+ */
+function enabled(): Limit<CaptionValue> {
   return {
-    ...feature,
-    error:
-      feature.error ??
-      ((l) =>
-        typeof l.caption === "number"
-          ? `You have reached your limit of ${
-              l.caption
-            } ${feature.title.toLowerCase()}.`
-          : `${feature.title} is not available on this plan.`)
-  } as unknown as Feature<CaptionsFromAvailability<A>>;
+    caption: true,
+    value: true,
+    isAllowed: () => capabilities.allLocalFeatures
+  };
 }
 
-function createLimit<
-  TCaption extends Limit["caption"],
-  TValue extends Limit["value"]
->(
-  caption: TCaption,
-  value?: TValue,
-  isAllowed?: (value: TValue) => Limit["isAllowed"]
-): Limit<TCaption> {
-  const inferredValue =
-    value ??
-    (caption === "infinity"
-      ? Infinity
-      : typeof caption === "boolean"
-      ? !!caption
-      : typeof caption === "number"
-      ? caption
-      : false);
+/**
+ * A capability that used to be metered (notebooks, tags, file size, ...)
+ * and is now unbounded.
+ */
+function unlimited(): Limit<CaptionValue> {
   return {
-    caption,
-    isAllowed: isAllowed
-      ? isAllowed(inferredValue as TValue)
-      : caption === "infinity"
-      ? alwaysInfinite
-      : inferredValue === false
-      ? alwaysFalse
-      : inferredValue === true
-      ? alwaysTrue
-      : typeof inferredValue === "number"
-      ? lt(inferredValue)
-      : alwaysFalse,
-    value: inferredValue
+    caption: "infinity",
+    value: Infinity,
+    isAllowed: () => capabilities.allLocalFeatures
+  };
+}
+
+function createFeature(feature: {
+  id: string;
+  title: string;
+  /**
+   * `enabled` for on/off capabilities, `unlimited` for quotas.
+   */
+  limit: "enabled" | "unlimited";
+  used?: Feature["used"];
+  error?: Feature["error"];
+}): Feature<CaptionValue> {
+  const limit = feature.limit === "unlimited" ? unlimited() : enabled();
+  return {
+    id: feature.id,
+    title: feature.title,
+    used: feature.used,
+    error:
+      feature.error ?? (() => `${feature.title} is available without limits.`),
+    availability: {
+      free: limit,
+      essential: limit,
+      pro: limit,
+      believer: limit,
+      legacyPro: limit
+    }
   };
 }
 
@@ -119,400 +125,182 @@ const features = {
   storage: createFeature({
     id: "storage",
     title: "Storage",
-    used: async () => {
-      const user = await db.user.getUser();
-      return user?.storageUsed || 0;
-    },
-    availability: {
-      free: createLimit("50MB/mo", 50 * 1024 * 1024),
-      essential: createLimit("1GB/mo", 1024 * 1024 * 1024),
-      pro: createLimit("10GB/mo", 10 * 1024 * 1024 * 1024),
-      believer: createLimit("25GB/mo", 25 * 1024 * 1024 * 1024),
-      legacyPro: createLimit("infinity", Infinity)
-    }
+    limit: "unlimited"
   }),
   fileSize: createFeature({
     id: "fileSize",
     title: "Maximum file size",
-    error: (limit) =>
-      `You cannot upload files larger than ${limit.caption} on this plan.`,
-    availability: {
-      free: createLimit("10MB", 10 * 1024 * 1024),
-      essential: createLimit("100MB", 100 * 1024 * 1024),
-      pro: createLimit("1GB", 1024 * 1024 * 1024),
-      believer: createLimit("5GB", 5 * 1024 * 1024 * 1024),
-      legacyPro: createLimit("512MB", 512 * 1024 * 1024)
-    }
+    limit: "unlimited"
   }),
   fullQualityImages: createFeature({
     id: "fullQualityImages",
     title: "Full quality images",
-    availability: {
-      free: createLimit(false),
-      essential: createLimit(false),
-      pro: createLimit(true),
-      believer: createLimit(true),
-      legacyPro: createLimit(true)
-    }
+    limit: "enabled"
   }),
   blockLinking: createFeature({
     id: "blockLinking",
     title: "Block-level note links",
-    error: () => `Block-level note links are not available on this plan.`,
-    availability: {
-      free: createLimit(false),
-      essential: createLimit(true),
-      pro: createLimit(true),
-      believer: createLimit(true),
-      legacyPro: createLimit(true)
-    }
+    limit: "enabled"
   }),
   taskList: createFeature({
     id: "taskList",
     title: "Task list",
-    availability: {
-      free: createLimit(false),
-      essential: createLimit(true),
-      pro: createLimit(true),
-      believer: createLimit(true),
-      legacyPro: createLimit(true)
-    }
+    limit: "enabled"
   }),
   outlineList: createFeature({
     id: "outlineList",
     title: "Outline list",
-    availability: {
-      free: createLimit(false),
-      essential: createLimit(true),
-      pro: createLimit(true),
-      believer: createLimit(true),
-      legacyPro: createLimit(true)
-    }
+    limit: "enabled"
   }),
   callout: createFeature({
     id: "callout",
     title: "Callouts",
-    availability: {
-      free: createLimit(false),
-      essential: createLimit(true),
-      pro: createLimit(true),
-      believer: createLimit(true),
-      legacyPro: createLimit(true)
-    }
+    limit: "enabled"
   }),
   colors: createFeature({
     id: "colors",
     title: "Colors",
-    used: () => db.colors.all.count(),
-    availability: {
-      free: createLimit(7),
-      essential: createLimit(20),
-      pro: createLimit("infinity"),
-      believer: createLimit("infinity"),
-      legacyPro: createLimit("infinity")
-    }
+    limit: "unlimited",
+    used: () => db.colors.all.count()
   }),
   tags: createFeature({
     id: "tags",
     title: "Tags",
-    used: () => db.tags.all.count(),
-    availability: {
-      free: createLimit(50),
-      essential: createLimit(500),
-      pro: createLimit("infinity"),
-      believer: createLimit("infinity"),
-      legacyPro: createLimit("infinity")
-    }
+    limit: "unlimited",
+    used: () => db.tags.all.count()
   }),
   notebooks: createFeature({
     id: "notebooks",
     title: "Notebooks",
-    used: () => db.notebooks.all.count(),
-    availability: {
-      free: createLimit(50),
-      essential: createLimit(500),
-      pro: createLimit("infinity"),
-      believer: createLimit("infinity"),
-      legacyPro: createLimit("infinity")
-    }
+    limit: "unlimited",
+    used: () => db.notebooks.all.count()
   }),
   activeReminders: createFeature({
     id: "activeReminders",
     title: "Active reminders",
-    used: () => db.reminders.active.count(),
-    availability: {
-      free: createLimit(10),
-      essential: createLimit(50),
-      pro: createLimit("infinity"),
-      believer: createLimit("infinity"),
-      legacyPro: createLimit("infinity")
-    }
+    limit: "unlimited",
+    used: () => db.reminders.active.count()
   }),
   shortcuts: createFeature({
     id: "shortcuts",
     title: "Shortcuts",
-    used: () => db.shortcuts.all.length,
-    availability: {
-      free: createLimit(10),
-      essential: createLimit("infinity"),
-      pro: createLimit("infinity"),
-      believer: createLimit("infinity"),
-      legacyPro: createLimit("infinity")
-    }
+    limit: "unlimited",
+    used: () => db.shortcuts.all.length
   }),
   defaultNotebookAndTag: createFeature({
     id: "defaultNotebookAndTag",
     title: "Default notebook & tag",
-    error: () => `You cannot set a default notebook or tag on this plan.`,
-    availability: {
-      free: createLimit(false),
-      essential: createLimit(false),
-      pro: createLimit(true),
-      believer: createLimit(true),
-      legacyPro: createLimit(true)
-    }
+    limit: "enabled"
   }),
   recurringReminders: createFeature({
     id: "recurringReminders",
     title: "Recurring reminders",
-    availability: {
-      free: createLimit(false),
-      essential: createLimit(true),
-      pro: createLimit(true),
-      believer: createLimit(true),
-      legacyPro: createLimit(true)
-    }
+    limit: "enabled"
   }),
   pinNoteInNotification: createFeature({
     id: "pinNoteInNotification",
     title: "Pin note in notification",
-    availability: {
-      free: createLimit(false),
-      essential: createLimit(false),
-      pro: createLimit(true),
-      believer: createLimit(true),
-      legacyPro: createLimit(true)
-    }
+    limit: "enabled"
   }),
   createNoteFromNotificationDrawer: createFeature({
     id: "createNoteFromNotificationDrawer",
     title: "Create note from notification drawer",
-    availability: {
-      free: createLimit(false),
-      essential: createLimit(false),
-      pro: createLimit(true),
-      believer: createLimit(true),
-      legacyPro: createLimit(true)
-    }
+    limit: "enabled"
   }),
   defaultSidebarTab: createFeature({
     id: "defaultSidebarTab",
     title: "Default sidebar tab",
-    availability: {
-      free: createLimit(false),
-      essential: createLimit(false),
-      pro: createLimit(true),
-      believer: createLimit(true),
-      legacyPro: createLimit(true)
-    }
+    limit: "enabled"
   }),
   customHomepage: createFeature({
     id: "customHomepage",
     title: "Custom homepage",
-    availability: {
-      free: createLimit(false),
-      essential: createLimit(false),
-      pro: createLimit(true),
-      believer: createLimit(true),
-      legacyPro: createLimit(true)
-    }
+    limit: "enabled"
   }),
   markdownShortcuts: createFeature({
     id: "markdownShortcuts",
     title: "Markdown shortcuts",
-    availability: {
-      free: createLimit(false),
-      essential: createLimit(true),
-      pro: createLimit(true),
-      believer: createLimit(true),
-      legacyPro: createLimit(true)
-    }
+    limit: "enabled"
   }),
   fontLigatures: createFeature({
     id: "fontLigatures",
     title: "Font ligatures",
-    availability: {
-      free: createLimit(false),
-      essential: createLimit(false),
-      pro: createLimit(true),
-      believer: createLimit(true),
-      legacyPro: createLimit(true)
-    }
+    limit: "enabled"
   }),
   customToolbarPreset: createFeature({
     id: "customToolbarPreset",
     title: "Custom toolbar preset",
-    availability: {
-      free: createLimit(false),
-      essential: createLimit(false),
-      pro: createLimit(true),
-      believer: createLimit(true),
-      legacyPro: createLimit(true)
-    }
+    limit: "enabled"
   }),
   customizableSidebar: createFeature({
     id: "customizableSidebar",
     title: "Customizable sidebar",
-    availability: {
-      free: createLimit(false),
-      essential: createLimit(true),
-      pro: createLimit(true),
-      believer: createLimit(true),
-      legacyPro: createLimit(true)
-    }
+    limit: "enabled"
   }),
   disableTrashCleanup: createFeature({
     id: "disableTrashCleanup",
     title: "Disable trash cleanup",
-    availability: {
-      free: createLimit(false),
-      essential: createLimit(false),
-      pro: createLimit(true),
-      believer: createLimit(true),
-      legacyPro: createLimit(true)
-    }
+    limit: "enabled"
   }),
   appLock: createFeature({
     id: "appLock",
     title: "App lock",
-    availability: {
-      free: createLimit(false),
-      essential: createLimit(false),
-      pro: createLimit(true),
-      believer: createLimit(true),
-      legacyPro: createLimit(true)
-    }
+    limit: "enabled"
   }),
   maxNoteVersions: createFeature({
     id: "maxNoteVersions",
     title: "Maximum note versions",
-    availability: {
-      free: createLimit(100),
-      essential: createLimit(1000),
-      pro: createLimit("infinity"),
-      believer: createLimit("infinity"),
-      legacyPro: createLimit("infinity")
-    }
+    limit: "unlimited"
   }),
   fullOfflineMode: createFeature({
     id: "fullOfflineMode",
     title: "Full offline mode",
-    availability: {
-      free: createLimit(false),
-      essential: createLimit(true),
-      pro: createLimit(true),
-      believer: createLimit(true),
-      legacyPro: createLimit(true)
-    }
+    limit: "enabled"
   }),
   syncControls: createFeature({
     id: "syncControls",
     title: "Sync controls",
-    availability: {
-      free: createLimit(false),
-      essential: createLimit(false),
-      pro: createLimit(true),
-      believer: createLimit(true),
-      legacyPro: createLimit(true)
-    }
+    limit: "enabled"
   }),
   monographLinksAndEmbeds: createFeature({
     id: "monographLinksAndEmbeds",
     title: "Links & embeds in monographs",
-    availability: {
-      free: createLimit(false),
-      essential: createLimit(true),
-      pro: createLimit(true),
-      believer: createLimit(true),
-      legacyPro: createLimit(true)
-    }
+    limit: "enabled"
   }),
   monographAnalytics: createFeature({
     id: "monographAnalytics",
     title: "Monographs analytics",
-    availability: {
-      free: createLimit(false),
-      essential: createLimit(false),
-      pro: createLimit(true),
-      believer: createLimit(true),
-      legacyPro: createLimit(true)
-    }
+    limit: "enabled"
   }),
   sms2FA: createFeature({
     id: "sms2FA",
     title: "2FA via SMS",
-    availability: {
-      free: createLimit(false),
-      essential: createLimit(false),
-      pro: createLimit(true),
-      believer: createLimit(true),
-      legacyPro: createLimit(true)
-    }
+    limit: "enabled"
   }),
   notesnookCircle: createFeature({
     id: "notesnookCircle",
     title: "Notesnook Circle",
-    availability: {
-      free: createLimit(false),
-      essential: createLimit(true),
-      pro: createLimit(true),
-      believer: createLimit(true),
-      legacyPro: createLimit(true)
-    }
+    limit: "enabled"
   }),
   androidLauncherShortcuts: createFeature({
     id: "androidLauncherShortcuts",
     title: "Android Launcher Shortcuts",
-    availability: {
-      free: createLimit(false),
-      essential: createLimit(false),
-      pro: createLimit(true),
-      believer: createLimit(true),
-      legacyPro: createLimit(true)
-    }
+    limit: "enabled"
   }),
   expiringNotes: createFeature({
     id: "expiringNotes",
     title: "Expiring notes",
-    availability: {
-      free: createLimit(false),
-      essential: createLimit(false),
-      pro: createLimit(true),
-      believer: createLimit(true),
-      legacyPro: createLimit(true)
-    }
+    limit: "enabled"
   }),
   exportTableAsCsv: createFeature({
     id: "exportTableAsCsv",
     title: "Export table as CSV",
-    availability: {
-      free: createLimit(false),
-      essential: createLimit(false),
-      pro: createLimit(true),
-      believer: createLimit(true),
-      legacyPro: createLimit(true)
-    }
+    limit: "enabled"
   }),
   importCsvToTable: createFeature({
     id: "importCsvToTable",
     title: "Import CSV to table",
-    availability: {
-      free: createLimit(false),
-      essential: createLimit(false),
-      pro: createLimit(true),
-      believer: createLimit(true),
-      legacyPro: createLimit(true)
-    }
+    limit: "enabled"
   })
 };
 
@@ -522,12 +310,9 @@ export async function isFeatureAvailable<TId extends FeatureId>(
 ): Promise<FeatureResult<TId>> {
   const feature = getFeature(id);
   const limit = await getFeatureLimit(feature);
-  const isAllowed = await limit.isAllowed(value || (await feature.used?.()));
-
   return {
     id,
-    isAllowed,
-    availableOn: isAllowed ? undefined : await availableOn(id, value),
+    isAllowed: await limit.isAllowed(value),
     caption: limit.caption,
     error: features[id].error(limit)
   };
@@ -535,9 +320,8 @@ export async function isFeatureAvailable<TId extends FeatureId>(
 
 export async function getFeatureLimit<TId extends FeatureId>(
   feature: Feature<TId>
-) {
-  const plan = await getUserPlan();
-  return getFeatureLimitFromPlan(feature, plan);
+): Promise<Limit<Caption<TId>>> {
+  return limitOf(feature);
 }
 
 export async function areFeaturesAvailable<TIds extends FeatureId[]>(
@@ -546,7 +330,6 @@ export async function areFeaturesAvailable<TIds extends FeatureId[]>(
 ): Promise<{
   [K in TIds[number]]: FeatureResult<K>;
 }> {
-  const plan = await getUserPlan();
   const results = {} as {
     [K in TIds[number]]: FeatureResult<K>;
   };
@@ -555,39 +338,17 @@ export async function areFeaturesAvailable<TIds extends FeatureId[]>(
     const id = ids[i];
 
     const feature = getFeature(id);
-    const limit = getFeatureLimitFromPlan(feature, plan);
-    const isAllowed = await limit.isAllowed(value || (await feature.used?.()));
+    const limit = limitOf(feature);
 
     results[id as TIds[number]] = {
       id: id as TIds[number],
-      isAllowed,
-      availableOn: isAllowed ? undefined : await availableOn(id, value),
+      isAllowed: await limit.isAllowed(value),
       caption: limit.caption as Caption<TIds[number]>,
       error: features[id].error(limit)
     };
   }
 
   return results;
-}
-
-async function getUserPlan() {
-  const user = await db.user.getUser();
-  const plan = user?.subscription?.plan || SubscriptionPlan.FREE;
-  return plan;
-}
-
-async function availableOn(id: FeatureId, value?: number) {
-  const feature = features[id];
-  for (const key in feature.availability) {
-    if (key === "legacyPro") continue;
-
-    if (
-      await feature.availability[
-        key as keyof typeof feature.availability
-      ].isAllowed(value)
-    )
-      return AVAILABILITY_TO_PLAN[key as keyof typeof feature.availability];
-  }
 }
 
 export function getFeature<TId extends FeatureId>(id: TId): Feature<TId> {
@@ -600,6 +361,7 @@ export function planToAvailability(plan: SubscriptionPlan) {
 
 export function getFeaturesTable() {
   // Feature  FREE  ESSENTIAL  PRO   BELIEVER
+  // (the four columns are kept for layout compatibility; they are identical)
   const rows: [string, Limit, Limit, Limit, Limit][] = [];
   for (const key in features) {
     const feature = features[key as FeatureId];
@@ -620,11 +382,10 @@ export type FeatureUsage = {
   used: number;
 };
 export async function getFeaturesUsage(): Promise<FeatureUsage[]> {
-  const plan = await getUserPlan();
   const usage: FeatureUsage[] = [];
   for (const key in features) {
     const feature = getFeature(key as FeatureId);
-    const limit = getFeatureLimitFromPlan(feature, plan);
+    const limit = limitOf(feature);
     if (!feature.used || typeof limit.value !== "number") continue;
     usage.push({
       id: key as FeatureId,
@@ -635,49 +396,28 @@ export async function getFeaturesUsage(): Promise<FeatureUsage[]> {
   return usage;
 }
 
-function getFeatureLimitFromPlan<TId extends FeatureId>(
-  feature: Feature<TId>,
-  plan: SubscriptionPlan
+/**
+ * Every plan resolves to the same set of limits, so the availability key is
+ * irrelevant; picking one keeps the record shape (and its consumers) intact.
+ */
+function limitOf<TId extends FeatureId>(
+  feature: Feature<TId>
 ): Limit<Caption<TId>> {
-  const key = PLAN_TO_AVAILABILITY[plan];
-  return feature.availability[key] as unknown as Limit<Caption<TId>>;
+  return feature.availability[LOCAL_AVAILABILITY] as unknown as Limit<
+    Caption<TId>
+  >;
 }
+
+const LOCAL_AVAILABILITY: keyof Feature["availability"] = "pro";
 
 const PLAN_TO_AVAILABILITY: Record<
   SubscriptionPlan,
   keyof Feature["availability"]
 > = {
-  [SubscriptionPlan.FREE]: "free",
-  [SubscriptionPlan.ESSENTIAL]: "essential",
-  [SubscriptionPlan.PRO]: "pro",
-  [SubscriptionPlan.BELIEVER]: "believer",
-  [SubscriptionPlan.EDUCATION]: "pro",
-  [SubscriptionPlan.LEGACY_PRO]: "legacyPro"
+  [SubscriptionPlan.FREE]: LOCAL_AVAILABILITY,
+  [SubscriptionPlan.ESSENTIAL]: LOCAL_AVAILABILITY,
+  [SubscriptionPlan.PRO]: LOCAL_AVAILABILITY,
+  [SubscriptionPlan.BELIEVER]: LOCAL_AVAILABILITY,
+  [SubscriptionPlan.EDUCATION]: LOCAL_AVAILABILITY,
+  [SubscriptionPlan.LEGACY_PRO]: LOCAL_AVAILABILITY
 };
-
-const AVAILABILITY_TO_PLAN: Record<
-  keyof Feature["availability"],
-  SubscriptionPlan | undefined
-> = {
-  free: SubscriptionPlan.FREE,
-  essential: SubscriptionPlan.ESSENTIAL,
-  pro: SubscriptionPlan.PRO,
-  believer: SubscriptionPlan.BELIEVER,
-  legacyPro: undefined
-};
-
-function lt(limit: number) {
-  return async (value?: number) => {
-    if (typeof value === "undefined") return false;
-    return value < limit;
-  };
-}
-function alwaysTrue() {
-  return true;
-}
-function alwaysFalse() {
-  return false;
-}
-function alwaysInfinite() {
-  return true;
-}

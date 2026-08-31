@@ -1,153 +1,135 @@
-# Contributing guidelines
+# Contributing
 
-Thank you so much for considering to contribute to Notesnook! If you have no idea where to start, what to do, what you _can_ do then you are in the right place. There are plenty of ways you can contribute to Notesnook; many don't even require coding skills.
+Thanks for considering it.
 
-## Ways to Contribute
+Openotes is a fork of [Notesnook](https://github.com/streetwriters/notesnook).
+Before you start, it is worth knowing which project a change belongs to:
 
-### Reporting a bug
+| Change | Where it belongs |
+|---|---|
+| The editor, the note data model, migrations, crypto primitives | **Upstream Notesnook.** Everyone benefits, this fork included, and it will reach us on the next merge. |
+| Mobile, cloud sync, subscriptions, publishing | **Upstream.** Not present here. |
+| WebDAV sync or backup, the Deno runtime, packaging | **Here.** |
+| A bug in the shared UI | Either. If it reproduces in Notesnook, upstream is the better home. |
 
-Ugh! Bugs!
+---
 
-> A bug is when software behaves in a way you didn't expect, which the developer didn't intend.
+## Getting set up
 
-To help us understand what's happening, we first want to **make sure you're using the latest version of Notesnook**.
+Requires [Deno](https://deno.land) 2.9+ and a C compiler.
 
-Once you've **confirmed that the bug still exists in the latest version**, you'll want to check to make sure it's not something we already know about in the [opened GitHub issues](https://github.com/streetwriters/notesnook/issues).
-
-If you've **upgraded to the latest version, and you can't find it in our open issues** list, it's time to [open a new issue](https://github.com/streetwriters/notesnook/issues/new/choose). It is recommended that you fill out all the fields in the GitHub issue form with as much detail as possible. This includes:
-
-1. Exact steps to reproduce the problem
-2. Video or picture showing the problem
-3. Platform & device information
-
-The **easier it is for us to recreate your problem, the faster it will be fixed**.
-
-### Suggesting a new feature
-
-If you've thought of a way that Notesnook could be better, we want to hear about it. **We track feature requests using GitHub Issues**, so feel free to [open an issue](https://github.com/streetwriters/notesnook/issues/new/choose) which describes the feature you would like to see, why you need it, and how it should work.
-
-Before you open a new feature request, please make sure it's not a duplicate. **Duplicate feature requests & bug reports are closed immediately.**
-
-### Helping out in the issue tracker
-
-New issues are always opened that need to be triaged, sorted & organized, so the developers can easily find the most critical and/or relevant bugs to fix. Any help in this regard is appreciated.
-
-In addition to this, you can help out in the following ways:
-
-1. Finding & highlighting stale/duplicate issues
-2. Answering questions & queries
-3. Reproducing bugs (or mentioning that you face a particular bug)
-4. Leaving your feedback on new feature requests
-
-### Contributing code
-
-> Before you start contributing code, **make sure to read the [commit guidelines](#commit-guidelines), [git branch organization](#git-branch-organization) & [style guidelines](#style-guidelines).**
-
-As with other types of contributions, **the first step is to [open an issue](https://github.com/streetwriters/notesnook/issues/new/choose) on GitHub**. Opening an issue before you make changes ensures that someone else isn't already working on that particular problem. It also lets us all work together to find the right approach before you spend a bunch of time on a PR. **So again, when in doubt, open an issue**.
-
-#### Implementing a new feature or fixing a bug
-
-Each subproject in the monorepo contains its own set of documentation which you should refer to get started. This includes:
-
-1. Setting up the developer environment
-2. Build instructions
-3. Running tests (if any)
-4. Architecture docs explaining how everything fits together
-
-Once you are done, [open a new pull request](https://docs.github.com/en/pull-requests/collaborating-with-pull-requests/proposing-changes-to-your-work-with-pull-requests/creating-a-pull-request).
-
-## Opening & submitting a pull request
-
-**Before submitting a pull request,** please make sure the following is done:
-
-1. Fork [the repository](https://github.com/streetwriters/notesnook) and create your branch from `master` (you can name your branch anything).
-2. Run `npm run bootstrap` in the repository root.
-3. If you've fixed a bug or added code that should be tested, add tests!
-4. Ensure the test suite passes (`npm run test`).
-5. Format your code with prettier (`npm run prettier`).
-6. Make sure your code lints (`npm run lint`). Tip: `npm run linc` to only check changed files.
-7. Read & follow the commit guidelines.
-8. Read & follow the style guidelines.
-
-### Commit guidelines
-
-#### Sign-off your commits
-
-To keep Notesnook 100% open source we use [DCO (Developer Certificate of Origin)](http://DeveloperCertificate.org) instead of CLA. We respect intellectual property rights of others, and a **Developer Certificate of Origin (DCO) is a lightweight mechanism to make sure all incoming contributions are correctly attributed and licensed**.
-
-The DCO is a declaration attached to every contribution made by every developer in the message of every commit. The developer simply adds a `Signed-off-by` statement and thereby agrees to the DCO, which can be viewed at [DeveloperCertificate.org](http://DeveloperCertificate.org).
-
-**We require that every contribution to Notesnook is signed with a Developer Certificate of Origin**. Additionally, **please use your real name**. We do not accept anonymous contributors nor those utilizing pseudonyms.
-
-**Each commit must include a DCO which looks like this:**
-
-```txt
-Signed-off-by: Jane Smith <jane.smith@email.com>
+```bash
+git clone https://github.com/yuvalkolodkingal/notesnook.git openotes
+cd openotes
+deno task build:native
+deno task build:ui
+deno task dev
 ```
 
-On VSCode, it looks like this:
+[BUILDING.md](BUILDING.md) has the details, including how to run two
+profiles against one WebDAV server to exercise synchronization by hand.
 
-![](resources/vscode-signed-off-commit.png)
+---
 
-You may type this line on your own when writing your commit messages. However, if your [user.name](http://user.name) and [user.email](http://user.email) are set in your git configs, you can use `-s` or `--signoff` to add the `Signed-off-by` line to the end of the commit message automatically.
+## Before you open a pull request
 
-#### Include `<scope>:` in your commit message
-
-All commits must include valid scopes in the commit message. **Valid commit scopes include:**
-
-**Apps:**
-
-1. `mobile`: changes related to mobile clients
-2. `web`: changes related to the web client
-3. `desktop`: changes related to the desktop client
-
-**Packages:**
-
-1. `crypto`: changes related to the cryptographic core
-2. `editor`: changes related to the editor (including `@notesnook/editor-mobile`)
-3. `logger`: changes related to the logger
-4. `theme`: changes related to the theme
-
-**Repo maintenance:**
-
-1. `config`: changes related to config of installed tools in the repo (e.g. eslint rules)
-2. `ci`: changes related to CI
-3. `setup`: setting up something new in the repo (e.g. eslint, commitlint)
-4. `docs`: changes related to documentation (README etc.)
-5. `misc`: miscellaneous changes like package-lock.json updates
-6. `global`: changes related to the whole repo
-
-**Some example commits would look like this:**
-
-```txt
-docs: list all valid scopes in commit guidelines
-web: impl xyz feature
-crypto: update libsodium version
+```bash
+deno task fmt          # format
+deno task lint         # lint
+deno task check        # type-check
+deno task test         # unit and protocol tests
+deno task test:webdav  # against a real WebDAV server
 ```
 
-## Style guidelines
+All five run in CI, along with a check that Electron and React Native have
+not crept back into the dependency tree.
 
-We use an automatic code formatter called [Prettier](https://prettier.io/). Run `npm run prettier` after making any changes to the code.
+---
 
-Then, our linter will catch most issues that may exist in your code. You can check the status of your code styling by simply running `npm run lint`.
+## What good looks like here
 
-However, there are still some styles that the linter cannot pick up. If you are unsure about something, looking at [Airbnb's Style Guide](https://github.com/airbnb/javascript) will guide you in the right direction.
+**Data safety is the first consideration, every time.** This application
+holds people's notes. When a change could lose or corrupt data, that
+outweighs elegance, performance and diff size. Concretely, the invariants
+that must not regress:
 
-## Git Branch Organization
+- A change is only marked synchronized after its remote object is verified.
+- Journal entries are immutable.
+- Conflicts keep both versions and tell the user.
+- Deletions are tombstones; a stale device cannot resurrect a deleted note.
+- A restore takes a verified safety backup first and rolls back intact.
+- A missing encryption library is a startup error, never a silent downgrade.
 
-Submit all changes directly to the [`master branch`](https://github.com/streetwriters/notesnook). We don't use separate branches for development or for upcoming releases. This requires us to always keep the `master` branch in a deployable state which means:
+If a change touches any of those, say so in the pull request and explain why
+it is still safe.
 
-1. All tests must be passing at all times
-2. There should be as few breaking changes as possible
+**Test what you change.** Especially the sync engine. The suite is fast
+(about a second) and the integration suite runs against a real WebDAV
+server — that suite has already caught a real defect that a mock would have
+missed, which is why it exists.
 
-## Review Process
+**Write for the next reader.** Comments should say *why*, particularly where
+the reason is not visible in the code: a workaround for a specific server's
+behaviour, an ordering that exists for crash-safety, a trade-off that was
+chosen deliberately. Do not comment what the next line does.
 
-We deeply appreciate everyone who takes the time to make a contribution. We will review all contributions as quickly as possible. **As a reminder, [opening an issue](https://github.com/streetwriters/notesnook/issues/new/choose) and discussing your change before you make it, is the best way to smooth the PR process.** This will prevent a rejection because someone else is already working on the problem, or because the solution is incompatible with the architectural direction.
+**Keep upstream mergeable.** `packages/core`, `packages/editor` and most of
+`apps/web` are deliberately close to upstream. Gratuitous divergence there
+costs us on every merge. `apps/desktop` has no shared history and is free.
 
-During the PR process, expect that there will be some back-and-forth. Please try to respond to comments in a timely fashion, and:
+**Say what you actually verified.** "Tests pass" should mean you ran them.
+If something is untested or you could not check it on your platform, write
+that down — an honest gap is useful, a false claim is not.
 
-1. If you don't wish to continue with the PR, let us know.
-2. If a PR takes too many iterations for its complexity or size, we may reject it.
-3. If you stop responding we may close the PR as abandoned.
-4. If a PR is accepted, a maintainer will merge your change.
-5. If we reject the PR, we will close the pull request with a comment explaining why. This decision isn't always final: if you feel we have misunderstood your intended change, please continue the conversation with a comment on the PR.
+---
+
+## Code style
+
+Deno's formatter and linter decide layout; run `deno task fmt` and stop
+thinking about it.
+
+Beyond that:
+
+- Every source file carries the GPL header. Copy it from a neighbour.
+- New code is TypeScript with explicit types at module boundaries.
+- Error messages are written for a user who is stuck, not for a developer
+  reading a stack trace: say what went wrong and what to do about it.
+- Prefer Deno and web APIs over Node-only ones. npm packages are fine
+  through Deno's compatibility layer where they earn their place.
+- No TODOs in merged code. Either finish it or open an issue.
+
+---
+
+## Commits and pull requests
+
+Write commit messages that explain the change and its reasoning. A reader
+six months from now should be able to tell what you did and why without
+opening the diff.
+
+In the pull request, cover: what changed, why, how you verified it, and
+anything you could not verify.
+
+---
+
+## Reporting bugs
+
+Include your platform and version, what happened, what you expected, and
+whether it reproduces from a clean profile
+(`OPENOTES_DATA_DIR=/tmp/test deno task dev`).
+
+For sync problems, the relevant details are your server software, whether
+"Test connection" succeeds, and what the status indicator says. Logs live in
+the cache directory and are reachable through `Help → Open log directory`.
+They are redacted at the point of writing — no note content, keys or
+passwords — but do skim one before attaching it.
+
+Security vulnerabilities go through
+[SECURITY.md](SECURITY.md), not the public issue tracker.
+
+---
+
+## Licence
+
+Contributions are licensed GPL-3.0-or-later, matching the project and
+upstream. By contributing you confirm you have the right to license your
+work that way.

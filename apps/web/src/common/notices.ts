@@ -18,19 +18,17 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
 import Config from "../utils/config";
-import { createBackup, verifyAccount } from "./index";
+import { createBackup } from "./index";
 import { db } from "./db";
 import { store as appStore } from "../stores/app-store";
-import { Backup, User, Email, Warn, Icon } from "../components/icons";
+import { Backup, Icon } from "../components/icons";
 import dayjs from "dayjs";
-import { hardNavigate, hashNavigate } from "../navigation";
 import { showToast } from "../utils/toast";
 import { TaskScheduler } from "../utils/task-scheduler";
-import { RecoveryKeyDialog } from "../dialogs/recovery-key-dialog";
 import { strings } from "@notesnook/intl";
 import { SettingsDialog } from "../dialogs/settings";
 
-export type NoticeType = "autoBackupsOff" | "login" | "email" | "recoverykey";
+export type NoticeType = "autoBackupsOff";
 
 export type Notice = {
   type: NoticeType;
@@ -107,25 +105,6 @@ export async function shouldAddBackupNotice() {
   return dayjs(lastBackupTime).add(offsetToDays, "d").isBefore(dayjs());
 }
 
-export async function shouldAddRecoveryKeyBackupNotice() {
-  if (isIgnored("recoverykey")) return false;
-
-  const recoveryKeyBackupDate = Config.get("recoveryKeyBackupDate", 0);
-  if (!recoveryKeyBackupDate) return true;
-  return dayjs(recoveryKeyBackupDate).add(30, "d").isBefore(dayjs());
-}
-
-export async function shouldAddLoginNotice() {
-  const user = await db.user.getUser();
-  if (!user) return true;
-}
-
-export async function shouldAddConfirmEmailNotice() {
-  const user = await db.user.getUser();
-  if (!user) return false;
-  return !user?.isEmailConfirmed;
-}
-
 type NoticeData = {
   key: string;
   title: string;
@@ -143,30 +122,6 @@ export const NoticesData: Record<NoticeType, NoticeData> = {
     action: () => SettingsDialog.show({ activeSection: "backup-export" }),
     dismissable: true,
     icon: Backup
-  },
-  login: {
-    key: "login",
-    title: strings.loginMessageActionText(),
-    subtitle: strings.loginMessage(),
-    action: () => hardNavigate("/login"),
-    icon: User
-  },
-  email: {
-    key: "email",
-    title: strings.emailNotConfirmed(),
-    subtitle: strings.emailNotConfirmedDesc(),
-    action: () => hashNavigate("/email/verify"),
-    icon: Email
-  },
-  recoverykey: {
-    key: "recoverykey",
-    title: strings.recoveryKeyMessageActionText(),
-    subtitle: strings.recoveryKeyMessage(),
-    dismissable: true,
-    action: async () => {
-      if (await verifyAccount()) await RecoveryKeyDialog.show({});
-    },
-    icon: Warn
   }
 };
 
@@ -178,15 +133,6 @@ export async function resetNotices() {
   }
   if (await shouldAddBackupNotice()) {
     await saveBackup();
-  }
-  if (await shouldAddLoginNotice()) {
-    notices.push({ type: "login", priority: 1 });
-  }
-  if (await shouldAddConfirmEmailNotice()) {
-    notices.push({ type: "email", priority: 4 });
-  }
-  if (await shouldAddRecoveryKeyBackupNotice()) {
-    notices.push({ type: "recoverykey", priority: 5 });
   }
   appStore.get().setNotices(...notices);
 }
@@ -200,7 +146,7 @@ async function saveBackup(mode: "full" | "partial" = "partial") {
   if (IS_TESTING) return;
 
   if (IS_DESKTOP_APP) {
-    await createBackup({ noVerify: true, mode, background: true });
+    await createBackup({ mode, background: true });
   } else {
     if (openedToast !== null) return;
     openedToast = showToast(

@@ -24,7 +24,6 @@ import { store as notebookStore } from "./notebook-store";
 import { store as trashStore } from "./trash-store";
 import { store as tagStore } from "./tag-store";
 import { store as attachmentStore } from "./attachment-store";
-import { store as monographStore } from "./monograph-store";
 import { store as reminderStore } from "./reminder-store";
 import { store as settingStore } from "./setting-store";
 import BaseStore from "./index";
@@ -182,7 +181,6 @@ class AppStore extends BaseStore<AppStore> {
     await trashStore.refresh();
     await tagStore.refresh();
     await attachmentStore.refresh();
-    await monographStore.refresh();
     await settingStore.refresh();
 
     await this.refreshNavItems();

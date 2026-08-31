@@ -19,23 +19,26 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 import {
   test as base,
+  Page,
   PlaywrightTestArgs,
   PlaywrightTestOptions,
   PlaywrightWorkerArgs,
   PlaywrightWorkerOptions
 } from "@playwright/test";
-import { ElectronTestFixtures } from "../../../desktop/__tests__/electron-test";
 
 export { expect } from "@playwright/test";
 export type { Page, Browser } from "@playwright/test";
+
+export type TestFixtures = {
+  newPage: () => Promise<Page>;
+};
+
 export type TestArgs = PlaywrightTestArgs &
   PlaywrightTestOptions &
   PlaywrightWorkerArgs &
   PlaywrightWorkerOptions &
-  Partial<ElectronTestFixtures>;
-export const test = base.extend<
-  NonNullable<unknown> & Partial<ElectronTestFixtures>
->({
+  Partial<TestFixtures>;
+export const test = base.extend<Partial<TestFixtures>>({
   page: async ({ page }, use) => {
     const client = await page.context().newCDPSession(page);
     await client.send("Emulation.setCPUThrottlingRate", {

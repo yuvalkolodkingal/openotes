@@ -134,15 +134,6 @@ const routes = defineRoutes({
       title: color.title,
       component: Notes
     });
-  },
-  "/monographs": () => {
-    useNoteStore.getState().setContext({ type: "monographs" });
-    return defineRoute({
-      key: "notes",
-      title: strings.routes.Monographs(),
-      type: "notes",
-      component: Notes
-    });
   }
 });
 

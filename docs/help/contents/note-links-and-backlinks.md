@@ -126,7 +126,7 @@ A `{{linkCopied}}` toast shows the copied link.
 Notebooks, tags and colors have internal links too — `nn://notebook/<id>`, `nn://tag/<id>` and `nn://color/<id>` — copied the same way from their own menus.
 
 ::: tip Opening links from outside the app
-Internal links only resolve inside Notesnook. A `nn://` link pasted into a browser or another app will open the Notesnook app. To share a note with someone who doesn't use Notesnook, [publish it as a monograph](/publish-notes-with-monographs) instead.
+Internal links only resolve inside Notesnook. A `nn://` link pasted into a browser or another app will open the Notesnook app. To share a note with someone who doesn't use Notesnook, export it instead — see [exporting notes](/export-notes-from-notesnook).
 
 :::
 

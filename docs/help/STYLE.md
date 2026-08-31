@@ -7,8 +7,7 @@ Every page on notesnook.com/help follows these. They cover accuracy, plan tags, 
 Never describe UI from memory. Every menu label, settings path, limit, default and plan gate must be traced to source in this monorepo before it is written:
 
 - user-facing strings — `packages/intl/src/strings.ts`
-- web/desktop UI — `apps/web/src/`, `apps/desktop/src/`
-- mobile UI — `apps/mobile/app/`
+- desktop UI — `apps/web/src/`, `apps/desktop/src/`
 - limits and plan gates — `packages/common/src/utils/is-feature-available.ts`
 - behaviour, sync, encryption, retention — `packages/core/src/`
 

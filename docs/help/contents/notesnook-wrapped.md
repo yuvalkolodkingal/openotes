@@ -55,7 +55,6 @@ There is no other way for it to work. Encryption means Notesnook has no idea how
 ## Related pages
 
 - [How is my data encrypted?](/how-is-my-data-encrypted) — why we can't see your notes or your stats
-- [Publish notes with monographs](/publish-notes-with-monographs) — the monographs counted in your Wrapped
 - [Attachments and files](/attachments-and-files) — the files Wrapped totals up
 - [Organize notes using notebooks](/organizing-notes/organize-notes-using-notebooks) — the notebooks Wrapped ranks
 - [Customizing the app](/customizing-notesnook) — the side menu the Wrapped button lives in

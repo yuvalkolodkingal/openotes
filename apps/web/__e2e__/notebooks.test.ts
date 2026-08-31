@@ -197,28 +197,6 @@ test("delete all notes within a notebook", async ({ page }) => {
 //   expect(await notes.isEmpty()).toBe(true);
 // });
 
-test("creating more than 50 notebooks shouldn't be possible on basic plan", async ({
-  page
-}, info) => {
-  info.setTimeout(2 * 60 * 1000);
-
-  const app = new AppModel(page);
-  await app.goto();
-  const notebooks = await app.goToNotebooks();
-
-  for (let i = 0; i < 50; ++i) {
-    await notebooks.createNotebook({ title: `Notebook ${i}` });
-  }
-
-  const result = await Promise.race([
-    notebooks.createNotebook(NOTEBOOK),
-    page
-      .waitForSelector(getTestId("upgrade-dialog"), { state: "visible" })
-      .then(() => true)
-  ]);
-  expect(result).toBe(true);
-});
-
 test(`sort notebooks`, async ({ page }, info) => {
   info.setTimeout(2 * 60 * 1000);
 
@@ -249,7 +227,6 @@ test(`sort notebooks`, async ({ page }, info) => {
 test("when default notebook is set, created note in notes context should go to default notebook", async ({
   page
 }) => {
-  await page.exposeBinding("isPro", () => true);
   const app = new AppModel(page);
   await app.goto();
   let notebooks = await app.goToNotebooks();
@@ -268,7 +245,6 @@ test("when default notebook is set, created note in notes context should go to d
 test("when default notebook is set, created note in other notebook's context should not go to default notebook", async ({
   page
 }) => {
-  await page.exposeBinding("isPro", () => true);
   const app = new AppModel(page);
   await app.goto();
   let notebooks = await app.goToNotebooks();
@@ -290,7 +266,6 @@ test("when default notebook is set, created note in other notebook's context sho
 test("when default notebook is set, created note in tags context should go to default notebook", async ({
   page
 }) => {
-  await page.exposeBinding("isPro", () => true);
   const app = new AppModel(page);
   await app.goto();
   let notebooks = await app.goToNotebooks();
@@ -311,7 +286,6 @@ test("when default notebook is set, created note in tags context should go to de
 test("when default notebook is set, created note in colors context should go to default notebook", async ({
   page
 }) => {
-  await page.exposeBinding("isPro", () => true);
   const coloredNote = { title: "Red note", content: NOTE.content };
   const app = new AppModel(page);
   await app.goto();
