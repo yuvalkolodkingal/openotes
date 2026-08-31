@@ -185,6 +185,14 @@ async function buildSqlite(target: Target, verifyHash: boolean) {
     await run(compiler, [
       "/O2",
       "/LD",
+      // A Windows DLL exports nothing unless each symbol says so — unlike
+      // ELF, where every non-static symbol is visible. Every public SQLite
+      // function is declared `SQLITE_API`, which the amalgamation defines
+      // as empty, so without this the DLL builds cleanly and then has no
+      // sqlite3_* entry points at all: dlopen succeeds and the first symbol
+      // lookup fails with "The specified procedure could not be found"
+      // (os error 127). This is SQLite's own documented way to build a DLL.
+      "/DSQLITE_API=__declspec(dllexport)",
       ...COMPILE_DEFINES.map((define) => `/D${define}`),
       source,
       `/Fe:${output}`,
