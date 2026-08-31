@@ -44,8 +44,30 @@ const log = logger.scope("server");
  * storage, so the bulk of user data does not depend on this at all.
  */
 
-/** Fixed loopback port. Chosen from the IANA dynamic range. */
-export const UI_PORT = 49732;
+/**
+ * Fixed loopback port, chosen from the IANA dynamic range.
+ *
+ * OPENOTES_UI_PORT overrides it. That is not a convenience: because the
+ * origin determines which webview storage the profile sees, a *given
+ * profile* must always use the same port. Overriding it is how you run a
+ * second profile side by side (with its own OPENOTES_DATA_DIR), and
+ * changing it for an existing profile orphans that profile's webview
+ * storage exactly as a random port would.
+ */
+function resolvePort(): number {
+  const override = Deno.env.get("OPENOTES_UI_PORT");
+  if (!override) return 49732;
+  const port = Number(override);
+  if (!Number.isInteger(port) || port < 1024 || port > 65535) {
+    throw new Error(
+      `OPENOTES_UI_PORT must be an integer between 1024 and 65535, ` +
+        `got ${JSON.stringify(override)}`
+    );
+  }
+  return port;
+}
+
+export const UI_PORT = resolvePort();
 export const UI_HOST = "127.0.0.1";
 export const UI_ORIGIN = `http://${UI_HOST}:${UI_PORT}`;
 

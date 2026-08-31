@@ -104,5 +104,7 @@ Environment:
   OPENOTES_NATIVE_DIR    Directory holding the bundled native libraries.
   OPENOTES_LOG_LEVEL     error | warn | info | debug | trace (default: info).
   OPENOTES_PORTABLE      Set to 1 to keep data next to the executable.
+  OPENOTES_UI_PORT       Loopback port for the interface (default 49732).
+                         Must stay stable for a given data directory.
 `;
 }
