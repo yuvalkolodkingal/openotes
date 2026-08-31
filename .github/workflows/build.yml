@@ -104,6 +104,15 @@ jobs:
                    "[0-9A-Za-z._-]; refusing." >&2
               exit 1 ;;
           esac
+          # Fail here rather than two jobs deep in an opaque rpmbuild error:
+          # rpmbuild rejects "-" in the spec Version: field and makepkg
+          # rejects it in pkgver=. release.yml refuses these too.
+          case "$version" in
+            *-*)
+              echo "Version \"$version\" is a prerelease; rpmbuild and" \
+                   "makepkg both reject a hyphen in the package version." >&2
+              exit 1 ;;
+          esac
           echo "version=$version" >> "$GITHUB_OUTPUT"
           echo "Building version $version"
 

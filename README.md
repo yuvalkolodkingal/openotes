@@ -87,10 +87,10 @@ chmod +x Openotes-1.0.0-linux-x86_64.AppImage
 ./Openotes-1.0.0-linux-x86_64.AppImage
 
 # Debian / Ubuntu
-sudo apt install ./openotes_1.0.0_amd64.deb
+sudo apt install ./Openotes-1.0.0-linux-x86_64.deb
 
 # Fedora / RHEL
-sudo dnf install ./openotes-1.0.0-1.x86_64.rpm
+sudo dnf install ./Openotes-1.0.0-linux-x86_64.rpm
 
 # Arch / Manjaro
 sudo pacman -U openotes-1.0.0-1-x86_64.pkg.tar.zst

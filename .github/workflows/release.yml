@@ -66,7 +66,6 @@ jobs:
     outputs:
       tag: ${{ steps.resolve.outputs.tag }}
       version: ${{ steps.resolve.outputs.version }}
-      prerelease: ${{ steps.resolve.outputs.prerelease }}
     steps:
       - uses: actions/checkout@v4
 
@@ -96,6 +95,21 @@ jobs:
                exit 1 ;;
           esac
           version="${tag#v}"
+
+          # No prereleases. Two packagers refuse a hyphen outright: rpmbuild
+          # rejects "-" in the spec's Version: field, and makepkg rejects it
+          # in pkgver=. Encoding around that means "~" for rpm (which sorts
+          # correctly) but an epoch bump for pacman (which has no "~", and
+          # where the obvious "_" would sort the rc ABOVE the final release
+          # and strand anyone who installed it). Refusing here is honest;
+          # publishing a release whose Linux packages cannot be built, or can
+          # never be upgraded from, is not.
+          case "$version" in
+            *-*) echo "Refusing to release \"$version\": prerelease versions" \
+                      "are not supported, because rpmbuild and makepkg both" \
+                      "reject a hyphen in the package version." >&2
+                 exit 1 ;;
+          esac
 
           declared=$(sed -n 's/^export const APP_VERSION = "\(.*\)";$/\1/p' \
             apps/desktop/src/constants.ts)
@@ -140,17 +154,11 @@ jobs:
             fi
           fi
 
-          case "$version" in
-            *-*) prerelease=true ;;
-            *)   prerelease=false ;;
-          esac
-
           {
             echo "tag=$tag"
             echo "version=$version"
-            echo "prerelease=$prerelease"
           } >> "$GITHUB_OUTPUT"
-          echo "Releasing $tag (version $version, prerelease=$prerelease)"
+          echo "Releasing $tag (version $version)"
 
   # -------------------------------------------------------------------------
   # Everything below waits on this. Nothing is published if it fails.
@@ -395,7 +403,6 @@ jobs:
       - name: Create the release
         env:
           GH_TOKEN: ${{ github.token }}
-          PRERELEASE: ${{ needs.version.outputs.prerelease }}
         run: |
           set -euo pipefail
           if gh release view "$TAG" --repo "${{ github.repository }}" >/dev/null 2>&1; then
@@ -409,6 +416,5 @@ jobs:
               --notes-file release-notes.md
               --repo "${{ github.repository }}"
             )
-            if [ "$PRERELEASE" = "true" ]; then args+=(--prerelease); fi
             gh release create "${args[@]}" dist/*
           fi
