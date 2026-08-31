@@ -113,11 +113,10 @@ OPENOTES_DATA_DIR=/tmp/openotes-b deno task dev   # in another terminal
 Point both at the same WebDAV server and directory, with the same sync
 passphrase.
 
-Note that the interface is served on a **fixed** loopback port, because the
-webview keys its storage by origin and a changing port would orphan settings
-and keys on every launch. Two instances therefore cannot both serve the
-interface: the second hands over to the first. To run two profiles at once,
-give the second a different `OPENOTES_UI_PORT` as well.
+Each profile is fully independent: the vault, attachments, settings and key
+material all live under its data directory. The interface is served on a
+loopback port the runtime assigns per launch, reachable only by that
+instance's own webview, so two instances do not collide.
 
 ---
 
@@ -204,10 +203,9 @@ deliberately refuses to start rather than open an unencrypted vault.
 **"Could not find the built user interface".**
 Run `deno task build:ui`, or set `OPENOTES_UI_ROOT`.
 
-**"Another program is already listening on port …".**
-The interface needs its fixed port so the webview keeps a stable origin.
-Close whatever is using it. Starting on a different port would make the app
-appear freshly installed.
+**"Openotes is already running".**
+An advisory lock is held by another instance. Close it. The kernel releases
+the lock however the process dies, so a crash does not leave it stuck.
 
 **A blank window on Linux.**
 WebKitGTK is missing or too old. Install `libwebkit2gtk-4.1-0` (Debian /

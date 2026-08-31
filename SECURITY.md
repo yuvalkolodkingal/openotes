@@ -62,6 +62,7 @@ No new cryptographic construction was invented for this fork.
 | Content addressing | keyed BLAKE2b |
 | Stored credentials | AES-256-GCM, key from PBKDF2-SHA-256 (600,000 iterations) |
 | Database at rest | SQLite3MultipleCiphers |
+| Renderer key material at rest | `keystore.json`, `0600`, holding keys the renderer itself wrapped |
 | Backup integrity | SHA-256 over the plaintext, checked after decryption |
 
 ### Key hierarchy
@@ -144,6 +145,24 @@ renderer's existing key-wrapping fallback covers the browser-side key store.
 **The WebDAV password is never returned to the renderer** — not even to
 repopulate its own settings form, which reads a `hasPassword` boolean
 instead.
+
+---
+
+## 4a. Renderer storage
+
+The interface cannot use `localStorage` or IndexedDB for anything durable:
+the runtime assigns a different loopback port on every launch, so the page's
+origin changes and its storage is orphaned (measured, not assumed). Durable
+renderer storage is therefore served by the runtime, in two namespaces.
+
+`keys` holds key material. It is written `0600`, through a temp file and a
+rename so a crash cannot truncate it, and a damaged file is preserved for
+recovery rather than replaced — losing it means losing the vault. It cannot
+be read in bulk: a compromised renderer must ask for each key by name rather
+than exfiltrating the store in one call.
+
+`settings` holds ordinary preferences and is plain JSON, because they are
+not secret and being readable makes them debuggable.
 
 ---
 

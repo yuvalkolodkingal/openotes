@@ -24,15 +24,18 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
  * WHY THIS READS THE LOG INSTEAD OF CURLING THE APPLICATION
  *
  * The obvious smoke test is to fetch the interface server's health route.
- * That does not work here, and the reason is documented at the top of
- * apps/desktop/src/native/server.ts: under `deno desktop` the runtime owns
- * the listening address, publishes it as DENO_SERVE_ADDRESS, and wires the
- * socket to the embedded webview rather than to the machine's network
- * stack. A connection to that port from another process is refused —
- * measured here, not assumed. That is a security property worth keeping, so
- * this test works with what the application does publish (its structured
- * start-up log on stdout) and probes the port only to report,
- * informationally, that it is closed.
+ * It cannot be relied on. Under `deno desktop` the runtime owns the
+ * listening address: the port handed to `Deno.serve` is ignored, the
+ * runtime substitutes its own and publishes it as DENO_SERVE_ADDRESS, and
+ * apps/desktop/src/native/server.ts documents the socket as wired to the
+ * embedded webview rather than to the machine. So there is no port this
+ * script can predict, and no guarantee the one it discovers is reachable.
+ *
+ * Every assertion below therefore comes from the one thing the application
+ * definitely publishes — its structured start-up log on stdout — and the
+ * health route is probed afterwards, at whatever address the log reports,
+ * purely as information. (On Linux/x86_64 with Deno 2.9.6 that probe does
+ * get a 200; the check does not depend on it either way.)
  *
  * What is asserted, in order of how much it proves:
  *

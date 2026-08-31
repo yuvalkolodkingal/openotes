@@ -107,17 +107,39 @@ side:
 The UI is served from a loopback origin with `nosniff`, `COOP` and `COEP`,
 and static serving is confined to the built UI directory.
 
-### Why the port is fixed
+### Why nothing durable lives in webview storage
 
-The webview keys IndexedDB and localStorage by origin. An ephemeral port
-would change the origin on every launch and silently orphan the key store
-and settings — the app would look freshly installed. So the UI server binds
-a fixed port, and if that port is taken by something else the app says so
-instead of starting on a different one.
+Under `deno desktop` the runtime owns the listening address. A port passed
+to `Deno.serve` is ignored; the runtime substitutes its own, publishes it
+as `DENO_SERVE_ADDRESS`, and wires the socket to the embedded webview
+rather than publishing it on the machine — a fetch to that port from
+another process fails.
 
-Belt and braces: attachments and the vault database live on the filesystem
-under the Deno side, not in webview storage, so the bulk of user data does
-not depend on this at all.
+Two consequences, both measured rather than assumed:
+
+**Nothing outside the application can reach the interface server.** Good
+for security, and the reason the smoke test inspects the window instead of
+curling a health endpoint.
+
+**The port differs on every launch, so the page's origin does too.**
+Observed across two runs of the same build: `http://127.0.0.1:34265`, then
+`http://127.0.0.1:42857`. Browser storage is partitioned by origin, so
+anything the page writes to `localStorage` or IndexedDB is unreachable
+after a restart — a value written in one run reads back as `null` in the
+next.
+
+Upstream keeps the *database key* in IndexedDB. Carried over unchanged,
+every launch would find no key, generate a fresh one, and leave the
+existing vault permanently unopenable.
+
+So the vault, attachments, settings and key material are all held by the
+runtime and reached through bindings — keyed by the data directory rather
+than by a port number. `native/keyvalue.ts` provides the two namespaces the
+interface uses: `keys` for key material (never returned in bulk, so a
+compromised renderer cannot exfiltrate the key store in one call) and
+`settings` for what would otherwise be `localStorage`.
+
+Treat any new use of `localStorage` or IndexedDB in the interface as a bug.
 
 ---
 
@@ -129,6 +151,8 @@ not depend on this at all.
 | Attachment content | `attachments/<xx>/<yy>/<hash>` | Encrypted by the renderer before it is handed over |
 | WebDAV password, sync passphrase | `credentials.enc` | AES-256-GCM over PBKDF2 |
 | Device-local settings, window geometry, sync cursors | `settings.json` | None — nothing secret is kept here |
+| Renderer key material (database key) | `keystore.json` | File permissions; see below |
+| Renderer preferences (the localStorage replacement) | `renderer-settings.json` | None — not secret |
 | Logs | Cache directory | None — redacted at the point of writing |
 
 ### The SQLite decision
