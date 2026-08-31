@@ -21,14 +21,12 @@ import ListItem from "../list-item";
 import { navigate } from "../../navigation";
 import { Flex, Text } from "@theme-ui/components";
 import { store as appStore } from "../../stores/app-store";
-import { store as settingStore } from "../../stores/setting-store";
 import { db } from "../../common/db";
 import {
   Edit,
   Shortcut,
   DeleteForver,
   Tag as TagIcon,
-  Copy,
   InternalLink
 } from "../icons";
 import { MenuItem } from "@notesnook/ui";
@@ -184,24 +182,6 @@ export const tagMenuItems: (
         await Multiselect.deleteTags(ids);
       },
       multiSelect: true
-    },
-    {
-      type: "button",
-      key: "copyid",
-      title: "Copy ID",
-      icon: Copy.path,
-      onClick: async () => {
-        try {
-          await writeToClipboard({
-            "text/plain": tag.id
-          });
-          showToast("success", "Tag ID copied to clipboard");
-        } catch (e) {
-          console.error(e);
-          showToast("error", "Failed to copy Tag ID");
-        }
-      },
-      isHidden: !settingStore.get().isInboxEnabled
     }
   ];
 };

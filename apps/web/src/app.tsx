@@ -29,7 +29,6 @@ import NavigationMenu from "./components/navigation-menu";
 import StatusBar from "./components/status-bar";
 import { FlexScrollContainer } from "./components/scroll-container";
 import CachedRouter from "./components/cached-router";
-import { WebExtensionRelay } from "./utils/web-extension-relay";
 import {
   Pane,
   SplitPane,
@@ -48,8 +47,6 @@ import { getFontSizes } from "@notesnook/theme/theme/font/fontsize.js";
 import { useWindowControls } from "./hooks/use-window-controls";
 import { STATUS_BAR_HEIGHT } from "./common/constants";
 import { NavigationEvents } from "./navigation";
-
-new WebExtensionRelay();
 
 function App() {
   const isMobile = useMobile();

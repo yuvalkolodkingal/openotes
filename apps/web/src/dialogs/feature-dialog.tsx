@@ -19,18 +19,9 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 import { Text, Flex, Link } from "@theme-ui/components";
 import Dialog from "../components/dialog";
-import { getHomeRoute, hardNavigate } from "../navigation";
 import { appVersion } from "../utils/version";
 import Config from "../utils/config";
-import {
-  ArrowRight,
-  Checkmark,
-  Icon,
-  Warn,
-  Inbox,
-  LinkedTo,
-  Plus
-} from "../components/icons";
+import { Checkmark, Icon, Warn } from "../components/icons";
 import { BaseDialogProps, DialogManager } from "../common/dialog-manager";
 import { strings } from "@notesnook/intl";
 
@@ -52,17 +43,8 @@ type Feature = {
   subFeatures?: SubFeature[];
 };
 
-export type FeatureKeys = "confirmed" | "highlights";
+export type FeatureKeys = "highlights";
 const features: Record<FeatureKeys, Feature> = {
-  confirmed: {
-    title: strings.emailConfirmed(),
-    subtitle: strings.confirmEmailThankyou(),
-    cta: {
-      title: strings.continue(),
-      icon: ArrowRight,
-      action: () => hardNavigate(getHomeRoute())
-    }
-  },
   highlights: {
     title: appVersion.isBeta
       ? "Welcome to Notesnook Beta!"

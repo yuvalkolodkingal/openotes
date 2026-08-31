@@ -29,13 +29,13 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
 import { assert, assertEquals, assertRejects } from "@std/assert";
-import { WebDavClient } from "../src/client.ts";
-import { FetchTransport, toBasicAuth } from "../src/http.ts";
-import { SyncError } from "../src/types.ts";
-import { SyncCrypto } from "../src/crypto.ts";
-import { BackupEngine, WebDavBackupTarget } from "../src/backup.ts";
-import { createDevice, bytesEqual, masterKeyFor, testBytes } from "./harness.ts";
-import { MemorySyncStore, type TestItem } from "./memory-store.ts";
+import { WebDavClient } from "../../src/client.ts";
+import { FetchTransport, toBasicAuth } from "../../src/http.ts";
+import { SyncError } from "../../src/types.ts";
+import { SyncCrypto } from "../../src/crypto.ts";
+import { BackupEngine, WebDavBackupTarget } from "../../src/backup.ts";
+import { createDevice, bytesEqual, masterKeyFor, testBytes } from "../harness.ts";
+import { MemorySyncStore, type TestItem } from "../memory-store.ts";
 
 const BASE_URL = Deno.env.get("WEBDAV_INTEGRATION_URL");
 const USERNAME = Deno.env.get("WEBDAV_INTEGRATION_USER") || undefined;

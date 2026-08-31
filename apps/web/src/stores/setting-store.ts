@@ -23,12 +23,8 @@ import { desktop } from "../common/desktop-bridge";
 import createStore from "../common/store";
 import Config from "../utils/config";
 import BaseStore from "./index";
-import { TimeFormat, DayFormat, WeekFormat, EVENTS } from "@notesnook/core";
+import { TimeFormat, DayFormat, WeekFormat } from "@notesnook/core";
 import { Profile, TrashCleanupInterval } from "@notesnook/core";
-import { showToast } from "../utils/toast";
-import { ConfirmDialog } from "../dialogs/confirm";
-import * as openpgp from "openpgp";
-import { InboxPGPKeysDialog } from "../dialogs/inbox-pgp-keys-dialog";
 
 export enum ImageCompressionOptions {
   ASK_EVERY_TIME,
@@ -81,15 +77,6 @@ class SettingStore extends BaseStore<SettingStore> {
   isSnap = false;
   isPortable = false;
   proxyRules?: string;
-  isInboxEnabled = false;
-
-  init = () => {
-    db.eventManager.subscribe(EVENTS.userFetched, async () => {
-      this.set({
-        isInboxEnabled: await db.user.hasInboxKeys()
-      });
-    });
-  };
 
   refresh = async () => {
     this.set({
@@ -110,7 +97,6 @@ class SettingStore extends BaseStore<SettingStore> {
       zoomFactor: await desktop?.integration.zoomFactor.query(),
       autoUpdates: await desktop?.updater.autoUpdates.query(),
       proxyRules: await desktop?.integration.proxyRules.query(),
-      isInboxEnabled: await db.user.hasInboxKeys(),
       backupStorageLocation: await desktop?.integration.backupDirectory.query()
     });
   };
@@ -271,38 +257,6 @@ class SettingStore extends BaseStore<SettingStore> {
 
     if (!state) db.fs().cancel("offline-mode");
     else db.attachments.cacheAttachments();
-  };
-
-  toggleInbox = async () => {
-    const { isInboxEnabled } = this.get();
-
-    try {
-      if (isInboxEnabled) {
-        const ok = await ConfirmDialog.show({
-          title: "Disable Inbox API",
-          message:
-            "Disabling will delete all your unsynced inbox items. Additionally, disabling will revoke all existing API keys, they will no longer work. Are you sure?",
-          positiveButtonText: "Yes",
-          negativeButtonText: "No"
-        });
-        if (!ok) return;
-
-        await db.inboxItemsHistory.deleteFailed();
-        await db.user.discardInboxKeys();
-        this.set({ isInboxEnabled: false });
-
-        return;
-      }
-
-      const ok = await InboxPGPKeysDialog.show({ keys: null });
-      if (ok) {
-        this.set({ isInboxEnabled: true });
-      }
-    } catch (e) {
-      if (e instanceof Error) {
-        showToast("error", e.message);
-      }
-    }
   };
 }
 

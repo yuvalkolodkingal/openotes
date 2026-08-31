@@ -1,0 +1,109 @@
+# This file is part of the Notesnook project (https://notesnook.com/)
+#
+# Copyright (C) 2023 Streetwriters (Private) Limited
+# Copyright (C) 2026 Notesnook Deno Desktop contributors
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+# Maintainer: Openotes contributors <https://github.com/yuvalkolodkingal/notesnook>
+
+# ---------------------------------------------------------------------------
+# Openotes, packaged from the prebuilt Linux release tarball.
+#
+# This PKGBUILD does not compile anything: the CI release job builds the
+# tarball (deno compile + the built web UI + the native SQLite libraries) and
+# this only unpacks and installs it. See packaging/README.md for the tarball
+# contract.
+#
+# makepkg names the result openotes-${pkgver}-${pkgrel}-x86_64.pkg.tar.zst,
+# which is what CI publishes; nothing here overrides PKGEXT.
+# ---------------------------------------------------------------------------
+
+pkgname=openotes
+# Default matches APP_VERSION in apps/desktop/src/constants.ts. The CI release
+# job rewrites this line from the release tag before running makepkg.
+pkgver=1.0.0
+pkgrel=1
+pkgdesc="Offline-first, end-to-end-encrypted notes with WebDAV sync (a fork of Notesnook)"
+arch=('x86_64')
+url="https://github.com/yuvalkolodkingal/notesnook"
+license=('GPL3')
+
+# webkit2gtk-4.1 is the GTK3 / libsoup3 WebKitGTK that the OS webview loads at
+# runtime; the app ships no browser engine of its own. gtk3 comes in with it
+# but is listed because the webview links it directly, and hicolor-icon-theme
+# owns the icon directories written below.
+depends=('webkit2gtk-4.1' 'gtk3' 'hicolor-icon-theme')
+
+optdepends=('zenity: native file chooser and save dialogs'
+            'libnotify: reminder notifications via notify-send'
+            'xdg-utils: opening links and attachments in the default application')
+
+# !strip: `deno compile` appends its payload after the ELF sections. Stripping
+#         rewrites the file and discards that payload, leaving a binary that
+#         starts and then cannot find its own code.
+# !debug: there are no debug symbols to split out of a prebuilt binary.
+options=('!strip' '!debug')
+
+_tarball="${pkgname}-${pkgver}-linux-x86_64.tar.gz"
+source=("${_tarball}::${url}/releases/download/v${pkgver}/${_tarball}")
+
+# CI replaces this with the real digest (updpkgsums) after uploading the
+# release asset. SKIP is only correct while the tarball is fetched over HTTPS
+# from a release the same job just produced.
+sha256sums=('SKIP')
+
+package() {
+  local _src="${srcdir}/${pkgname}-${pkgver}-linux-x86_64"
+  local _libdir="${pkgdir}/usr/lib/${pkgname}"
+
+  # The binary resolves its user interface and its native libraries relative
+  # to its own path (apps/desktop/main.ts:51-71,
+  # apps/desktop/src/native/sqlite.ts:63-80), so the payload is kept together
+  # in /usr/lib/openotes rather than scattered around /usr/bin.
+  install -Dm755 "${_src}/openotes" "${_libdir}/openotes"
+  cp -r "${_src}/ui" "${_libdir}/ui"
+  cp -r "${_src}/native" "${_libdir}/native"
+  chmod -R u=rwX,go=rX "${_libdir}"
+
+  # /usr/bin/openotes. Both resolvers check their environment override first,
+  # so the launcher pins the two directories instead of relying on where the
+  # binary happens to sit. A user-set value still wins.
+  install -d "${pkgdir}/usr/bin"
+  cat > "${pkgdir}/usr/bin/${pkgname}" <<'LAUNCHER'
+#!/bin/sh
+OPENOTES_UI_ROOT="${OPENOTES_UI_ROOT:-/usr/lib/openotes/ui}"
+OPENOTES_NATIVE_DIR="${OPENOTES_NATIVE_DIR:-/usr/lib/openotes/native}"
+export OPENOTES_UI_ROOT OPENOTES_NATIVE_DIR
+exec /usr/lib/openotes/openotes "$@"
+LAUNCHER
+  chmod 755 "${pkgdir}/usr/bin/${pkgname}"
+
+  install -Dm644 "${_src}/openotes.desktop" \
+    "${pkgdir}/usr/share/applications/${pkgname}.desktop"
+
+  local _size
+  for _size in 16x16 24x24 32x32 48x48 64x64 128x128 256x256 512x512; do
+    install -Dm644 "${_src}/icons/${_size}.png" \
+      "${pkgdir}/usr/share/icons/hicolor/${_size}/apps/${pkgname}.png"
+  done
+
+  install -Dm644 "${_src}/openotes.1" \
+    "${pkgdir}/usr/share/man/man1/${pkgname}.1"
+
+  install -Dm644 "${_src}/LICENSE" \
+    "${pkgdir}/usr/share/licenses/${pkgname}/LICENSE"
+  install -Dm644 "${_src}/UPSTREAM.md" \
+    "${pkgdir}/usr/share/licenses/${pkgname}/UPSTREAM.md"
+}

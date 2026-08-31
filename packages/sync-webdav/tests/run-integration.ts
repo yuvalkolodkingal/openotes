@@ -315,7 +315,7 @@ async function main() {
 
   console.log(`Using ${server.description}\n`);
 
-  const testFile = new URL("./integration_test.ts", import.meta.url).pathname;
+  const testFile = new URL("./integration/integration_test.ts", import.meta.url).pathname;
   const test = new Deno.Command(Deno.execPath(), {
     args: ["test", "-A", "--no-check", testFile],
     env: {

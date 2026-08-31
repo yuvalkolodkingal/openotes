@@ -28,9 +28,9 @@
     "fmt": "deno fmt",
     "lint": "deno lint",
     "check": "deno check apps/desktop/main.ts packages/sync-webdav/src/index.ts",
-    "test": "deno test -A --no-check=remote",
+    "test": "deno test -A packages/sync-webdav/tests/ apps/desktop/tests/ --ignore=packages/sync-webdav/tests/integration",
     "test:webdav": "deno run -A packages/sync-webdav/tests/run-integration.ts",
-    "test:ui": "deno run -A apps/desktop/scripts/test-ui.ts",
+    "test:ui": "deno run -A --node-modules-dir=auto npm:vitest@3.2.4 run --root apps/web",
     "bench": "deno run -A apps/desktop/scripts/benchmark.ts",
     "build:ui": "deno run -A apps/desktop/scripts/build-ui.ts",
     "build": "deno run -A apps/desktop/scripts/build.ts",
@@ -43,7 +43,9 @@
     "checksums": "deno run -A apps/desktop/scripts/checksums.ts",
     "verify:no-electron": "deno run -A apps/desktop/scripts/verify-dependencies.ts",
     "build:native": "deno run -A apps/desktop/scripts/build-native.ts",
-    "check:native": "deno run -A apps/desktop/scripts/build-native.ts --check"
+    "check:native": "deno run -A apps/desktop/scripts/build-native.ts --check",
+    "test:sync": "deno test -A packages/sync-webdav/tests/client_test.ts packages/sync-webdav/tests/sync_test.ts packages/sync-webdav/tests/backup_test.ts",
+    "test:desktop": "deno test -A apps/desktop/tests/"
   },
   "fmt": {
     "exclude": [
