@@ -325,13 +325,28 @@ export class EditorModel {
     await this.page
       .context()
       .grantPermissions(["clipboard-read", "clipboard-write"]);
+    // The image is drawn locally rather than fetched from the network: the
+    // test must not depend on an external image host being reachable (it
+    // flakes when the runner is rate-limited), and it matches the app's own
+    // promise not to reach out to third parties.
     await this.page.evaluate(async () => {
-      const resp = await fetch("https://dummyjson.com/image/150");
-      const blob = await resp.blob();
-      window.navigator.clipboard.write([
-        new ClipboardItem({
-          "image/png": new Blob([blob], { type: "image/png" })
-        })
+      const canvas = document.createElement("canvas");
+      canvas.width = 150;
+      canvas.height = 150;
+      const context = canvas.getContext("2d");
+      if (context) {
+        context.fillStyle = "#0f766e";
+        context.fillRect(0, 0, 150, 150);
+      }
+      const blob = await new Promise<Blob>((resolve, reject) =>
+        canvas.toBlob(
+          (result) =>
+            result ? resolve(result) : reject(new Error("no blob")),
+          "image/png"
+        )
+      );
+      await window.navigator.clipboard.write([
+        new ClipboardItem({ "image/png": blob })
       ]);
     });
 
