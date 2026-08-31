@@ -1,0 +1,75 @@
+/* Openotes design tokens — v1.0 */
+
+:root {
+  /* Brand */
+  --on-teal-900: #134e4a;
+  --on-teal-700: #0f766e;   /* primary */
+  --on-teal-500: #14b8a6;
+  --on-teal-200: #99f6e4;   /* fold */
+  --on-paper:    #f0fdfa;   /* sheet */
+
+  /* Neutrals — warm gray, paper-adjacent */
+  --on-ink:      #1c1917;
+  --on-gray-700: #44403c;
+  --on-gray-500: #78716c;
+  --on-gray-300: #d6d3d1;
+  --on-gray-100: #f5f5f4;
+  --on-white:    #fafaf9;
+
+  /* Sync status */
+  --on-synced:   #0f766e;   /* ✓ synced */
+  --on-syncing:  #0369a1;   /* ↻ syncing */
+  --on-offline:  #78716c;   /* ○ offline */
+  --on-pending:  #78716c;   /* ⋯ pending */
+  --on-error:    #b91c1c;   /* ! error */
+  --on-conflict: #b45309;   /* ⚠ conflict */
+
+  /* Semantic (light) */
+  --bg:           var(--on-white);
+  --bg-raised:    #ffffff;
+  --bg-sidebar:   var(--on-gray-100);
+  --text:         var(--on-ink);
+  --text-muted:   var(--on-gray-500);
+  --border:       var(--on-gray-300);
+  --accent:       var(--on-teal-700);
+  --accent-hover: var(--on-teal-900);
+  --selection:    #ccfbf1;
+
+  /* Type */
+  --font-ui:   "Inter", "Segoe UI", system-ui, sans-serif;
+  --font-note: "Inter", "Segoe UI", system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", "Cascadia Code", ui-monospace, monospace;
+
+  --text-xs: 12px;
+  --text-sm: 13px;
+  --text-md: 15px;   /* note body */
+  --text-lg: 18px;
+  --text-xl: 24px;   /* note title */
+
+  /* Shape and space */
+  --radius-sm: 4px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-6: 24px;
+  --space-8: 32px;
+}
+
+[data-theme="dark"] {
+  --bg:           #171412;
+  --bg-raised:    #211d1a;
+  --bg-sidebar:   #1c1917;
+  --text:         #e7e5e4;
+  --text-muted:   #a8a29e;
+  --border:       #3f3a36;
+  --accent:       #2dd4bf;
+  --accent-hover: #5eead4;
+  --selection:    #134e4a;
+  --on-synced:    #2dd4bf;
+  --on-syncing:   #38bdf8;
+  --on-error:     #f87171;
+  --on-conflict:  #fbbf24;
+}

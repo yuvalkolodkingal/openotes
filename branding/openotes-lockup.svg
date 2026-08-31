@@ -1,0 +1,16 @@
+<svg width="720" height="200" viewBox="0 0 720 200" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Openotes — your notes, your server">
+  <!-- Mark at 160px -->
+  <g transform="translate(20,20) scale(0.3125)">
+    <rect x="0" y="0" width="512" height="512" rx="117" fill="#0f766e"/>
+    <path d="M110 102 h205 l87 87 v221 h-292 z" fill="#f0fdfa"/>
+    <path d="M315 102 l87 87 h-87 z" fill="#99f6e4"/>
+    <line x1="154" y1="248" x2="358" y2="248" stroke="#0f766e" stroke-width="15" stroke-linecap="round"/>
+    <line x1="154" y1="299" x2="358" y2="299" stroke="#0f766e" stroke-width="15" stroke-linecap="round" opacity="0.55"/>
+    <circle cx="256" cy="381" r="33" fill="#0f766e"/>
+    <path d="M256 392 l-22 58 h44 z" fill="#0f766e"/>
+  </g>
+  <!-- Wordmark. NOTE: convert to outlines before shipping in contexts
+       where the font stack may not resolve (docs sites are fine). -->
+  <text x="212" y="106" font-family="'Inter', 'Segoe UI', -apple-system, 'Helvetica Neue', Arial, sans-serif" font-size="64" font-weight="600" letter-spacing="-1.5" fill="#134e4a">Openotes</text>
+  <text x="214" y="150" font-family="'Inter', 'Segoe UI', -apple-system, 'Helvetica Neue', Arial, sans-serif" font-size="26" font-weight="400" fill="#0f766e">your notes, your server</text>
+</svg>

@@ -1,0 +1,12 @@
+<svg width="512" height="512" viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Openotes">
+  <!-- Sheet outline -->
+  <path d="M110 62 h205 l87 87 v301 h-292 z" fill="none" stroke="currentColor" stroke-width="26" stroke-linejoin="round"/>
+  <!-- Fold -->
+  <path d="M315 62 v87 h87" fill="none" stroke="currentColor" stroke-width="26" stroke-linejoin="round"/>
+  <!-- Text lines -->
+  <line x1="160" y1="228" x2="352" y2="228" stroke="currentColor" stroke-width="22" stroke-linecap="round"/>
+  <line x1="160" y1="284" x2="352" y2="284" stroke="currentColor" stroke-width="22" stroke-linecap="round" opacity="0.55"/>
+  <!-- Keyhole -->
+  <circle cx="256" cy="366" r="30" fill="currentColor"/>
+  <path d="M256 376 l-20 54 h40 z" fill="currentColor"/>
+</svg>
