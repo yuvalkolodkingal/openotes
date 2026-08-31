@@ -395,42 +395,13 @@ jobs:
           cp "dist/Openotes-${{ needs.version.outputs.version }}-linux-x86_64.tar.gz" \
              packaging/flatpak/openotes-linux-x86_64.tar.gz
 
-      # The manifest was written against a single-file `deno compile` binary.
-      # `deno desktop` splits the application into a launcher plus an
-      # `openotes.so` payload, and without the payload the launcher starts
-      # and then cannot find its own code. One extra install line fixes it.
-      # This patch is applied to a copy for the build only; the fix belongs
-      # in packaging/flatpak/org.openotes.Openotes.yml itself.
-      - name: Add the payload install step to the manifest
-        run: |
-          set -eu
-          manifest=packaging/flatpak/org.openotes.Openotes.yml
-          python3 - "$manifest" <<'PY'
-          import sys
-          path = sys.argv[1]
-          needle = "      - install -Dm755 openotes /app/lib/openotes/openotes\n"
-          extra = "      - install -Dm755 openotes.so /app/lib/openotes/openotes.so\n"
-          text = open(path).read()
-          if extra in text:
-              print("manifest already installs openotes.so")
-              sys.exit(0)
-          if needle not in text:
-              sys.exit(
-                  "the manifest no longer contains the line this patch anchors "
-                  "to; check packaging/flatpak/org.openotes.Openotes.yml"
-              )
-          open(path, "w").write(text.replace(needle, needle + extra, 1))
-          print("added the openotes.so install step")
-          PY
-          grep -q "openotes.so /app/lib/openotes/openotes.so" "$manifest"
-
       - name: flatpak-builder
         run: |
           set -eu
           flatpak-builder --force-clean --disable-rofiles-fuse --repo=repo \
             build-dir packaging/flatpak/org.openotes.Openotes.yml
           flatpak build-bundle repo \
-            "Openotes-${{ needs.version.outputs.version }}-x86_64.flatpak" \
+            "Openotes-${{ needs.version.outputs.version }}-linux-x86_64.flatpak" \
             org.openotes.Openotes
 
       - name: Verify the flatpak carries the payload
@@ -480,15 +451,9 @@ jobs:
           echo "builder ALL=(ALL) NOPASSWD: ALL" > /etc/sudoers.d/builder
 
       # Two substitutions the packaging README already expects (pkgver and
-      # sha256sums), plus two this pipeline needs:
-      #
-      #   * `source` points at the local tarball instead of a release URL,
-      #     because the release does not exist yet at build time;
-      #   * one extra install line for `openotes.so`. The PKGBUILD, like the
-      #     flatpak manifest, was written against a single-file binary;
-      #     `deno desktop` produces a launcher plus a payload, and installing
-      #     only the launcher gives a package that starts and then cannot
-      #     find its own code. The fix belongs in packaging/arch/PKGBUILD.
+      # sha256sums), plus one this pipeline needs: `source` points at the
+      # local tarball instead of a release URL, because the release does not
+      # exist yet at build time.
       - name: Stage the PKGBUILD
         run: |
           set -eu
@@ -523,10 +488,6 @@ jobs:
               else:
                   out.append(line)
           text = "".join(out)
-
-          needle = '  install -Dm755 "${_src}/openotes" "${_libdir}/openotes"\n'
-          extra = '  install -Dm755 "${_src}/openotes.so" "${_libdir}/openotes.so"\n'
-          text = text.replace(needle, needle + extra, 1)
 
           open("arch-build/PKGBUILD", "w").write(text)
           print("staged PKGBUILD for", version)

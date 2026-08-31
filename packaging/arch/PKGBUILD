@@ -22,9 +22,9 @@
 # Openotes, packaged from the prebuilt Linux release tarball.
 #
 # This PKGBUILD does not compile anything: the CI release job builds the
-# tarball (deno compile + the built web UI + the native SQLite libraries) and
-# this only unpacks and installs it. See packaging/README.md for the tarball
-# contract.
+# tarball (the deno desktop launcher + payload, the built web UI and the
+# native SQLite libraries) and this only unpacks and installs it. See
+# packaging/README.md for the tarball contract.
 #
 # makepkg names the result openotes-${pkgver}-${pkgrel}-x86_64.pkg.tar.zst,
 # which is what CI publishes; nothing here overrides PKGEXT.
@@ -50,14 +50,16 @@ optdepends=('zenity: native file chooser and save dialogs'
             'libnotify: reminder notifications via notify-send'
             'xdg-utils: opening links and attachments in the default application')
 
-# !strip: `deno compile` appends its payload after the ELF sections. Stripping
+# !strip: `deno desktop` appends its payload after the ELF sections. Stripping
 #         rewrites the file and discards that payload, leaving a binary that
 #         starts and then cannot find its own code.
 # !debug: there are no debug symbols to split out of a prebuilt binary.
 options=('!strip' '!debug')
 
+# The release asset is named with a capital O (Openotes-…); it is saved under
+# a lowercase local name so the extracted directory matches _src below.
 _tarball="${pkgname}-${pkgver}-linux-x86_64.tar.gz"
-source=("${_tarball}::${url}/releases/download/v${pkgver}/${_tarball}")
+source=("${_tarball}::${url}/releases/download/v${pkgver}/Openotes-${pkgver}-linux-x86_64.tar.gz")
 
 # CI replaces this with the real digest (updpkgsums) after uploading the
 # release asset. SKIP is only correct while the tarball is fetched over HTTPS
@@ -72,7 +74,12 @@ package() {
   # to its own path (apps/desktop/main.ts:51-71,
   # apps/desktop/src/native/sqlite.ts:63-80), so the payload is kept together
   # in /usr/lib/openotes rather than scattered around /usr/bin.
+  #
+  # openotes.so is not a shared library in the usual sense: it is the deno
+  # desktop payload the launcher loads from beside itself. Without it the
+  # launcher starts and then cannot find its own code.
   install -Dm755 "${_src}/openotes" "${_libdir}/openotes"
+  install -Dm755 "${_src}/openotes.so" "${_libdir}/openotes.so"
   cp -r "${_src}/ui" "${_libdir}/ui"
   cp -r "${_src}/native" "${_libdir}/native"
   chmod -R u=rwX,go=rX "${_libdir}"

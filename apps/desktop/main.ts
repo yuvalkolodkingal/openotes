@@ -51,7 +51,7 @@ function resolveUiRoot(): string {
     join(dirOf(Deno.execPath()), "ui"),
     join(Deno.cwd(), "apps", "desktop", "ui"),
     join(Deno.cwd(), "apps", "web", "build"),
-    join(Deno.cwd(), "ui")
+    join(Deno.cwd(), "ui"),
   ];
   for (const candidate of candidates) {
     try {
@@ -63,7 +63,9 @@ function resolveUiRoot(): string {
   }
   throw new Error(
     `Could not find the built user interface. Run "deno task build:ui" ` +
-      `first, or set OPENOTES_UI_ROOT. Looked in:\n  ${candidates.join("\n  ")}`
+      `first, or set OPENOTES_UI_ROOT. Looked in:\n  ${
+        candidates.join("\n  ")
+      }`,
   );
 }
 
@@ -80,7 +82,7 @@ function deepLinkFromArgs(args: string[]): string | undefined {
 /** Wraps Deno.BrowserWindow behind the interface the app expects. */
 function createWindowController(
   window: Deno.BrowserWindow,
-  state: { maximized: boolean }
+  state: { maximized: boolean },
 ): WindowController {
   return {
     maximize() {
@@ -104,7 +106,11 @@ function createWindowController(
     setTitle: (title) => window.setTitle(title),
     setZoom: (factor) => {
       void window
-        .executeJs(`document.documentElement.style.zoom = ${JSON.stringify(String(factor))}`)
+        .executeJs(
+          `document.documentElement.style.zoom = ${
+            JSON.stringify(String(factor))
+          }`,
+        )
         .catch(() => {});
     },
     requestClose: () => window.close(),
@@ -116,10 +122,10 @@ function createWindowController(
       void window.executeJs(script).catch((error: unknown) => {
         log.debug("Could not deliver an event to the renderer", {
           event,
-          error: error instanceof Error ? error.message : String(error)
+          error: error instanceof Error ? error.message : String(error),
         });
       });
-    }
+    },
   };
 }
 
@@ -134,7 +140,7 @@ async function main() {
   if (lock === undefined) {
     console.error(
       `${APP_NAME} is already running. Bring the existing window to the ` +
-        `front instead of starting a second copy.`
+        `front instead of starting a second copy.`,
     );
     Deno.exit(0);
   }
@@ -150,13 +156,13 @@ async function main() {
   const window = new Deno.BrowserWindow({
     title: APP_NAME,
     width: 1200,
-    height: 800
+    height: 800,
   });
 
   const controller = createWindowController(window, windowState);
   const app = await createApp({
     window: controller,
-    initialDeepLink: deepLink
+    initialDeepLink: deepLink,
   });
 
   // Restore the saved geometry now that settings are loaded.
@@ -175,7 +181,7 @@ async function main() {
     return await dispatch(
       request as { path: string; input?: unknown },
       handlers,
-      app
+      app,
     );
   });
 
@@ -186,7 +192,7 @@ async function main() {
     version: APP_VERSION,
     origin: server.origin,
     platform: Deno.build.os,
-    deno: Deno.version.deno
+    deno: Deno.version.deno,
   }));
 
   // ---- window lifecycle ----
@@ -203,7 +209,7 @@ async function main() {
           height,
           x,
           y,
-          maximized: windowState.maximized
+          maximized: windowState.maximized,
         });
       } catch {
         /* the window may already be gone */
@@ -255,7 +261,7 @@ async function main() {
   log.info(`${APP_NAME} ${APP_VERSION} started`, {
     origin: server.origin,
     uiRoot,
-    cacheDir: cacheDir()
+    cacheDir: cacheDir(),
   });
 }
 
@@ -285,7 +291,7 @@ async function acquireInstanceLock(): Promise<Deno.FsFile | undefined> {
     // If the lock file cannot even be created, do not block start-up over
     // it: opening the user's notes matters more than the guarantee.
     log.warn("Could not create the instance lock; continuing without it", {
-      error: error instanceof Error ? error.message : String(error)
+      error: error instanceof Error ? error.message : String(error),
     });
     return undefined as unknown as Deno.FsFile;
   }
@@ -306,11 +312,10 @@ async function acquireInstanceLock(): Promise<Deno.FsFile | undefined> {
   return file;
 }
 
-
 /** Turn CLI intents into the interface's hash routes, as upstream did. */
 function hashRouteFor(
   cli: Awaited<ReturnType<typeof parseArguments>>,
-  origin: string
+  origin: string,
 ): string {
   if (cli.note === true) return `${origin}/#/notes/create/1`;
   if (typeof cli.note === "string") return `${origin}/#/notes/${cli.note}/edit`;

@@ -96,7 +96,7 @@ declare namespace Deno {
     /** Expose a function to the webview as `bindings.<name>()`. */
     bind(
       name: string,
-      handler: (...args: any[]) => unknown | Promise<unknown>
+      handler: (...args: any[]) => unknown | Promise<unknown>,
     ): void;
     unbind(name: string): void;
 
@@ -109,20 +109,20 @@ declare namespace Deno {
 
     addEventListener(
       type: "resize",
-      listener: (event: BrowserWindowResizeEvent) => void
+      listener: (event: BrowserWindowResizeEvent) => void,
     ): void;
     addEventListener(
       type: "move",
-      listener: (event: BrowserWindowMoveEvent) => void
+      listener: (event: BrowserWindowMoveEvent) => void,
     ): void;
     addEventListener(
       type: "close" | "focus" | "blur",
-      listener: (event: Event) => void
+      listener: (event: Event) => void,
     ): void;
     addEventListener(
       type: string,
       listener: (event: any) => void,
-      options?: boolean | AddEventListenerOptions
+      options?: boolean | AddEventListenerOptions,
     ): void;
   }
 
@@ -172,10 +172,10 @@ declare namespace Deno {
 
   /** Optional platform APIs — always feature-detect before calling. */
   export function openDialog(
-    options?: OpenDialogOptions
+    options?: OpenDialogOptions,
   ): Promise<string[] | string | null>;
   export function saveDialog(
-    options?: SaveDialogOptions
+    options?: SaveDialogOptions,
   ): Promise<string | null>;
   export function notify(options?: NotifyOptions): Promise<void>;
   export function openUrl(url: string): Promise<void>;

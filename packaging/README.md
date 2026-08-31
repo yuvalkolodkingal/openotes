@@ -14,9 +14,12 @@ The release job produces exactly one Linux artifact and every packaging format
 consumes it:
 
 ```
-openotes-<version>-linux-x86_64.tar.gz
-└── openotes-<version>-linux-x86_64/
-    ├── openotes                     compiled binary (deno compile)
+Openotes-<version>-linux-x86_64.tar.gz     the release asset name
+└── openotes-<version>-linux-x86_64/       the inner directory (lowercase)
+    ├── openotes                     launcher (deno desktop)
+    ├── openotes.so                  the deno desktop payload the launcher
+    │                                loads from beside itself — not an
+    │                                ordinary shared library
     ├── ui/                          built web UI, served to the webview
     │   └── index.html
     ├── native/                      libsqlite3mc.so + the two FTS5 tokenizer
@@ -29,18 +32,22 @@ openotes-<version>-linux-x86_64.tar.gz
     └── UPSTREAM.md                  copied from the repository root
 ```
 
-Two properties of that layout are load-bearing:
+Three properties of that layout are load-bearing:
 
-- **The binary must not be stripped.** `deno compile` appends its payload after
+- **The binary must not be stripped.** `deno desktop` appends its payload after
   the ELF sections; stripping rewrites the file, drops the payload, and leaves
   a binary that starts and then cannot find its own code. Both the flatpak
   manifest (`build-options: strip: false`) and the PKGBUILD (`options=('!strip')`)
   turn the default stripping off, and the release job must not strip it either.
+- **`openotes.so` travels with the launcher.** `deno desktop` splits the
+  application into a launcher plus a payload; installing only the launcher
+  gives a package that starts and then cannot find its own code. Every
+  package installs the two side by side.
 - **`ui/` and `native/` travel with the binary.** At startup the app looks for
   a `ui` directory and a `native` directory next to its own executable
   (`apps/desktop/main.ts:51-71`, `apps/desktop/src/native/sqlite.ts:63-80`) and
   checks `OPENOTES_UI_ROOT` / `OPENOTES_NATIVE_DIR` first. Both packages keep
-  the three together under a private lib directory and put a four-line `sh`
+  everything together under a private lib directory and put a four-line `sh`
   launcher on `PATH` that pins the two variables, so an unset variable can
   never make an installed copy load a stale UI.
 
@@ -130,11 +137,16 @@ CI copies this file into the release tarball and installs it from there.
 Builds `openotes-<version>-1-x86_64.pkg.tar.zst`, which is makepkg's default
 name for `pkgname-pkgver-pkgrel-arch`; nothing overrides `PKGEXT`.
 
-CI does two substitutions before running `makepkg`:
+CI does three substitutions before running `makepkg`:
 
 1. rewrite the `pkgver=` line from the release tag;
-2. replace `sha256sums=('SKIP')` with the real digest — `updpkgsums` does both
-   the download and the edit.
+2. point `source=` at the local tarball, because the release asset does not
+   exist yet at build time;
+3. replace `sha256sums=('SKIP')` with the real digest.
+
+Run standalone after a release, the unedited PKGBUILD downloads the
+published `Openotes-<version>-linux-x86_64.tar.gz` asset instead (saved
+under a lowercase local name so the extracted directory matches `_src`).
 
 `depends` is `webkit2gtk-4.1` (the GTK3/libsoup3 WebKitGTK the webview loads),
 `gtk3`, and `hicolor-icon-theme`. `zenity`, `libnotify` and `xdg-utils` are

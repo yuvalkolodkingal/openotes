@@ -54,6 +54,14 @@
     "test:desktop": "deno test -A apps/desktop/tests/"
   },
   "fmt": {
+    "include": [
+      "apps/desktop/main.ts",
+      "apps/desktop/src",
+      "apps/desktop/scripts",
+      "apps/desktop/types",
+      "packages/sync-webdav/src",
+      "packages/sync-webdav/tests"
+    ],
     "exclude": [
       "apps/web/src/common/sqlite/*.js",
       "apps/web/build",

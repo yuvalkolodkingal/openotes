@@ -20,8 +20,8 @@
 # Openotes flatpak manifest.
 #
 # This manifest does not build the app. The CI release job builds the Linux
-# tarball first (deno compile + the built web UI + the native SQLite
-# libraries) and drops it next to this file as
+# tarball first (the deno desktop launcher + payload, the built web UI and
+# the native SQLite libraries) and drops it next to this file as
 # `openotes-linux-x86_64.tar.gz`; everything below is installation only.
 # See packaging/README.md for the exact tarball contract.
 #
@@ -83,7 +83,7 @@ modules:
     buildsystem: simple
 
     build-options:
-      # `deno compile` appends its payload after the ELF sections. Stripping
+      # `deno desktop` appends its payload after the ELF sections. Stripping
       # rewrites the file and drops that payload, producing a binary that
       # starts and then cannot find its own code. Both flags are required.
       strip: false
@@ -123,10 +123,14 @@ modules:
           - 'exec /app/lib/openotes/openotes "$@"'
 
     build-commands:
-      # The application payload: the compiled binary, the built web UI it
-      # serves to the webview, and the SQLite3MC library plus the two FTS5
-      # tokenizer extensions the database schema needs.
+      # The application payload: the launcher, the deno desktop payload it
+      # loads from beside itself (openotes.so — not an ordinary shared
+      # library; without it the launcher starts and then cannot find its own
+      # code), the built web UI it serves to the webview, and the SQLite3MC
+      # library plus the two FTS5 tokenizer extensions the database schema
+      # needs.
       - install -Dm755 openotes /app/lib/openotes/openotes
+      - install -Dm755 openotes.so /app/lib/openotes/openotes.so
       - cp -r ui /app/lib/openotes/ui
       - cp -r native /app/lib/openotes/native
       - chmod -R a+rX /app/lib/openotes

@@ -170,7 +170,7 @@ jobs:
             "Openotes-$VERSION-windows-x86_64.msi" \
             "Openotes-$VERSION-windows-x86_64.zip" \
             "openotes-$VERSION-1-x86_64.pkg.tar.zst" \
-            "Openotes-$VERSION-x86_64.flatpak"; do
+            "Openotes-$VERSION-linux-x86_64.flatpak"; do
             if [ ! -f "dist/$artifact" ]; then
               echo "missing: $artifact" >&2
               missing=1
@@ -285,7 +285,7 @@ jobs:
             echo "| Debian / Ubuntu | \`Openotes-$VERSION-linux-x86_64.deb\` |"
             echo "| Fedora / openSUSE | \`Openotes-$VERSION-linux-x86_64.rpm\` |"
             echo "| Arch | \`openotes-$VERSION-1-x86_64.pkg.tar.zst\` |"
-            echo "| Flatpak | \`Openotes-$VERSION-x86_64.flatpak\` |"
+            echo "| Flatpak | \`Openotes-$VERSION-linux-x86_64.flatpak\` |"
             echo "| Linux (tarball) | \`Openotes-$VERSION-linux-x86_64.tar.gz\` |"
             echo "| Windows (installer) | \`Openotes-$VERSION-windows-x86_64.exe\` |"
             echo "| Windows (MSI) | \`Openotes-$VERSION-windows-x86_64.msi\` |"
@@ -313,6 +313,18 @@ jobs:
             echo "\`openotes-$VERSION.spdx.json\`."
           } > release-notes.md
           cat release-notes.md
+
+      # The in-app updater fetches <releases>/latest/download/latest.json
+      # (see apps/desktop/src/updates/updater.ts). The manifest is generated
+      # from the already-verified SHA256SUMS so its hashes cannot disagree
+      # with the published checksums, and it refuses to publish an artifact
+      # that has no checksum entry.
+      - name: Write the update manifest
+        run: |
+          set -euo pipefail
+          deno run -A apps/desktop/scripts/update-manifest.ts \
+            dist "$VERSION" release-notes.md
+          cat dist/latest.json
 
       - name: Create the release
         env:

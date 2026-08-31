@@ -29,13 +29,21 @@ distribution rather than a second installer.
 |---|---|
 | `Openotes-VERSION-linux-x86_64.AppImage` | Runs on any distribution with WebKitGTK. |
 | `Openotes-VERSION-linux-x86_64.flatpak` | Sandboxed bundle. |
-| `openotes_VERSION_amd64.deb` | Debian, Ubuntu. |
-| `openotes-VERSION-1.x86_64.rpm` | Fedora, RHEL, openSUSE. |
+| `Openotes-VERSION-linux-x86_64.deb` | Debian, Ubuntu. |
+| `Openotes-VERSION-linux-x86_64.rpm` | Fedora, RHEL, openSUSE. |
 | `openotes-VERSION-1-x86_64.pkg.tar.zst` | Arch, Manjaro. |
 | `Openotes-VERSION-linux-x86_64.tar.gz` | Generic tarball, and the input every other Linux format is built from. |
 
-`.pkg.tar.zst` is what `makepkg` actually produces; there is no `.pacman`
-extension and nothing here invents one.
+The `.deb` and `.rpm` release assets deliberately keep the uniform
+`Openotes-VERSION-linux-ARCH` scheme rather than each distro's native
+convention (`openotes_VERSION_amd64.deb`, `openotes-VERSION-1.x86_64.rpm`) —
+one predictable name per artifact keeps `SHA256SUMS`, the update manifest
+and the download page consistent. The *package metadata inside* each file
+uses the distro's convention (`Package: openotes`, amd64), so the installed
+package behaves natively. `openotes-VERSION-1-x86_64.pkg.tar.zst` is the one
+exception: it is exactly what `makepkg` names `pkgname-pkgver-pkgrel-arch`,
+because pacman tooling expects that shape. There is no `.pacman` extension
+and nothing here invents one.
 
 ### Alongside them
 
@@ -79,7 +87,8 @@ what an installed copy contains:
 
 ```
 openotes-<version>-linux-x86_64/
-├── openotes            the compiled binary
+├── openotes            the launcher
+├── openotes.so         the deno desktop payload the launcher loads
 ├── ui/                 the built interface, served to the webview
 ├── native/             libsqlite3mc.so and the two FTS5 extensions
 ├── icons/              16×16 … 512×512 PNGs
@@ -89,8 +98,8 @@ openotes-<version>-linux-x86_64/
 └── UPSTREAM.md
 ```
 
-Two properties of that layout are load-bearing, and getting either wrong
-produces a package that installs cleanly and then fails at runtime:
+Three properties of that layout are load-bearing, and getting any of them
+wrong produces a package that installs cleanly and then fails at runtime:
 
 **The binary must not be stripped.** `deno desktop` appends its payload
 after the ELF sections. Stripping rewrites the file, discards the payload,
@@ -98,9 +107,14 @@ and leaves a binary that starts and then cannot find its own code. The
 flatpak manifest sets `strip: false` and the PKGBUILD sets
 `options=('!strip')`; the release job must not strip it either.
 
+**`openotes.so` travels with the launcher.** It is not an ordinary shared
+library: it is the application payload `deno desktop` splits out beside the
+launcher. A package that installs only the launcher starts and then cannot
+find its own code.
+
 **`ui/` and `native/` travel with the binary.** At startup the application
 looks for them next to its own executable, and honours `OPENOTES_UI_ROOT`
-and `OPENOTES_NATIVE_DIR` first. The distribution packages keep all three
+and `OPENOTES_NATIVE_DIR` first. The distribution packages keep everything
 together under a private library directory and install a small launcher on
 `PATH` that pins both variables, so an unset variable cannot make an
 installed copy load a stale interface.
@@ -144,7 +158,7 @@ Flatpak and Arch use their own tooling:
 ```bash
 flatpak-builder --force-clean --repo=repo build-dir \
     packaging/flatpak/org.openotes.Openotes.yml
-flatpak build-bundle repo Openotes-1.0.0-x86_64.flatpak org.openotes.Openotes
+flatpak build-bundle repo Openotes-1.0.0-linux-x86_64.flatpak org.openotes.Openotes
 
 cd packaging/arch && makepkg
 ```
@@ -212,12 +226,12 @@ expected for an unsigned application and not a defect in the build.
 
 ```bash
 # Debian
-dpkg-deb --info openotes_1.0.0_amd64.deb
-dpkg-deb --contents openotes_1.0.0_amd64.deb
+dpkg-deb --info Openotes-1.0.0-linux-x86_64.deb
+dpkg-deb --contents Openotes-1.0.0-linux-x86_64.deb
 
 # RPM
-rpm -qip openotes-1.0.0-1.x86_64.rpm
-rpm -qlp openotes-1.0.0-1.x86_64.rpm
+rpm -qip Openotes-1.0.0-linux-x86_64.rpm
+rpm -qlp Openotes-1.0.0-linux-x86_64.rpm
 
 # Arch
 bsdtar -tf openotes-1.0.0-1-x86_64.pkg.tar.zst
