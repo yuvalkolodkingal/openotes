@@ -1,0 +1,11 @@
+{
+  "name": "@notesnook/sync-webdav",
+  "version": "1.0.0",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "imports": {
+    "@notesnook/crypto": "../crypto/src/index.ts",
+    "@notesnook/sodium": "../sodium/src/browser.ts"
+  }
+}

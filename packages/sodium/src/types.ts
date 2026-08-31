@@ -31,6 +31,8 @@ export interface ISodium {
 
   get crypto_generichash(): typeof sodium.crypto_generichash;
 
+  get crypto_box_keypair(): typeof sodium.crypto_box_keypair;
+
   get crypto_pwhash(): typeof sodium.crypto_pwhash;
   get crypto_pwhash_ALG_ARGON2ID13(): typeof sodium.crypto_pwhash_ALG_ARGON2ID13;
   get crypto_pwhash_SALTBYTES(): typeof sodium.crypto_pwhash_SALTBYTES;

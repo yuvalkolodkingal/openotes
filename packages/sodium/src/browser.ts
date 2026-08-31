@@ -18,6 +18,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
 import sodium from "libsodium-wrappers-sumo";
+import type { base64_variants as SodiumBase64Variants } from "libsodium-wrappers-sumo";
 import { base64_variants, type ISodium } from "./types";
 
 export class Sodium implements ISodium {
@@ -27,6 +28,10 @@ export class Sodium implements ISodium {
 
   get crypto_generichash() {
     return sodium.crypto_generichash;
+  }
+
+  get crypto_box_keypair() {
+    return sodium.crypto_box_keypair;
   }
 
   get crypto_pwhash() {
@@ -120,7 +125,7 @@ export class Sodium implements ISodium {
   }
 }
 
-function convertVariant(variant: base64_variants): sodium.base64_variants {
+function convertVariant(variant: base64_variants): SodiumBase64Variants {
   switch (variant) {
     case base64_variants.ORIGINAL:
       return sodium.base64_variants.ORIGINAL;
