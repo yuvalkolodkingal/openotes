@@ -1,6 +1,6 @@
 <div align="center">
 
-# Openotes
+<p align="center"><img src="branding/openotes-lockup.png" alt="Openotes" width="360"></p>
 
 **A desktop notes application that keeps your notes yours.**
 

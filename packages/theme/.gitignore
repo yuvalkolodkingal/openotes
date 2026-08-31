@@ -156,3 +156,11 @@ sketch
 
 **/themes/
 # End of https://www.toptal.com/developers/gitignore/api/react,node
+
+# The generic **/themes/ rule above is meant for Sublime/PSD theme folders,
+# but it also hides the default theme definitions. This fork commits those
+# (branded for Openotes) instead of fetching them from an upstream server at
+# build time, so they are re-included here.
+!src/theme-engine/themes/
+!src/theme-engine/themes/default-light.json
+!src/theme-engine/themes/default-dark.json

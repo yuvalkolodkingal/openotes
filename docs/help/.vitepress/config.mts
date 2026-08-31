@@ -88,7 +88,7 @@ export default defineConfig({
         crossorigin: ""
       }
     ],
-    ["meta", { name: "theme-color", content: "#008837" }],
+    ["meta", { name: "theme-color", content: "#0f766e" }],
     ["meta", { property: "og:type", content: "website" }],
     ["meta", { property: "og:site_name", content: "Notesnook Help" }],
     ["meta", { property: "og:image", content: "/logo.png" }],

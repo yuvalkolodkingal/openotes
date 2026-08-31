@@ -85,7 +85,7 @@ withDefaults(
 }
 
 .nn-cta__button:hover {
-  background-color: #008837e6;
+  background-color: #0f766ee6;
 }
 
 .nn-cta__link {

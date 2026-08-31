@@ -1,0 +1,25 @@
+JetBrains Mono
+==============
+
+Font:     JetBrains Mono (Regular 400, Medium 500)
+License:  SIL Open Font License, Version 1.1 (OFL-1.1)
+Project:  https://github.com/JetBrains/JetBrainsMono
+Copyright: Copyright 2020 The JetBrains Mono Project Authors
+           (https://github.com/JetBrains/JetBrainsMono)
+
+The bundled woff2 files in this directory
+(JetBrainsMono-Regular.woff2, JetBrainsMono-Medium.woff2) were taken from the
+@fontsource/jetbrains-mono 5.0.18 distribution, which packages JetBrains Mono
+under the SIL Open Font License 1.1. Source URLs:
+
+  https://cdn.jsdelivr.net/npm/@fontsource/jetbrains-mono@5.0.18/files/jetbrains-mono-latin-400-normal.woff2
+  https://cdn.jsdelivr.net/npm/@fontsource/jetbrains-mono@5.0.18/files/jetbrains-mono-latin-500-normal.woff2
+
+The full text of the SIL Open Font License 1.1 is available at:
+
+  https://openfontlicense.org/open-font-license-official-text/
+  https://github.com/JetBrains/JetBrainsMono/blob/master/OFL.txt
+
+Under the OFL these font files may be used, studied, modified and
+redistributed freely so long as they are not sold by themselves; the
+original font names are reserved by the OFL Reserved Font Name mechanism.

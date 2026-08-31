@@ -16,8 +16,16 @@ GNU General Public License for more details.
 You should have received a copy of the GNU General Public License
 along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
-import "isomorphic-fetch";
-import { mkdir, writeFile } from "fs/promises";
+
+// Upstream generated the default themes here by fetching them from
+// streetwriters/notesnook-themes at build time. Openotes ships its own
+// branded themes committed in src/theme-engine/themes/ (they are the source
+// of truth, imported directly by the theme engine), so this build must not
+// reach out to anyone — the fork contacts no Notesnook infrastructure, and a
+// build that silently re-downloaded upstream would also overwrite the
+// Openotes palette with Notesnook's green. This step now only asserts the
+// committed themes are present.
+
 import path from "path";
 import { fileURLToPath } from "url";
 import { existsSync } from "fs";
@@ -31,28 +39,24 @@ const THEMES_DIRECTORY = path.resolve(
   path.join(__dirname, "..", "src", "theme-engine", "themes")
 );
 
-const THEME_COMPATIBILITY_VERSION = 1;
+function main() {
+  const missing = DEFAULT_THEMES.filter(
+    (themeId) => !existsSync(path.join(THEMES_DIRECTORY, `${themeId}.json`))
+  );
 
-async function main() {
-  await mkdir(THEMES_DIRECTORY, { recursive: true });
-
-  for (const themeId of DEFAULT_THEMES) {
-    const themePath = path.join(THEMES_DIRECTORY, `${themeId}.json`);
-    if (existsSync(themePath)) continue;
-    console.log("Getting", themeId);
-
-    const BASE_URL = `https://raw.githubusercontent.com/streetwriters/notesnook-themes/main/themes/${themeId}/v${THEME_COMPATIBILITY_VERSION}`;
-    const theme = await fetch(`${BASE_URL}/theme.json`).then((r) => r.json());
-    const codeBlockCSS = await fetch(`${BASE_URL}/code-block.css`).then((r) =>
-      r.text()
+  if (missing.length > 0) {
+    console.error(
+      `The default theme file(s) ${missing
+        .map((id) => `${id}.json`)
+        .join(", ")} are missing from ${THEMES_DIRECTORY}.\n` +
+        "They are committed to the repository — restore them with " +
+        "`git checkout -- packages/theme/src/theme-engine/themes`. " +
+        "This build never downloads them."
     );
-    if (!theme) continue;
-
-    await writeFile(
-      path.join(THEMES_DIRECTORY, `${themeId}.json`),
-      JSON.stringify({ ...theme, $schema: undefined, codeBlockCSS })
-    );
+    process.exit(1);
   }
+
+  console.log("Default themes present:", DEFAULT_THEMES.join(", "));
 }
 
 main();

@@ -33,6 +33,8 @@ const SANS_FONT_STACK = [
   "sans-serif"
 ];
 const MONOSPACE_FONT_STACK = [
+  '"JetBrains Mono"',
+  "ui-monospace",
   "Hack",
   "Consolas",
   '"Andale Mono"',

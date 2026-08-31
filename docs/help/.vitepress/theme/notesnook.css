@@ -3,7 +3,7 @@
  *
  * Values come from @notesnook/theme (default-light / default-dark v2.1) and
  * apps/web:
- *   accent            #008837            packages/theme default themes
+ *   accent            #0f766e            packages/theme default themes
  *   radii             2.5 / 5 / 7 / 10   packages/theme/src/theme/index.ts
  *   space scale       6 / 10 / 15 / 20   packages/theme/src/theme/index.ts
  *   shadows           menu / dialog      packages/theme/src/theme/index.ts
@@ -20,9 +20,9 @@
 
 :root {
   /* Notesnook primitives */
-  --nn-accent: #008837;
+  --nn-accent: #0f766e;
   --nn-accent-foreground: #ffffff;
-  --nn-shade: #0088371a; /* alpha(accent, .1) */
+  --nn-shade: #0f766e1a; /* alpha(accent, .1) */
 
   --nn-radius-small: 2.5px;
   --nn-radius-default: 5px;
@@ -52,9 +52,9 @@
 
 /* ------------------------------- light ---------------------------------- */
 :root {
-  --vp-c-brand-1: #008837;
-  --vp-c-brand-2: #008837e6; /* app button hover  — alpha(accent, .9) */
-  --vp-c-brand-3: #008837cc; /* app button active — alpha(accent, .8) */
+  --vp-c-brand-1: #0f766e;
+  --vp-c-brand-2: #0f766ee6; /* app button hover  — alpha(accent, .9) */
+  --vp-c-brand-3: #0f766ecc; /* app button active — alpha(accent, .8) */
   --vp-c-brand-soft: var(--nn-shade);
 
   --vp-c-bg: #ffffff;
@@ -87,12 +87,12 @@
 
 /* -------------------------------- dark ---------------------------------- */
 .dark {
-  /* #008837 is only 3.06:1 on the app's #181818, so text-bearing brand steps
-     are lightened for readability. Solid accent fills stay exactly #008837. */
+  /* #0f766e is only 3.06:1 on the app's #181818, so text-bearing brand steps
+     are lightened for readability. Solid accent fills stay exactly #0f766e. */
   --vp-c-brand-1: #00b34a;
   --vp-c-brand-2: #00c853;
-  --vp-c-brand-3: #008837;
-  --vp-c-brand-soft: #00883733;
+  --vp-c-brand-3: #0f766e;
+  --vp-c-brand-soft: #0f766e33;
 
   --vp-c-bg: #181818;
   --vp-c-bg-alt: #202020;
@@ -128,10 +128,10 @@
   --vp-button-brand-bg: var(--nn-accent);
   --vp-button-brand-text: var(--nn-accent-foreground);
   --vp-button-brand-border: transparent;
-  --vp-button-brand-hover-bg: #008837e6;
+  --vp-button-brand-hover-bg: #0f766ee6;
   --vp-button-brand-hover-text: var(--nn-accent-foreground);
   --vp-button-brand-hover-border: transparent;
-  --vp-button-brand-active-bg: #008837cc;
+  --vp-button-brand-active-bg: #0f766ecc;
   --vp-button-brand-active-text: var(--nn-accent-foreground);
 
   --vp-code-bg: var(--nn-code-bg);
@@ -161,7 +161,7 @@ html {
 }
 
 ::selection {
-  background-color: #00883766;
+  background-color: #0f766e66;
   color: var(--nn-selected-fg);
 }
 

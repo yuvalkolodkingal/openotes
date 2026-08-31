@@ -1,11 +1,11 @@
 <p align="center">
-<img style="align:center;" src="/resources/screenshots/web.jpg" alt="Notesnook web screenshot" width="600" />
+<img style="align:center;" src="/resources/screenshots/web.jpg" alt="Openotes web screenshot" width="600" />
 </p>
 
-<h1 align="center">Notesnook Web</h1>
+<h1 align="center">Openotes web</h1>
 <h3 align="center">The web app is built using React, Typescript & Javascript.</h3>
 <p align="center">
-<a href="https://app.notesnook.com/">Try it out!</a> | <a href="#developer-guide">Developer guide</a> | <a href="#build-instructions">How to build?</a> | <a href="../desktop/">Desktop app</a>
+<a href="#developer-guide">Developer guide</a> | <a href="#build-instructions">How to build?</a>
 </p>
 
 ## Getting started

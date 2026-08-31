@@ -65,6 +65,20 @@ type Appearance = {
   spinning?: boolean;
 };
 
+// Sync-status colors are a RESERVED vocabulary from the design system, not
+// decoration — they match the README's indicator table one-to-one and may
+// never be reused for anything else:
+//
+//   synced   → teal   (the theme `accent`, which the rebrand made teal)
+//   syncing  → blue   #0369a1
+//   offline  → gray   #78716c
+//   pending  → gray   #78716c
+//   error    → red    var(--icon-error)
+//   conflict → amber  #b45309  (a conflict is NOT an error)
+//
+// "Offline is gray, not red: working offline is a normal, supported state of
+// the product, and the palette must say so." A conflict is amber, not red,
+// for the same reason: both versions were safely kept, nothing failed.
 export function describeSyncStatus(
   status: SyncStatusValue,
   conflicts: number
@@ -76,7 +90,7 @@ export function describeSyncStatus(
     return {
       key: "conflict",
       icon: Alert,
-      iconColor: "var(--icon-error)",
+      iconColor: "#b45309",
       label: conflicts === 1 ? "Conflict" : `${conflicts} conflicts`,
       tooltip:
         "Both versions of an item were kept. Click to review the conflicts."
@@ -87,6 +101,7 @@ export function describeSyncStatus(
       return {
         key: "synced",
         icon: Sync,
+        iconColor: "accent",
         label: strings.synced(),
         tooltip: status.at
           ? `All changes are synced (${getTimeAgo(status.at, "en_short", {
@@ -98,6 +113,7 @@ export function describeSyncStatus(
       return {
         key: "syncing",
         icon: Sync,
+        iconColor: "#0369a1",
         spinning: true,
         label: status.progress
           ? `${strings.syncing()} ${status.progress.done}/${
@@ -110,6 +126,7 @@ export function describeSyncStatus(
       return {
         key: "offline",
         icon: SyncOff,
+        iconColor: "#78716c",
         label: strings.offline(),
         tooltip:
           "The WebDAV server cannot be reached. Changes are kept on this device and will sync when it is back."
@@ -118,7 +135,7 @@ export function describeSyncStatus(
       return {
         key: "pending",
         icon: Sync,
-        iconColor: "accent",
+        iconColor: "#78716c",
         label:
           status.count > 0 ? `${status.count} pending` : "Pending changes",
         tooltip: "There are local changes waiting to sync. Click to sync now."
@@ -135,7 +152,7 @@ export function describeSyncStatus(
       return {
         key: "conflict",
         icon: Alert,
-        iconColor: "var(--icon-error)",
+        iconColor: "#b45309",
         label: status.count === 1 ? "Conflict" : `${status.count} conflicts`,
         tooltip:
           "Both versions of an item were kept. Click to review the conflicts."
