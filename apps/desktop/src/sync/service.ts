@@ -223,6 +223,9 @@ export class SyncService {
         CREDENTIAL_KEY_PASSWORD,
         options.password,
       );
+      // The marker the settings form reads: it cannot ask the credential
+      // store directly because that store may be locked.
+      await this.options.settings.patchWebDav({ passwordSaved: true });
     }
     if (options.passphrase !== undefined) {
       await this.options.credentials.set(
@@ -403,7 +406,10 @@ export class SyncService {
     this.stop();
     await this.options.credentials.set(CREDENTIAL_KEY_PASSWORD, undefined);
     await this.options.credentials.set(CREDENTIAL_KEY_PASSPHRASE, undefined);
-    await this.options.settings.patchWebDav({ enabled: false });
+    await this.options.settings.patchWebDav({
+      enabled: false,
+      passwordSaved: false,
+    });
     await this.resetRemoteState();
     this.setStatus({ type: "disabled" });
   }

@@ -218,8 +218,11 @@ export function createHandlers(): Record<string, Handler> {
 
     "integration.systemTheme": (_input, context) => context.theme.current(),
     "integration.changeTheme": async (input, context) => {
-      const theme = input === "dark" || input === "light" || input === "system"
-        ? input
+      // The interface sends { theme, backgroundColor?, ... }; a bare string
+      // is accepted too.
+      const raw = input && typeof input === "object" ? input.theme : input;
+      const theme = raw === "dark" || raw === "light" || raw === "system"
+        ? raw
         : "system";
       await context.settings.set("theme", theme);
       context.theme.apply(theme);
@@ -618,11 +621,16 @@ export function createHandlers(): Record<string, Handler> {
       return directory;
     },
 
-    "backup.importFile": async (_input, context) =>
-      await context.dialogs.selectFile({
+    "backup.importFile": async (_input, context) => {
+      const picked = await context.dialogs.selectFile({
         title: "Choose a backup file",
         extensions: ["enc", "nnbackup", "nnbackupz", "json"],
-      }),
+      });
+      // Picking through the native dialog is the capability grant that lets
+      // backup.restore read this one file from outside the app directories.
+      if (picked) context.backups.grantFile(picked);
+      return picked;
+    },
 
     "backup.restore": async (input, context) => {
       if (input?.confirm !== "restore") {

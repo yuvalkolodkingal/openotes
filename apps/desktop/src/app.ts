@@ -143,7 +143,6 @@ export async function createApp(
   let syncStore: DatabaseSyncStore | undefined;
   let rendererReady = false;
   const pendingEvents: { event: EventName; payload: unknown }[] = [];
-  let hasWebDavPassword = false;
 
   const computeAllowedRoots = () => [
     appDataDir(),
@@ -220,7 +219,9 @@ export async function createApp(
       exports.setAllowedRoots(computeAllowedRoots());
     },
 
-    hasStoredWebDavPassword: () => hasWebDavPassword,
+    // A persisted marker rather than a live credential-store query: the
+    // store may be locked when the settings form asks (see settings.ts).
+    hasStoredWebDavPassword: () => settings.get("webdav").passwordSaved,
 
     tailLogs: (lines) => logger.tail(lines),
 
@@ -341,7 +342,12 @@ export async function createApp(
   if (settings.get("webdav").storeCredentialsWithMachineKey) {
     try {
       await credentials.unlockWithMachineKey();
-      hasWebDavPassword = await credentials.has("webdav.password");
+      // Self-heal the passwordSaved marker for installations that stored a
+      // password before the marker existed.
+      const stored = await credentials.has("webdav.password");
+      if (stored !== settings.get("webdav").passwordSaved) {
+        await settings.patchWebDav({ passwordSaved: stored });
+      }
     } catch (error) {
       log.warn("Could not unlock stored credentials at startup", {
         error: error instanceof Error ? error.message : String(error),

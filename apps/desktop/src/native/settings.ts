@@ -59,6 +59,13 @@ export interface WebDavSettings {
   allowInsecureHttp: boolean;
   /** Remember the WebDAV password without unlocking the vault first. */
   storeCredentialsWithMachineKey: boolean;
+  /**
+   * Whether a WebDAV password is stored in the credential store. A marker,
+   * not a secret: the credential store itself may be locked when the
+   * settings form asks, so the answer has to live somewhere readable.
+   * Maintained by SyncService.setCredentials/disconnect.
+   */
+  passwordSaved: boolean;
 }
 
 export interface BackupSettings {
@@ -130,6 +137,7 @@ export function defaultSettings(): AppSettings {
       maxRetries: 3,
       allowInsecureHttp: false,
       storeCredentialsWithMachineKey: false,
+      passwordSaved: false,
     },
     backup: {
       localEnabled: true,

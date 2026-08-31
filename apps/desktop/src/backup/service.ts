@@ -107,6 +107,14 @@ export interface RestoreProgress {
 export class BackupService {
   private readonly crypto = new SyncCrypto();
   private readonly engine: BackupEngine;
+  /**
+   * Files the user picked through the native file dialog. Picking a file is
+   * a capability grant: the renderer never named the path, the OS dialog
+   * did, so restoring from it is allowed even though it lies outside the
+   * backup directory (a download, a USB stick). Bounded and in-memory —
+   * the grant does not outlive the process.
+   */
+  private readonly grantedFiles: string[] = [];
 
   constructor(private readonly options: BackupServiceOptions) {
     this.engine = new BackupEngine(this.crypto, {
@@ -114,6 +122,13 @@ export class BackupService {
       appVersion: APP_VERSION,
       deviceId: options.settings.get("sync").deviceId ?? "unknown",
     });
+  }
+
+  /** Record a natively-picked backup file as restorable. */
+  grantFile(path: string): void {
+    this.grantedFiles.push(path);
+    // A handful of picks is plenty; this is not a persistent allowlist.
+    while (this.grantedFiles.length > 8) this.grantedFiles.shift();
   }
 
   private async backupKey(): Promise<SerializedKey> {
@@ -314,14 +329,19 @@ export class BackupService {
     report("downloading", "Reading the backup");
     let raw: Uint8Array;
     if (which === "file") {
-      const path = assertInside(
-        nameOrPath,
-        [
-          this.options.settings.get("backup").localDirectory,
-          appDataDir(),
-        ],
-        "backup file",
-      );
+      // A path the user just picked through the native dialog is allowed
+      // as-is (exact match only); anything else must be inside the
+      // directories the app owns.
+      const path = this.grantedFiles.includes(nameOrPath)
+        ? nameOrPath
+        : assertInside(
+          nameOrPath,
+          [
+            this.options.settings.get("backup").localDirectory,
+            appDataDir(),
+          ],
+          "backup file",
+        );
       raw = await Deno.readFile(path);
     } else {
       const target = which === "local"

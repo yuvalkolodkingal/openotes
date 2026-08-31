@@ -128,21 +128,6 @@ export class AppModel {
     return await this.routeHeader.getAttribute("data-header");
   }
 
-  async isSynced() {
-    return (
-      (await this.page
-        .locator(getTestId("sync-status-completed"))
-        .isVisible()) ||
-      (await this.page.locator(getTestId("sync-status-synced")).isVisible())
-    );
-  }
-
-  async waitForSync(state: "completed" | "synced" | "syncing" = "completed") {
-    await this.page
-      .locator(getTestId(`sync-status-${state}`))
-      .waitFor({ state: "visible" });
-  }
-
   async lockAppButton() {
     return this.page.locator(getTestId("lock-app"));
   }

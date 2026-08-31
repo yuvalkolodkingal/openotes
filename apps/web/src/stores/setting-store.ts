@@ -171,7 +171,7 @@ class SettingStore extends BaseStore<SettingStore> {
     Config.set("imageCompression", imageCompression);
   };
 
-  setDesktopIntegration = async (settings: DesktopIntegration) => {
+  setDesktopIntegration = async (settings: Partial<DesktopIntegration>) => {
     const { desktopIntegrationSettings } = this.get();
 
     await desktop?.integration.setDesktopIntegration.mutate({

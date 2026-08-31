@@ -38,6 +38,7 @@ import { AppEventManager, AppEvents } from "../app-events";
 import { TaskScheduler } from "../../utils/task-scheduler";
 import { checkForUpdate } from "../../utils/updater";
 import { store as settingStore } from "../../stores/setting-store";
+import type { DesktopIntegration } from "@notesnook/desktop";
 
 type RpcResponse =
   | { ok: true; result: unknown }
@@ -192,7 +193,135 @@ function makeNamespace(namespace: string) {
   );
 }
 
-export type DesktopBridge = Record<string, Record<string, Procedure>>;
+/**
+ * The typed surface of the runtime's procedure allowlist
+ * (apps/desktop/src/rpc/protocol.ts), with each procedure's input and
+ * output shaped after its handler in apps/desktop/src/rpc/handlers.ts.
+ * The proxy underneath is dynamic — these types are the renderer-side
+ * contract, and a namespace missing here is a one-line addition, not a
+ * runtime change.
+ */
+export interface DesktopBridge {
+  bridge: {
+    ready: Procedure<void, { ready: boolean }>;
+    onOpenLink: Procedure<void, string>;
+    onCreateItem: Procedure<void, string>;
+  };
+  window: {
+    maximize: Procedure<void, void>;
+    restore: Procedure<void, void>;
+    /** Upstream spelling, kept so the renderer is unchanged. */
+    minimze: Procedure<void, void>;
+    maximized: Procedure<void, boolean>;
+    fullscreen: Procedure<void, boolean>;
+    close: Procedure<void, void>;
+    setTitle: Procedure<string | { title: string }, void>;
+    onWindowStateChanged: Procedure<void, unknown>;
+    onClose: Procedure<void, void>;
+  };
+  integration: {
+    isFlatpak: Procedure<void, boolean>;
+    isSnap: Procedure<void, boolean>;
+    isPortable: Procedure<void, boolean>;
+    appVersion: Procedure<void, string>;
+    about: Procedure<void, Record<string, string>>;
+    backupDirectory: Procedure<void, string | undefined>;
+    selectBackupDirectory: Procedure<void, string | undefined>;
+    selectDirectory: Procedure<{ title?: string }, string | undefined>;
+    selectFile: Procedure<
+      { title?: string; extensions?: string[] },
+      string | undefined
+    >;
+    saveFile: Procedure<
+      { title?: string; defaultName?: string },
+      string | undefined
+    >;
+    zoomFactor: Procedure<void, number>;
+    setZoomFactor: Procedure<number, void>;
+    privacyMode: Procedure<void, boolean>;
+    setPrivacyMode: Procedure<{ enabled: boolean }, void>;
+    desktopIntegration: Procedure<void, DesktopIntegration>;
+    setDesktopIntegration: Procedure<Partial<DesktopIntegration>, void>;
+    showNotification: Procedure<
+      {
+        title?: string;
+        body?: string;
+        tag?: string;
+        silent?: boolean;
+        urgency?: string;
+        timeoutType?: string;
+      },
+      void
+    >;
+    showMenu: Procedure<unknown, { handled: boolean }>;
+    openPath: Procedure<string | { path: string }, void>;
+    revealFile: Procedure<string | { path: string }, void>;
+    openExternal: Procedure<string | { url: string }, void>;
+    restart: Procedure<void, void>;
+    bringToFront: Procedure<void, void>;
+    systemTheme: Procedure<void, "light" | "dark">;
+    changeTheme: Procedure<
+      | "light"
+      | "dark"
+      | "system"
+      | {
+        theme: string;
+        backgroundColor?: string;
+        windowControlsIconColor?: string;
+      },
+      void
+    >;
+    onThemeChanged: Procedure<void, unknown>;
+    readClipboard: Procedure<void, string>;
+    writeClipboard: Procedure<string | { text: string }, void>;
+    /** Electron-era, accepted and inert. */
+    customDns: Procedure<void, boolean>;
+    setCustomDns: Procedure<boolean, boolean>;
+    proxyRules: Procedure<void, string>;
+    setProxyRules: Procedure<string, string>;
+    openLogDirectory: Procedure<void, void>;
+    logs: Procedure<{ lines?: number }, string>;
+  };
+  sqlite: {
+    open: Procedure<Record<string, unknown>, unknown>;
+    run: Procedure<
+      { id: string; sql: string; parameters?: unknown[] },
+      unknown
+    >;
+    close: Procedure<string | { id: string }, void>;
+    delete: Procedure<string | { id: string }, void>;
+    export: Procedure<string | { id: string }, string>;
+  };
+  compress: {
+    gzip: Procedure<string | { data: string; level?: number }, string>;
+    gunzip: Procedure<string | { data: string }, string>;
+  };
+  safeStorage: {
+    isEncryptionAvailable: Procedure<void, boolean>;
+    encryptString: Procedure<string | { plaintext: string }, string>;
+    decryptString: Procedure<string | { payload: string }, string>;
+  };
+  updater: {
+    check: Procedure<void, unknown>;
+    download: Procedure<void, unknown>;
+    install: Procedure<void, unknown>;
+    autoUpdates: Procedure<void, boolean>;
+    toggleAutoUpdates: Procedure<{ enabled: boolean }, void>;
+    releaseTrack: Procedure<void, string>;
+    changeReleaseTrack: Procedure<{ track: string }, string>;
+    onChecking: Procedure<void, unknown>;
+    onAvailable: Procedure<void, unknown>;
+    onNotAvailable: Procedure<void, unknown>;
+    onDownloadProgress: Procedure<void, unknown>;
+    onDownloaded: Procedure<void, unknown>;
+    onError: Procedure<void, unknown>;
+  };
+  webdav: {
+    fetchAttachment: Procedure<{ hash: string }, boolean>;
+    onStatus: Procedure<void, unknown>;
+    onConflict: Procedure<void, unknown>;
+  };
+}
 
 export const desktop = new Proxy({} as DesktopBridge, {
   get(_target, property) {

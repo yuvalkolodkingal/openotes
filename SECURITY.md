@@ -162,7 +162,12 @@ be read in bulk: a compromised renderer must ask for each key by name rather
 than exfiltrating the store in one call.
 
 `settings` holds ordinary preferences and is plain JSON, because they are
-not secret and being readable makes them debuggable.
+not secret and being readable makes them debuggable. The interface keeps
+using its synchronous localStorage wrapper within a session; at boot the
+runtime's copy is seeded into localStorage before anything reads it, and
+every write is mirrored back (`utils/config-persistence.ts`), so
+preferences survive the per-launch origin change without every consumer
+becoming asynchronous.
 
 Attachment content is served the same way, through the `attachments.*`
 procedures into a chunked on-disk store (one directory per attachment hash

@@ -294,10 +294,14 @@ class WebDavStore extends BaseStore<WebDavStore> {
     await this.refreshStatus();
   };
 
-  /** Requires the literal confirmation the handler checks for. */
+  /**
+   * Requires the literal confirmation the handler checks for. The generation
+   * is the engine's identifier for the new repository (`<deviceId>-<n>`, see
+   * `newGeneration` in packages/sync-webdav), not a counter.
+   */
   rebuildRemote = async () => {
     const result = await this.withBusy(() =>
-      rpc<{ generation: number }>("webdav.rebuildRemote", {
+      rpc<{ generation: string }>("webdav.rebuildRemote", {
         confirm: "rebuild"
       })
     );

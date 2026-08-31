@@ -139,9 +139,11 @@ export const SyncSettings: SettingsGroup[] = [
               ConfirmDialog.show({
                 title: "Disconnect from the WebDAV server?",
                 message:
-                  "This device will stop syncing. Nothing is deleted: your " +
-                  "notes stay here and the encrypted repository stays on the " +
-                  "server. You can reconnect with the same passphrase later.",
+                  "This device will stop syncing. Your notes stay here and " +
+                  "the encrypted repository stays on the server, but the " +
+                  "WebDAV password and sync passphrase stored on this device " +
+                  "are deleted — you will need to enter both again to " +
+                  "reconnect.",
                 positiveButtonText: "Disconnect",
                 negativeButtonText: strings.cancel()
               }).then((result) => {

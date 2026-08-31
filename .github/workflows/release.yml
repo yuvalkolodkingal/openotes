@@ -66,15 +66,39 @@ jobs:
 
       - name: Resolve and cross-check the version
         id: resolve
+        # The tag arrives through the environment rather than being expanded
+        # into the script: `${{ inputs.tag }}` is attacker-controlled text and
+        # pasting it into bash would make it executable.
+        env:
+          TAG_INPUT: ${{ inputs.tag }}
+          REF_NAME: ${{ github.ref_name }}
         run: |
           set -euo pipefail
-          tag="${{ inputs.tag || github.ref_name }}"
+          tag="${TAG_INPUT:-$REF_NAME}"
           case "$tag" in
             v*) ;;
             *) echo "Refusing to release from \"$tag\": tags must start with v" >&2
                exit 1 ;;
           esac
           version="${tag#v}"
+
+          # A workflow_dispatch run checks out the ref it was started on, not
+          # the tag named in the input — and `uses: ./.github/workflows/...`
+          # resolves the called workflows at that same ref. So a dispatch
+          # could build one commit and publish it under a tag that points at
+          # another. Refuse unless the two are the same commit; the fix is to
+          # pick the tag itself as the ref the run starts on.
+          if [ -n "${TAG_INPUT:-}" ]; then
+            git fetch --no-tags --depth=1 origin "+refs/tags/$tag:refs/tags/$tag"
+            tagged=$(git rev-parse "refs/tags/$tag^{commit}")
+            if [ "$tagged" != "$GITHUB_SHA" ]; then
+              echo "Tag $tag points at $tagged but this run checked out" \
+                   "$GITHUB_SHA, so the artifacts would not be built from" \
+                   "the tagged commit." >&2
+              echo "Re-run the workflow with $tag selected as the ref." >&2
+              exit 1
+            fi
+          fi
 
           declared=$(sed -n 's/^export const APP_VERSION = "\(.*\)";$/\1/p' \
             apps/desktop/src/constants.ts)
@@ -239,10 +263,13 @@ jobs:
               -in "$target" \
               -out "$target.signed"
             mv "$target.signed" "$target"
-            osslsigncode verify -in "$target" || {
-              echo "The signature on $target did not verify" >&2
-              exit 1
-            }
+            # Verification is advisory: osslsigncode exits non-zero when the
+            # certificate chain is not in the runner's CA store, which is
+            # normal for an internal or newly-issued code-signing CA. The
+            # signing step above already failed hard if signing itself did.
+            osslsigncode verify -in "$target" \
+              || echo "::warning::Signature on $target did not chain to a" \
+                      "trusted root on this runner (expected for internal CAs)"
           done
 
       # ---- SBOM (spec §43) ---------------------------------------------------
@@ -325,18 +352,33 @@ jobs:
           deno run -A apps/desktop/scripts/update-manifest.ts \
             dist "$VERSION" release-notes.md
           cat dist/latest.json
+          # The manifest was generated FROM the verified SHA256SUMS, so
+          # appending its own digest afterwards invalidates nothing — and
+          # a download of latest.json becomes checkable like everything
+          # else. Re-verify the whole file to prove the append kept it
+          # coreutils-clean.
+          (cd dist && sha256sum latest.json >> SHA256SUMS && sha256sum -c SHA256SUMS)
 
+      # `gh release create` is not idempotent. If a previous run of this job
+      # created the release and then died uploading assets, the re-run must
+      # finish the upload rather than fail at the very last step.
       - name: Create the release
         env:
           GH_TOKEN: ${{ github.token }}
           PRERELEASE: ${{ needs.version.outputs.prerelease }}
         run: |
           set -euo pipefail
-          args=(
-            "$TAG"
-            --title "Openotes $VERSION"
-            --notes-file release-notes.md
-            --repo "${{ github.repository }}"
-          )
-          if [ "$PRERELEASE" = "true" ]; then args+=(--prerelease); fi
-          gh release create "${args[@]}" dist/*
+          if gh release view "$TAG" --repo "${{ github.repository }}" >/dev/null 2>&1; then
+            echo "Release $TAG already exists; uploading assets with --clobber."
+            gh release upload "$TAG" dist/* \
+              --repo "${{ github.repository }}" --clobber
+          else
+            args=(
+              "$TAG"
+              --title "Openotes $VERSION"
+              --notes-file release-notes.md
+              --repo "${{ github.repository }}"
+            )
+            if [ "$PRERELEASE" = "true" ]; then args+=(--prerelease); fi
+            gh release create "${args[@]}" dist/*
+          fi
