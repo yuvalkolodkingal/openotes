@@ -260,9 +260,29 @@ export class MemorySyncStore implements SyncDataStore {
 /** In-memory attachment storage implementing AttachmentSource. */
 export class MemoryAttachments implements AttachmentSource {
   readonly blobs = new Map<string, Uint8Array>();
+  /**
+   * Per-attachment chunk lists, as stored locally or as received from the
+   * engine. Chunk boundaries are semantic (one secretstream frame per
+   * chunk), so tests assert on these — not only on the joined bytes.
+   */
+  readonly chunks = new Map<string, Uint8Array[]>();
 
   add(hash: string, data: Uint8Array): void {
     this.blobs.set(hash, data);
+  }
+
+  /** Store explicit chunks, the way the real chunk store holds frames. */
+  addChunks(hash: string, chunks: Uint8Array[]): void {
+    this.chunks.set(hash, chunks.map((chunk) => chunk.slice()));
+    let length = 0;
+    for (const chunk of chunks) length += chunk.length;
+    const out = new Uint8Array(length);
+    let offset = 0;
+    for (const chunk of chunks) {
+      out.set(chunk, offset);
+      offset += chunk.length;
+    }
+    this.blobs.set(hash, out);
   }
 
   exists(hash: string): Promise<boolean> {
@@ -272,13 +292,19 @@ export class MemoryAttachments implements AttachmentSource {
   read(hash: string): Promise<ReadableStream<Uint8Array> | undefined> {
     const data = this.blobs.get(hash);
     if (!data) return Promise.resolve(undefined);
+    const stored = this.chunks.get(hash);
     return Promise.resolve(
       new ReadableStream<Uint8Array>({
         start(controller) {
-          // Emit in several chunks so streaming paths are exercised.
-          const size = Math.max(1, Math.ceil(data.length / 3));
-          for (let offset = 0; offset < data.length; offset += size) {
-            controller.enqueue(data.subarray(offset, offset + size));
+          if (stored) {
+            // One emitted chunk per stored chunk, like the real store.
+            for (const chunk of stored) controller.enqueue(chunk);
+          } else {
+            // Emit in several chunks so streaming paths are exercised.
+            const size = Math.max(1, Math.ceil(data.length / 3));
+            for (let offset = 0; offset < data.length; offset += size) {
+              controller.enqueue(data.subarray(offset, offset + size));
+            }
           }
           controller.close();
         },
@@ -294,6 +320,7 @@ export class MemoryAttachments implements AttachmentSource {
       if (done) break;
       chunks.push(value);
     }
+    this.chunks.set(hash, chunks);
     let length = 0;
     for (const chunk of chunks) length += chunk.length;
     const out = new Uint8Array(length);

@@ -36,9 +36,11 @@ import { IDataType } from "hash-wasm/dist/lib/util";
 import { FileHandle } from "@notesnook/streamable-fs";
 import {
   CacheStorageFileStore,
+  DesktopFileStore,
   IndexedDBFileStore,
   OriginPrivateFileSystem
 } from "./file-store";
+import { desktop } from "../common/desktop-bridge";
 import { isFeatureSupported } from "../utils/feature-check";
 import {
   FileEncryptionMetadataWithHash,
@@ -58,8 +60,21 @@ const UPLOAD_PART_REQUIRED_CHUNKS = Math.ceil(
   (10 * 1024 * 1024) / ENCRYPTED_CHUNK_SIZE
 );
 const MINIMUM_MULTIPART_FILE_SIZE = 25 * 1024 * 1024;
+// On the desktop runtime every browser-origin store (OPFS, CacheStorage,
+// IndexedDB) is orphaned across restarts because the page's origin changes
+// with the loopback port. Attachment chunks are therefore stored by the
+// runtime and reached over RPC; the browser stores remain for the pure-web
+// build. Mirrors the selection in interfaces/key-store.ts.
+const desktopFileStore =
+  IS_DESKTOP_APP &&
+  typeof (globalThis as { bindings?: { rpc?: unknown } }).bindings?.rpc ===
+    "function"
+    ? new DesktopFileStore()
+    : undefined;
 export const streamablefs = new StreamableFS(
-  isFeatureSupported("opfs")
+  desktopFileStore
+    ? desktopFileStore
+    : isFeatureSupported("opfs")
     ? new OriginPrivateFileSystem("streamable-fs")
     : isFeatureSupported("cache")
     ? new CacheStorageFileStore("streamable-fs")
@@ -71,7 +86,7 @@ export async function writeEncryptedFile(
   key: SerializedKey,
   hash: string
 ) {
-  if (!isFeatureSupported("indexedDB"))
+  if (!desktopFileStore && !isFeatureSupported("indexedDB"))
     throw new Error("This browser does not support IndexedDB.");
 
   if (await streamablefs.exists(hash)) await streamablefs.deleteFile(hash);
@@ -247,6 +262,14 @@ async function uploadFile(
       `File is corrupt or missing data. Please upload the file again. (File hash: ${filename})`
     );
   if (fileHandle.file.additionalData?.uploaded) return true;
+
+  // On desktop there is no attachment server: the runtime's WebDAV sync
+  // engine replicates content straight out of the local chunk store, so
+  // content that exists locally (verified above) is all "uploaded" means.
+  if (desktopFileStore) {
+    await fileHandle.addAdditionalData("uploaded", true);
+    return true;
+  }
 
   // if file already exists on the server, we just return true
   // we don't reupload the file i.e. overwriting is not possible.
@@ -493,6 +516,26 @@ async function downloadFile(
     if (handle && (await exists(handle))) return true;
     if (handle) await handle.delete();
 
+    // On desktop attachments never come from the S3 seam. Sync normally
+    // delivers content by itself; when it has not yet, ask the runtime to
+    // fetch this one attachment from the WebDAV repository. Absent there
+    // too means the owning device has not uploaded it yet — report "not
+    // available", not an error.
+    if (desktopFileStore) {
+      reportProgress(
+        { total: 100, loaded: 0 },
+        { type: "download", hash: filename }
+      );
+      try {
+        const fetched = await desktop?.webdav.fetchAttachment.query({
+          hash: filename
+        });
+        return fetched === true && (await exists(filename));
+      } finally {
+        reportProgress(undefined, { type: "download", hash: filename });
+      }
+    }
+
     const attachment = await db.attachments.attachment(filename);
     if (!attachment) throw new Error("Attachment doesn't exist.");
 
@@ -656,6 +699,15 @@ async function deleteFile(
   filename: string,
   requestOptions?: RequestOptionsWithSignal
 ) {
+  // On desktop the request options point at the S3 seam; deletion is
+  // local-only and remote pruning is the WebDAV engine's job.
+  if (desktopFileStore) {
+    return (
+      !(await streamablefs.exists(filename)) ||
+      (await desktopFileStore.deleteFile(filename))
+    );
+  }
+
   if (!requestOptions)
     return (
       !(await streamablefs.exists(filename)) ||
@@ -681,6 +733,13 @@ async function bulkDeleteFiles(
   filenames: string[],
   requestOptions?: RequestOptionsWithSignal
 ) {
+  if (desktopFileStore) {
+    for (const filename of filenames) {
+      await desktopFileStore.deleteFile(filename);
+    }
+    return true;
+  }
+
   if (!requestOptions) {
     await streamablefs.bulkDeleteFiles(filenames);
     return true;
@@ -707,6 +766,19 @@ async function bulkDeleteFiles(
  * `>0` means file is valid
  */
 export async function getUploadedFileSize(filename: string) {
+  // On desktop the local chunk store is authoritative — there is no server
+  // object to measure. Report the stored (encrypted) size, mirroring the
+  // server's content-length semantics: 0 when absent, -1 on error.
+  if (desktopFileStore) {
+    try {
+      const handle = await streamablefs.readFile(filename);
+      return handle ? await handle.size() : 0;
+    } catch (e) {
+      logger.error(e, "Failed to get local attachment size.", { filename });
+      return -1;
+    }
+  }
+
   try {
     const url = `${hosts.API_HOST}/s3?name=${filename}`;
     const token = await db.tokenManager.getAccessToken();

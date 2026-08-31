@@ -164,6 +164,15 @@ than exfiltrating the store in one call.
 `settings` holds ordinary preferences and is plain JSON, because they are
 not secret and being readable makes them debuggable.
 
+Attachment content is served the same way, through the `attachments.*`
+procedures into a chunked on-disk store (one directory per attachment hash
+under `attachments/`, one file per chunk). The bytes arrive already
+encrypted by the renderer's crypto worker — one secretstream frame per
+chunk — so the runtime stores ciphertext it cannot read and never handles
+an attachment key. Chunk and file names are validated against a strict
+character set and canonical index form before any path is built; a name
+that does not parse is refused before it touches the filesystem.
+
 ---
 
 ## 5. Logging

@@ -38,7 +38,7 @@ import { logger } from "../native/logger.ts";
 import { APP_NAME, APP_VERSION } from "../constants.ts";
 import type { SettingsStore } from "../native/settings.ts";
 import type { CredentialStore } from "../security/credentials.ts";
-import type { FileStorage } from "../native/filesystem.ts";
+import type { AttachmentChunkStore } from "../native/attachment-store.ts";
 import type { SqliteService } from "../native/sqlite.ts";
 import type { DatabaseSyncStore } from "../sync/store-adapter.ts";
 import { SYNC_TABLES } from "../sync/store-adapter.ts";
@@ -79,7 +79,7 @@ export interface BackupServiceOptions {
   sqlite: SqliteService;
   databaseHandle: () => string | undefined;
   store: () => DatabaseSyncStore | undefined;
-  files: FileStorage;
+  files: AttachmentChunkStore;
   onCompleted: (info: { target: string; name: string }) => void;
 }
 
@@ -153,7 +153,7 @@ export class BackupService {
     }
 
     const attachments = new Map<string, Uint8Array>();
-    for (const hash of await this.options.files.list()) {
+    for (const hash of await this.options.files.listHashes()) {
       const content = await this.options.files.readAll(hash);
       if (content) attachments.set(hash, content);
     }
@@ -402,15 +402,9 @@ export class BackupService {
     if (snapshot.attachments) {
       for (const [hash, content] of snapshot.attachments) {
         if (await this.options.files.exists(hash)) continue;
-        await this.options.files.writeStream(
-          hash,
-          new ReadableStream<Uint8Array>({
-            start(controller) {
-              controller.enqueue(content);
-              controller.close();
-            },
-          }),
-        );
+        // The backup payload is flat bytes; writeContiguous re-splits it at
+        // the renderer's fixed frame size so decryption still lines up.
+        await this.options.files.writeContiguous(hash, content);
       }
     }
 

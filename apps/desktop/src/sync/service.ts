@@ -38,7 +38,7 @@ import { logger } from "../native/logger.ts";
 import { USER_AGENT } from "../constants.ts";
 import type { SettingsStore } from "../native/settings.ts";
 import type { CredentialStore } from "../security/credentials.ts";
-import type { FileStorage } from "../native/filesystem.ts";
+import type { AttachmentChunkStore } from "../native/attachment-store.ts";
 import type { DatabaseSyncStore } from "./store-adapter.ts";
 
 const log = logger.scope("sync");
@@ -66,9 +66,14 @@ class FileQueueStorage implements QueueStorage {
   }
 }
 
-/** Bridges the sync engine's attachment needs to on-disk storage. */
+/**
+ * Bridges the sync engine's attachment needs to the on-disk chunk store.
+ * `read` emits one chunk per stored chunk file and `write` stores one chunk
+ * file per received chunk; the engine encrypts each chunk as one wire
+ * frame, so the renderer's frame boundaries survive the round trip.
+ */
 class DiskAttachments implements AttachmentSource {
-  constructor(private readonly storage: FileStorage) {}
+  constructor(private readonly storage: AttachmentChunkStore) {}
 
   exists(hash: string) {
     return this.storage.exists(hash);
@@ -86,7 +91,7 @@ class DiskAttachments implements AttachmentSource {
 export interface SyncServiceOptions {
   settings: SettingsStore;
   credentials: CredentialStore;
-  files: FileStorage;
+  files: AttachmentChunkStore;
   store: DatabaseSyncStore;
   onStatus: (status: SyncStatus) => void;
   onConflict: (info: { entityId: string; entityType: string }) => void;
@@ -337,6 +342,18 @@ export class SyncService {
       return this.runCycle("manual");
     }
     return this.scheduler.trigger("manual");
+  }
+
+  /**
+   * Fetch one attachment's content from the remote repository on demand.
+   * Returns false when sync is not configured or the remote does not have
+   * the content; the caller treats that as "not available yet", not an
+   * error.
+   */
+  async fetchAttachment(hash: string): Promise<boolean> {
+    const engine = this.engine ?? (await this.buildEngine());
+    if (!engine) return false;
+    return await engine.fetchAttachment(hash);
   }
 
   private async runCycle(trigger: SyncTrigger): Promise<void> {

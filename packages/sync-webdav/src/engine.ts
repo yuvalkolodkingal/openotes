@@ -37,10 +37,19 @@ import {
   SyncStatus,
 } from "./types.ts";
 
+/**
+ * Local attachment content, as the engine sees it. Chunk boundaries are
+ * load-bearing: the bytes are already encrypted by the renderer as one
+ * secretstream frame per stored chunk, and decryption feeds stored chunks
+ * back into the secretstream one at a time. The engine therefore encrypts
+ * each chunk `read` emits as exactly one wire frame, and hands `write` a
+ * stream with exactly one chunk per wire frame it decrypted — sources must
+ * emit stored chunks as-is and persist received chunks as-is.
+ */
 export interface AttachmentSource {
-  /** Stream the plaintext content of a local attachment. */
+  /** Stream a local attachment's content, one emitted chunk per stored chunk. */
   read(hash: string): Promise<ReadableStream<Uint8Array> | undefined>;
-  /** Persist a downloaded attachment's plaintext content. */
+  /** Persist a downloaded attachment, one stored chunk per received chunk. */
   write(hash: string, stream: ReadableStream<Uint8Array>): Promise<void>;
   /** True when the attachment content is already available locally. */
   exists(hash: string): Promise<boolean>;
@@ -88,9 +97,6 @@ export interface SyncResult {
   devices: number;
   durationMs: number;
 }
-
-/** Chunk size for streaming attachment encryption. */
-const ATTACHMENT_CHUNK_SIZE = 512 * 1024;
 
 export class SyncEngine {
   private readonly repository: SyncRepository;
@@ -528,16 +534,8 @@ export class SyncEngine {
         this.logger.warn("Attachment not yet uploaded by its owner", { hash });
         continue;
       }
-      const plaintext = await this.decryptAttachmentBytes(attachmentKey, raw);
-      await source.write(
-        hash,
-        new ReadableStream<Uint8Array>({
-          start(controller) {
-            controller.enqueue(plaintext);
-            controller.close();
-          },
-        }),
-      );
+      const frames = await this.decryptAttachmentFrames(attachmentKey, raw);
+      await source.write(hash, streamOfFrames(frames));
       await this.options.queue.acknowledgeDownload(hash);
       downloaded++;
     }
@@ -545,11 +543,35 @@ export class SyncEngine {
   }
 
   /**
-   * Encrypt an attachment with libsodium's secretstream so the plaintext is
-   * processed chunk by chunk and never held whole in memory.
+   * Fetch one attachment from the remote repository on demand — used when
+   * the interface needs content that sync has not delivered yet (e.g. the
+   * attachment record arrived before its bytes were uploaded elsewhere).
+   * Returns false when the remote does not have the content either.
+   */
+  async fetchAttachment(hash: string): Promise<boolean> {
+    const source = this.options.attachments;
+    if (!source) return false;
+    if (await source.exists(hash)) return true;
+    if (!this.syncKey || !this.metadata) await this.connect();
+    const raw = await this.options.client.getIfExists(attachmentPath(hash));
+    if (!raw) return false;
+    const frames = await this.decryptAttachmentFrames(
+      this.attachmentKey!,
+      raw,
+    );
+    await source.write(hash, streamOfFrames(frames));
+    return true;
+  }
+
+  /**
+   * Encrypt an attachment with libsodium's secretstream, one wire frame per
+   * chunk the input stream emits, so local chunk boundaries survive the
+   * round trip verbatim. The input chunks are the renderer's own
+   * secretstream frames (~512 KiB each), which keeps frames bounded without
+   * re-buffering here.
    *
-   * Wire format: [4-byte big-endian header length][base64 header][chunks...]
-   * Each chunk is [4-byte big-endian length][ciphertext].
+   * Wire format: [4-byte big-endian header length][base64 header][frames...]
+   * Each frame is [4-byte big-endian length][ciphertext].
    */
   async encryptAttachmentStream(
     key: SerializedKey,
@@ -566,22 +588,16 @@ export class SyncEngine {
     const outputReader = transform.readable.getReader();
 
     const pump = (async () => {
-      let buffer: Uint8Array<ArrayBuffer> = new Uint8Array(0);
+      // One chunk of lookahead so the last chunk can carry the final tag.
+      let previous: Uint8Array | undefined;
       while (true) {
         const { value, done } = await reader.read();
         if (done) break;
-        buffer = concat(buffer, value);
-        while (buffer.length >= ATTACHMENT_CHUNK_SIZE) {
-          await writer.write({
-            data: buffer.slice(0, ATTACHMENT_CHUNK_SIZE),
-            final: false,
-          });
-          buffer = buffer.slice(ATTACHMENT_CHUNK_SIZE) as Uint8Array<
-            ArrayBuffer
-          >;
-        }
+        if (value.length === 0) continue;
+        if (previous) await writer.write({ data: previous, final: false });
+        previous = value;
       }
-      await writer.write({ data: buffer, final: true });
+      await writer.write({ data: previous ?? new Uint8Array(0), final: true });
       await writer.close().catch(() => {});
     })();
 
@@ -595,10 +611,14 @@ export class SyncEngine {
     return concatAll(chunks);
   }
 
-  async decryptAttachmentBytes(
+  /**
+   * Decrypt a downloaded attachment, returning one Uint8Array per wire
+   * frame — the same boundaries the uploader's local chunks had.
+   */
+  async decryptAttachmentFrames(
     key: SerializedKey,
     data: Uint8Array,
-  ): Promise<Uint8Array> {
+  ): Promise<Uint8Array[]> {
     let offset = 0;
     const headerLength = readUint32be(data, offset);
     offset += 4;
@@ -628,7 +648,15 @@ export class SyncEngine {
       output.push(value);
     }
     await pump;
-    return concatAll(output);
+    return output;
+  }
+
+  /** The whole decrypted attachment as contiguous bytes. */
+  async decryptAttachmentBytes(
+    key: SerializedKey,
+    data: Uint8Array,
+  ): Promise<Uint8Array> {
+    return concatAll(await this.decryptAttachmentFrames(key, data));
   }
 
   /**
@@ -783,14 +811,16 @@ function readUint32be(data: Uint8Array, offset: number): number {
   );
 }
 
-function concat(
-  a: Uint8Array,
-  b: Uint8Array,
-): Uint8Array<ArrayBuffer> {
-  const out = new Uint8Array(a.length + b.length);
-  out.set(a, 0);
-  out.set(b, a.length);
-  return out;
+/** Emit each frame as its own chunk, so writers can persist it as one. */
+function streamOfFrames(
+  frames: readonly Uint8Array[],
+): ReadableStream<Uint8Array> {
+  return new ReadableStream<Uint8Array>({
+    start(controller) {
+      for (const frame of frames) controller.enqueue(frame);
+      controller.close();
+    },
+  });
 }
 
 function concatAll(chunks: readonly Uint8Array[]): Uint8Array<ArrayBuffer> {

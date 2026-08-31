@@ -122,6 +122,23 @@ export const PROCEDURE_NAMES = [
   "storage.entries",
   "storage.clear",
 
+  // --- attachment content (chunked, see native/attachment-store.ts) ---
+  // The renderer's streamable-fs layer runs against these instead of
+  // origin-scoped browser storage, for the same reason as storage.* above:
+  // the webview origin changes every launch, so anything kept there is
+  // orphaned on restart.
+  "attachments.setMetadata",
+  "attachments.getMetadata",
+  "attachments.deleteMetadata",
+  "attachments.writeChunk",
+  "attachments.readChunk",
+  "attachments.deleteChunk",
+  "attachments.chunkSize",
+  "attachments.listChunks",
+  "attachments.list",
+  "attachments.deleteFile",
+  "attachments.clear",
+
   // --- key storage ---
   "safeStorage.isEncryptionAvailable",
   "safeStorage.encryptString",
@@ -151,6 +168,7 @@ export const PROCEDURE_NAMES = [
   "webdav.resetRemoteState",
   "webdav.rebuildRemote",
   "webdav.setPassphrase",
+  "webdav.fetchAttachment",
 
   // --- backup engine (new in this fork) ---
   "backup.getSettings",

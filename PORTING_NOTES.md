@@ -92,8 +92,9 @@ titlebar/menu/keybinding decisions).
 | `updater.*` (7 procs + 6 subs) | `updater.*` + events | Upstream feed `https://notesnook.com/api/v1/releases/...` (`apps/desktop/src/utils/autoupdater.ts:26-31`) is replaced by `UPDATE_MANIFEST_URL` (fork GitHub releases `latest.json`, `src/constants.ts`). UI already handles `autoUpdates=false` (flatpak path), so a stub is a valid v1. |
 | `window.maximize/restore/minimze[sic]/maximized/fullscreen`, `onWindowStateChanged` | `window.*` (typo **kept** deliberately) + events `window.stateChanged/close` + new `window.setTitle` | Only needed when `!hasNativeTitlebar` (`apps/web/src/root.tsx:44-50`, `components/title-bar/index.tsx`); forcing native titlebar is the cheap path. Close button uses DOM `window.close()` — webview must honor it or bind it. |
 | `spellChecker.*` (7 procs) | **Dropped** (absent from PROCEDURE_NAMES) | Chromium-session-specific. WebView2 has its own; WebKitGTK uses enchant. Hide the settings section (`apps/web/src/hooks/use-spell-checker.ts` callers degrade). |
-| — | **New:** `webdav.getConfig/setConfig/testConnection/connect/disconnect/syncNow/status/resetRemoteState/rebuildRemote/setPassphrase`; events `webdav.status/conflict` | Host-side sync engine control (§7). |
+| — | **New:** `webdav.getConfig/setConfig/testConnection/connect/disconnect/syncNow/status/resetRemoteState/rebuildRemote/setPassphrase/fetchAttachment`; events `webdav.status/conflict` | Host-side sync engine control (§7). `fetchAttachment` pulls one attachment's content on demand (§7.3). |
 | — | **New:** `backup.getSettings/setSettings/createNow/list/restore/selectLocalDirectory/importFile`; event `backup.completed` | Host-side backup engine (§8). |
+| — | **New:** `attachments.setMetadata/getMetadata/deleteMetadata/writeChunk/readChunk/deleteChunk/chunkSize/listChunks/list/deleteFile/clear` | The streamable-fs `IFileStorage` surface, served by the runtime's chunked store (§7.3). Base64 chunks; `clear` requires `confirm:"clear"`. |
 | — | **New:** `capabilities.get` | Feature discovery for the renderer. |
 
 ### 2.3 Main-process-only features to re-implement in the Deno host
@@ -378,7 +379,32 @@ downloadFile/deleteFile/exists/getUploadedFileSize, L733-745, injected via
 storage plugs in by re-implementing uploadFile/downloadFile against WebDAV
 PUT/GET (ciphertext is already encrypted at rest; no crypto at transfer time)
 and neutering the tokenManager Authorization header in `database/fs.ts`.
-Local chunk store stays `packages/streamable-fs` (OPFS in the webview).
+
+**Implemented as follows.** The streamable-fs abstraction stays, but on
+desktop its `IFileStorage` backend is `DesktopFileStore`
+(`apps/web/src/interfaces/fs.ts` selects it the way `key-store.ts` selects
+`DesktopKVStore`), which marshals every operation over the `attachments.*`
+procedures into the runtime's chunked store
+(`apps/desktop/src/native/attachment-store.ts`: one directory per hash,
+`meta.json` + numbered chunk files, meta written last as the commit point).
+OPFS/CacheStorage/IndexedDB cannot be used on desktop — the loopback port,
+and so the origin, changes every launch and origin storage is orphaned.
+The browser backends remain for the pure-web build. Chunk boundaries are
+one secretstream frame each; the sync engine encrypts each stored chunk as
+one wire frame and its download path emits one chunk per frame
+(`packages/sync-webdav/src/engine.ts`), so the boundaries the renderer's
+decryption depends on survive replication. The S3 seam is dead on desktop:
+`uploadFile` reports true once content is in the local store (the WebDAV
+engine owns replication), `downloadFile` answers from the local store and
+falls back to `webdav.fetchAttachment` (a single-attachment fetch through
+the sync engine), `getUploadedFileSize` measures the local store, and
+delete goes to the local store only — no code path reaches
+`hosts.API_HOST` when `IS_DESKTOP_APP`. Backup payloads keep attachments
+as flat bytes; restore re-splits them at the fixed 512 KiB + 17 frame size
+(`writeContiguous`), the same reconstruction upstream's own download path
+performs with `ChunkedStream(chunkSize + ABYTES)`. Limitation: a
+`downloadFile` for content the owning device has not uploaded yet returns
+false ("not available"), and sync delivers the content later.
 
 ---
 

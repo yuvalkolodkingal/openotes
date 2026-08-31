@@ -30,7 +30,8 @@ import {
 import { logger } from "./native/logger.ts";
 import { SettingsStore } from "./native/settings.ts";
 import { SqliteService } from "./native/sqlite.ts";
-import { ExportWriter, FileStorage } from "./native/filesystem.ts";
+import { ExportWriter } from "./native/filesystem.ts";
+import { AttachmentChunkStore } from "./native/attachment-store.ts";
 import { KeyValueStore } from "./native/keyvalue.ts";
 import {
   Clipboard,
@@ -71,7 +72,7 @@ export interface AppContext {
   settings: SettingsStore;
   credentials: CredentialStore;
   sqlite: SqliteService;
-  files: FileStorage;
+  files: AttachmentChunkStore;
   exports: ExportWriter;
   storage: KeyValueStore;
   safeStorage: SafeStorage;
@@ -126,7 +127,7 @@ export async function createApp(
   // unencrypted vault nobody notices.
   const sqlite = new SqliteService();
   await sqlite.initialize();
-  const files = new FileStorage();
+  const files = new AttachmentChunkStore();
   await files.cleanupPartials();
   const storage = new KeyValueStore(appDataDir());
   const safeStorage = new SafeStorage(appDataDir());
@@ -241,7 +242,6 @@ export async function createApp(
       }
       context.sync?.stop();
       exports.closeAll();
-      files.closeAll();
       await storage.flush();
       sqlite.closeAll();
       await settings.flush();

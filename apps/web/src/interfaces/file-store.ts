@@ -149,6 +149,115 @@ export class CacheStorageFileStore implements IFileStorage {
   }
 }
 
+/**
+ * Attachment store backed by the desktop runtime (Openotes).
+ *
+ * The runtime assigns the interface a different loopback port on every
+ * launch, so the page's origin — and with it OPFS, CacheStorage and
+ * IndexedDB — changes between runs. Attachment content stored there is
+ * orphaned on restart, which is data loss. On desktop the chunks therefore
+ * live on the runtime side of the bindings, in a per-hash chunked store
+ * that the WebDAV sync engine reads and writes directly.
+ *
+ * Chunk boundaries are preserved exactly: every chunk streamable-fs writes
+ * is one encrypted secretstream frame, and the runtime stores each one as
+ * its own file. Binary payloads travel base64-encoded, like every other
+ * binary RPC procedure.
+ */
+export class DesktopFileStore implements IFileStorage {
+  private async call(path: string, input?: unknown): Promise<unknown> {
+    const bindings = (
+      globalThis as {
+        bindings?: {
+          rpc(request: { path: string; input?: unknown }): Promise<
+            | { ok: true; result: unknown }
+            | { ok: false; error: { message: string } }
+          >;
+        };
+      }
+    ).bindings;
+    if (!bindings) throw new Error("The desktop runtime is not available");
+    const response = await bindings.rpc({ path, input });
+    if (!response.ok) throw new Error(response.error.message);
+    return response.result;
+  }
+
+  async clear(): Promise<void> {
+    await this.call("attachments.clear", { confirm: "clear" });
+  }
+
+  async setMetadata(filename: string, metadata: File): Promise<void> {
+    await this.call("attachments.setMetadata", { filename, metadata });
+  }
+
+  async getMetadata(filename: string): Promise<File | undefined> {
+    const result = await this.call("attachments.getMetadata", { filename });
+    return result ? (result as File) : undefined;
+  }
+
+  async deleteMetadata(filename: string): Promise<void> {
+    await this.call("attachments.deleteMetadata", { filename });
+  }
+
+  async writeChunk(chunkName: string, data: Uint8Array): Promise<void> {
+    await this.call("attachments.writeChunk", {
+      chunkName,
+      data: bytesToBase64(data)
+    });
+  }
+
+  async deleteChunk(chunkName: string): Promise<void> {
+    await this.call("attachments.deleteChunk", { chunkName });
+  }
+
+  async readChunk(chunkName: string): Promise<Uint8Array | undefined> {
+    const result = await this.call("attachments.readChunk", { chunkName });
+    return typeof result === "string" ? base64ToBytes(result) : undefined;
+  }
+
+  async chunkSize(chunkName: string): Promise<number> {
+    const result = await this.call("attachments.chunkSize", { chunkName });
+    return typeof result === "number" ? result : 0;
+  }
+
+  async listChunks(chunkPrefix: string): Promise<string[]> {
+    const result = await this.call("attachments.listChunks", { chunkPrefix });
+    return Array.isArray(result) ? (result as string[]) : [];
+  }
+
+  async list(): Promise<string[]> {
+    const result = await this.call("attachments.list");
+    return Array.isArray(result) ? (result as string[]) : [];
+  }
+
+  /**
+   * Remove one attachment wholesale — metadata and every chunk in a single
+   * round trip, instead of one RPC call per chunk. Not part of
+   * IFileStorage; used by the desktop paths in interfaces/fs.ts.
+   */
+  async deleteFile(filename: string): Promise<boolean> {
+    return (await this.call("attachments.deleteFile", { filename })) === true;
+  }
+}
+
+function bytesToBase64(bytes: Uint8Array): string {
+  let binary = "";
+  const CHUNK = 0x8000;
+  for (let index = 0; index < bytes.length; index += CHUNK) {
+    binary += String.fromCharCode(...bytes.subarray(index, index + CHUNK));
+  }
+  return btoa(binary);
+}
+
+function base64ToBytes(value: string): Uint8Array {
+  const binary = atob(value);
+  const out = new Uint8Array(binary.length);
+  for (let index = 0; index < binary.length; index++) {
+    out[index] = binary.charCodeAt(index);
+  }
+  return out;
+}
+
 export class OriginPrivateFileSystem implements IFileStorage {
   private readonly worker = wrap<OriginPrivateFileStoreWorkerType>(
     new OriginPrivateFileStoreWorker()

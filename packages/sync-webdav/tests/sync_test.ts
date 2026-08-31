@@ -423,6 +423,66 @@ Deno.test("attachments sync end to end, encrypted and deduplicated", async () =>
   });
 });
 
+Deno.test("attachment chunk boundaries survive upload and download", async () => {
+  await withServer(async (server) => {
+    const a = await createDevice({ id: "DEVICEA", baseUrl: server.url });
+    // Frame-shaped chunks, the way the renderer stores them: fixed-size
+    // secretstream frames plus a shorter final one. Each stored chunk must
+    // come back as exactly one chunk on the downloading device, or the
+    // renderer's decryption stream would fail.
+    const frames = [
+      testBytes(64 * 1024 + 17, 1),
+      testBytes(64 * 1024 + 17, 2),
+      testBytes(1000 + 17, 3),
+    ];
+    const hash = "framedattachment1";
+    a.attachments.addChunks(hash, frames);
+    await a.queue.enqueueAttachment(hash);
+    a.store.put({ id: "att2", type: "attachment", hash, title: "framed.bin" });
+    await a.engine.sync();
+
+    const b = await createDevice({ id: "DEVICEB", baseUrl: server.url });
+    await b.engine.sync();
+    const received = b.attachments.chunks.get(hash);
+    assert(received, "attachment was not downloaded");
+    assertEquals(
+      received.map((chunk) => chunk.length),
+      frames.map((chunk) => chunk.length),
+      "chunk boundaries changed in transit",
+    );
+    for (let i = 0; i < frames.length; i++) {
+      assert(bytesEqual(received[i], frames[i]), `chunk ${i} differs`);
+    }
+  });
+});
+
+Deno.test("fetchAttachment pulls one attachment on demand", async () => {
+  await withServer(async (server) => {
+    const a = await createDevice({ id: "DEVICEA", baseUrl: server.url });
+    const frames = [testBytes(2048, 5), testBytes(700, 6)];
+    const hash = "ondemandattachment1";
+    a.attachments.addChunks(hash, frames);
+    await a.queue.enqueueAttachment(hash);
+    await a.engine.sync();
+
+    // B never synced the record; it asks for exactly this attachment.
+    const b = await createDevice({ id: "DEVICEB", baseUrl: server.url });
+    assertEquals(await b.engine.fetchAttachment(hash), true);
+    const received = b.attachments.chunks.get(hash);
+    assert(received);
+    assertEquals(
+      received.map((chunk) => chunk.length),
+      frames.map((chunk) => chunk.length),
+    );
+
+    // Already present: answered locally without another download.
+    assertEquals(await b.engine.fetchAttachment(hash), true);
+
+    // Not on the server either: "not available", not an error.
+    assertEquals(await b.engine.fetchAttachment("missingattachment1"), false);
+  });
+});
+
 Deno.test("large payloads spill into content-addressed objects", async () => {
   await withServer(async (server) => {
     const a = await createDevice({ id: "DEVICEA", baseUrl: server.url });

@@ -139,6 +139,20 @@ interface uses: `keys` for key material (never returned in bulk, so a
 compromised renderer cannot exfiltrate the key store in one call) and
 `settings` for what would otherwise be `localStorage`.
 
+Attachment content takes the same route. Upstream stores it through
+`packages/streamable-fs` in origin storage (OPFS, CacheStorage or
+IndexedDB), which the port churn orphans just the same. Here the
+interface's streamable-fs layer runs against a `DesktopFileStore`
+(`apps/web/src/interfaces/file-store.ts`) that speaks the `attachments.*`
+procedures, backed by `native/attachment-store.ts`: one directory per
+attachment hash holding a `meta.json` and one file per chunk. Chunk
+boundaries matter — every chunk is one XChaCha20 secretstream frame and
+decryption consumes stored chunks one at a time — so the store never
+merges or re-splits them, the sync engine encrypts each chunk as one wire
+frame, and the boundaries survive a full upload/download round trip.
+`meta.json` is written last and is the commit point; a directory without
+it is an interrupted write and is removed at startup.
+
 Treat any new use of `localStorage` or IndexedDB in the interface as a bug.
 
 ---
@@ -148,7 +162,7 @@ Treat any new use of `localStorage` or IndexedDB in the interface as a bug.
 | Data | Where | Encryption |
 |---|---|---|
 | Notes, notebooks, tags, relations, settings | SQLite in the app data directory | SQLite3MultipleCiphers, keyed at open |
-| Attachment content | `attachments/<xx>/<yy>/<hash>` | Encrypted by the renderer before it is handed over |
+| Attachment content | `attachments/<xx>/<yy>/<hash>/` — `meta.json` plus one file per chunk | Encrypted by the renderer before it is handed over; one secretstream frame per chunk file |
 | WebDAV password, sync passphrase | `credentials.enc` | AES-256-GCM over PBKDF2 |
 | Device-local settings, window geometry, sync cursors | `settings.json` | None — nothing secret is kept here |
 | Renderer key material (database key) | `keystore.json` | File permissions; see below |
@@ -265,6 +279,7 @@ packaging/            flatpak manifest, PKGBUILD, .desktop, man page
 | `packages/sync-webdav/tests/client_test.ts` | Every WebDAV verb, conditional requests, each HTTP error, timeouts, malformed PROPFIND, truncated uploads, path traversal, and parser tolerance for Nextcloud/Apache/absolute-href responses. |
 | `packages/sync-webdav/tests/sync_test.ts` | Protocol behaviour: initialization, version refusal, the mandatory multi-device scenario, stale-delete resurrection, corrupt and duplicate records, sequence collisions, attachment round-trips, remote rebuild. |
 | `packages/sync-webdav/tests/backup_test.ts` | The mandatory backup scenario, corruption, tampering, wrong keys, retention, scheduling, and that deleting a synced note leaves backups untouched. |
+| `apps/desktop/tests/attachment_store_test.ts` | The chunked attachment store: the exact chunk keys streamable-fs uses, frame-boundary preservation through the sync-facing views, traversal rejection, crash cleanup, and a renderer-shaped round trip through the real RPC handlers. |
 | `packages/sync-webdav/tests/integration_test.ts` | The same protocol scenarios against a **real** third-party WebDAV server, run by `deno task test:webdav`. Required in CI, not skippable. |
 
 The unit suite runs against an in-process WebDAV server that can inject

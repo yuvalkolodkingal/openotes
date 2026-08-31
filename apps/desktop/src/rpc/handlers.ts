@@ -314,6 +314,72 @@ export function createHandlers(): Record<string, Handler> {
       return { ok: true };
     },
 
+    // ---------------- attachment content ----------------
+
+    // The renderer's streamable-fs layer, served by the runtime's chunked
+    // attachment store. Chunk names are `<hash>-chunk-<index>` and are
+    // parsed and validated strictly by the store before any path is built.
+    // Binary travels as base64, like every other binary procedure here.
+
+    "attachments.setMetadata": async (input, context) => {
+      const filename = asString(input, "filename", 200);
+      const metadata = input?.metadata;
+      if (
+        !metadata || typeof metadata !== "object" || Array.isArray(metadata)
+      ) {
+        throw new Error('"metadata" must be an object');
+      }
+      await context.files.setMetadata(filename, {
+        filename,
+        size: Number(metadata.size ?? 0),
+        type: optionalString(metadata.type) ?? "application/octet-stream",
+        additionalData: isPlainObject(metadata.additionalData)
+          ? metadata.additionalData
+          : undefined,
+      });
+      return { ok: true };
+    },
+    "attachments.getMetadata": async (input, context) =>
+      (await context.files.getMetadata(asString(input, "filename", 200))) ??
+        null,
+    "attachments.deleteMetadata": async (input, context) => {
+      await context.files.deleteMetadata(asString(input, "filename", 200));
+      return { ok: true };
+    },
+    "attachments.writeChunk": async (input, context) => {
+      await context.files.writeChunk(
+        asString(input, "chunkName", 200),
+        base64Decode(asString(input, "data", 4_000_000)),
+      );
+      return { ok: true };
+    },
+    "attachments.readChunk": async (input, context) => {
+      const data = await context.files.readChunk(
+        asString(input, "chunkName", 200),
+      );
+      return data ? base64Encode(data) : null;
+    },
+    "attachments.deleteChunk": async (input, context) => {
+      await context.files.deleteChunk(asString(input, "chunkName", 200));
+      return { ok: true };
+    },
+    "attachments.chunkSize": async (input, context) =>
+      await context.files.chunkSize(asString(input, "chunkName", 200)),
+    "attachments.listChunks": async (input, context) =>
+      await context.files.listChunks(asString(input, "chunkPrefix", 200)),
+    "attachments.list": async (_input, context) => await context.files.list(),
+    "attachments.deleteFile": async (input, context) =>
+      await context.files.deleteFile(asString(input, "filename", 200)),
+    "attachments.clear": async (input, context) => {
+      if (input?.confirm !== "clear") {
+        throw new Error(
+          "Clearing attachment storage requires explicit confirmation",
+        );
+      }
+      await context.files.clear();
+      return { ok: true };
+    },
+
     // ---------------- key storage ----------------
 
     // The renderer's key store wraps its AES key through these two calls
@@ -474,6 +540,9 @@ export function createHandlers(): Record<string, Handler> {
       status: context.sync.currentStatus,
       pending: await context.sync.pendingCount(),
     }),
+
+    "webdav.fetchAttachment": async (input, context) =>
+      await context.sync.fetchAttachment(asString(input, "hash", 128)),
 
     "webdav.resetRemoteState": async (_input, context) => {
       await context.sync.resetRemoteState();
@@ -644,6 +713,12 @@ function optionalString(value: unknown): string | undefined {
 
 function boolOr(value: unknown, fallback: boolean): boolean {
   return typeof value === "boolean" ? value : fallback;
+}
+
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+  return (
+    value !== null && typeof value === "object" && !Array.isArray(value)
+  );
 }
 
 function clampInt(
