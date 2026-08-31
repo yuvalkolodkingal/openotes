@@ -323,3 +323,194 @@ function promisifyIDBRequest<T = undefined>(
     request.onabort = request.onerror = () => reject(request.error);
   });
 }
+
+/**
+ * KV store backed by the desktop runtime (Openotes).
+ *
+ * The runtime assigns the interface a different loopback port on every
+ * launch, so the page's origin — and with it everything in localStorage
+ * and IndexedDB — changes between runs. Anything that must survive a
+ * restart therefore has to live on the runtime side of the bindings; the
+ * key store's metadata and secrets are exactly that, and losing them means
+ * losing the vault.
+ *
+ * Values are structured-clone-ish data holding ArrayBuffers and typed
+ * arrays (wrapped keys, encrypted secrets), which JSON cannot carry, so
+ * they are encoded with a small tagged format. CryptoKey objects are
+ * deliberately NOT supported: on this platform the key store takes the
+ * safeStorage path, which never persists one — hitting a CryptoKey here
+ * means that assumption broke, and the loud error is the point.
+ */
+export class DesktopKVStore implements IKVStore {
+  constructor(private readonly prefix: string) {}
+
+  private async call(path: string, input: unknown): Promise<unknown> {
+    const bindings = (
+      globalThis as {
+        bindings?: {
+          rpc(request: { path: string; input?: unknown }): Promise<
+            | { ok: true; result: unknown }
+            | { ok: false; error: { message: string } }
+          >;
+        };
+      }
+    ).bindings;
+    if (!bindings) throw new Error("The desktop runtime is not available");
+    const response = await bindings.rpc({ path, input });
+    if (!response.ok) throw new Error(response.error.message);
+    return response.result;
+  }
+
+  private name(key: string) {
+    return `${this.prefix}.${key}`;
+  }
+
+  async get<T>(key: string): Promise<T | undefined> {
+    const raw = (await this.call("storage.get", {
+      namespace: "keys",
+      key: this.name(key)
+    })) as string | null;
+    return raw === null ? undefined : (decodeTagged(raw) as T);
+  }
+
+  async set<T>(key: string, value: T): Promise<void> {
+    await this.call("storage.set", {
+      namespace: "keys",
+      key: this.name(key),
+      value: encodeTagged(value)
+    });
+  }
+
+  async setMany(entries: [string, unknown][]): Promise<void> {
+    for (const [key, value] of entries) await this.set(key, value);
+  }
+
+  async getMany<T>(keys: string[]): Promise<[string, T][]> {
+    const result: [string, T][] = [];
+    for (const key of keys) {
+      const value = await this.get<T>(key);
+      if (value !== undefined) result.push([key, value]);
+    }
+    return result;
+  }
+
+  async delete(key: string): Promise<void> {
+    await this.call("storage.remove", {
+      namespace: "keys",
+      key: this.name(key)
+    });
+  }
+
+  async deleteMany(keys: string[]): Promise<void> {
+    for (const key of keys) await this.delete(key);
+  }
+
+  private async ownKeys(): Promise<string[]> {
+    const all = (await this.call("storage.keys", {
+      namespace: "keys"
+    })) as string[];
+    return all
+      .filter((key) => key.startsWith(this.prefix + "."))
+      .map((key) => key.slice(this.prefix.length + 1));
+  }
+
+  async clear(): Promise<void> {
+    await this.deleteMany(await this.ownKeys());
+  }
+
+  keys(): Promise<string[]> {
+    return this.ownKeys();
+  }
+
+  async values<T>(): Promise<T[]> {
+    return (await this.entries<T>()).map(([, value]) => value);
+  }
+
+  async entries<T>(): Promise<[string, T][]> {
+    // The runtime's "keys" namespace has no bulk read, on purpose — a
+    // compromised page must not exfiltrate the key store in one call — so
+    // entries are fetched one by one.
+    return await this.getMany<T>(await this.ownKeys());
+  }
+}
+
+type TaggedValue =
+  | { $type: "json"; value: unknown }
+  | { $type: "bytes"; encoding: "ArrayBuffer" | "Uint8Array"; data: string };
+
+function encodeTagged(value: unknown): string {
+  const encode = (input: unknown): unknown => {
+    if (input instanceof ArrayBuffer) {
+      return {
+        $type: "bytes",
+        encoding: "ArrayBuffer",
+        data: bytesToBase64(new Uint8Array(input))
+      } satisfies TaggedValue;
+    }
+    if (input instanceof Uint8Array) {
+      return {
+        $type: "bytes",
+        encoding: "Uint8Array",
+        data: bytesToBase64(input)
+      } satisfies TaggedValue;
+    }
+    if (typeof CryptoKey !== "undefined" && input instanceof CryptoKey) {
+      throw new Error(
+        "A CryptoKey cannot be persisted through the desktop runtime. " +
+          "The key store must use its safeStorage wrapping path here."
+      );
+    }
+    if (Array.isArray(input)) return input.map(encode);
+    if (input !== null && typeof input === "object") {
+      const out: Record<string, unknown> = {};
+      for (const [key, entry] of Object.entries(input)) out[key] = encode(entry);
+      return out;
+    }
+    return input;
+  };
+  return JSON.stringify({ $type: "json", value: encode(value) });
+}
+
+function decodeTagged(raw: string): unknown {
+  const decode = (input: unknown): unknown => {
+    if (input !== null && typeof input === "object") {
+      const tagged = input as TaggedValue;
+      if (tagged.$type === "bytes") {
+        const bytes = base64ToBytes(tagged.data);
+        return tagged.encoding === "ArrayBuffer" ? toArrayBuffer(bytes) : bytes;
+      }
+      if (Array.isArray(input)) return input.map(decode);
+      const out: Record<string, unknown> = {};
+      for (const [key, entry] of Object.entries(input)) out[key] = decode(entry);
+      return out;
+    }
+    return input;
+  };
+  const parsed = JSON.parse(raw) as TaggedValue;
+  if (parsed?.$type !== "json") throw new Error("Malformed stored value");
+  return decode(parsed.value);
+}
+
+function toArrayBuffer(bytes: Uint8Array): ArrayBuffer {
+  const buffer = new ArrayBuffer(bytes.byteLength);
+  new Uint8Array(buffer).set(bytes);
+  return buffer;
+}
+
+function bytesToBase64(bytes: Uint8Array): string {
+  let binary = "";
+  const CHUNK = 0x8000;
+  for (let index = 0; index < bytes.length; index += CHUNK) {
+    binary += String.fromCharCode(...bytes.subarray(index, index + CHUNK));
+  }
+  return btoa(binary);
+}
+
+function base64ToBytes(value: string): Uint8Array {
+  const binary = atob(value);
+  const out = new Uint8Array(binary.length);
+  for (let index = 0; index < binary.length; index++) {
+    out[index] = binary.charCodeAt(index);
+  }
+  return out;
+}

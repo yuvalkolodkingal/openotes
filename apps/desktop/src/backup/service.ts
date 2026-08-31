@@ -249,10 +249,27 @@ export class BackupService {
     return { name, manifest, written };
   }
 
-  /** Run a scheduled backup if the policy says one is due. */
+  /**
+   * Run a scheduled backup if the policy says one is due.
+   *
+   * Silently does nothing when there is nothing to back up yet: no
+   * destination enabled, or the credential store still locked because the
+   * user has not unlocked the vault. Neither is a failure worth warning
+   * about — on a fresh install both are the normal state, and warning
+   * about them on every launch trains people to ignore the log.
+   */
   async runIfDue(): Promise<boolean> {
     const settings = this.options.settings.get("backup");
+    if (!settings.localEnabled && !settings.webdavEnabled) return false;
     if (!BackupEngine.isDue(settings, settings.lastBackupAt)) return false;
+    if (!this.options.credentials.isUnlocked) {
+      log.debug("Scheduled backup deferred: the vault is locked");
+      return false;
+    }
+    if (!this.options.databaseHandle()) {
+      log.debug("Scheduled backup deferred: the vault is not open yet");
+      return false;
+    }
     try {
       await this.createNow();
       return true;

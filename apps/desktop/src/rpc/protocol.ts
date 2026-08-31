@@ -90,6 +90,14 @@ export const PROCEDURE_NAMES = [
   "integration.about",
   "integration.openLogDirectory",
   "integration.logs",
+  // Electron-era settings the interface still queries at start-up. They are
+  // accepted and inert: custom DNS-over-HTTPS and proxy rules were Chromium
+  // session features with no webview equivalent, and answering them beats
+  // a warning in every session's log.
+  "integration.customDns",
+  "integration.setCustomDns",
+  "integration.proxyRules",
+  "integration.setProxyRules",
 
   // --- sqlite ---
   "sqlite.open",

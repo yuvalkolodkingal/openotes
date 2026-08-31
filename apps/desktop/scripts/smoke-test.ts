@@ -80,7 +80,11 @@ const checks: Check[] = [];
 
 function record(name: string, status: Check["status"], detail: string) {
   checks.push({ name, status, detail });
-  const marker = status === "pass" ? "PASS" : status === "fail" ? "FAIL" : "INFO";
+  const marker = status === "pass"
+    ? "PASS"
+    : status === "fail"
+    ? "FAIL"
+    : "INFO";
   console.log(`  [${marker}] ${name}: ${detail}`);
 }
 
@@ -88,7 +92,7 @@ async function which(command: string): Promise<boolean> {
   try {
     const probe = new Deno.Command(
       Deno.build.os === "windows" ? "where" : "which",
-      { args: [command], stdout: "null", stderr: "null" }
+      { args: [command], stdout: "null", stderr: "null" },
     );
     return (await probe.output()).code === 0;
   } catch {
@@ -107,13 +111,13 @@ async function findBuiltApp(distDirectory: string): Promise<string> {
     if (!interesting) continue;
     candidates.push({
       path,
-      modified: (await Deno.stat(path)).mtime?.getTime() ?? 0
+      modified: (await Deno.stat(path)).mtime?.getTime() ?? 0,
     });
   }
   if (candidates.length === 0) {
     throw new Error(
       `Nothing to smoke-test in ${distDirectory}. Run "deno task build" ` +
-        `first, or point --app at a build.`
+        `first, or point --app at a build.`,
     );
   }
   candidates.sort((a, b) => b.modified - a.modified);
@@ -137,7 +141,10 @@ interface Launchable {
  * FUSE, and `--appimage-extract` is built into the AppImage runtime, so this
  * works everywhere and still exercises the real payload.
  */
-async function resolveLaunchable(path: string): Promise<Launchable> {
+async function resolveLaunchable(given: string): Promise<Launchable> {
+  // Absolute from here on: the AppImage is extracted with its own cwd, and a
+  // relative executable path would be resolved against that instead.
+  const path = resolve(given);
   const info = await Deno.stat(path);
 
   if (info.isDirectory) {
@@ -148,7 +155,7 @@ async function resolveLaunchable(path: string): Promise<Launchable> {
           executable: candidate,
           payloadRoot: path,
           env: {},
-          description: `application directory ${path}`
+          description: `application directory ${path}`,
         };
       }
     }
@@ -162,13 +169,13 @@ async function resolveLaunchable(path: string): Promise<Launchable> {
       args: ["--appimage-extract"],
       cwd: workDirectory,
       stdout: "null",
-      stderr: "piped"
+      stderr: "piped",
     }).output();
     if (result.code !== 0) {
       throw new Error(
         `Could not extract ${basename(path)}: ${
           new TextDecoder().decode(result.stderr).trim()
-        }`
+        }`,
       );
     }
     const root = join(workDirectory, "squashfs-root");
@@ -180,7 +187,7 @@ async function resolveLaunchable(path: string): Promise<Launchable> {
       env: { APPIMAGE: path, APPDIR: root },
       description: `AppImage ${basename(path)} (extracted to ${root})`,
       cleanup: () =>
-        Deno.remove(workDirectory, { recursive: true }).catch(() => {})
+        Deno.remove(workDirectory, { recursive: true }).catch(() => {}),
     };
   }
 
@@ -188,7 +195,7 @@ async function resolveLaunchable(path: string): Promise<Launchable> {
     executable: path,
     payloadRoot: resolve(path, ".."),
     env: {},
-    description: `executable ${path}`
+    description: `executable ${path}`,
   };
 }
 
@@ -215,12 +222,12 @@ async function resolveDisplay(executable: string): Promise<DisplayWrapper> {
     return {
       command: "xvfb-run",
       prefix: ["-a", "--server-args=-screen 0 1280x800x24", executable],
-      note: "xvfb-run"
+      note: "xvfb-run",
     };
   }
   throw new Error(
     `No display and no xvfb-run. Install xvfb (apt-get install xvfb) or run ` +
-      `the smoke test on a machine with a display.`
+      `the smoke test on a machine with a display.`,
   );
 }
 
@@ -244,9 +251,9 @@ async function isolatedEnvironment(): Promise<{
       XDG_CACHE_HOME: join(home, "cache"),
       XDG_DOCUMENTS_DIR: join(home, "documents"),
       OPENOTES_DATA_DIR: join(home, "data", APP_ID),
-      OPENOTES_LOG_LEVEL: "debug"
+      OPENOTES_LOG_LEVEL: "debug",
     },
-    cleanup: () => Deno.remove(home, { recursive: true }).catch(() => {})
+    cleanup: () => Deno.remove(home, { recursive: true }).catch(() => {}),
   };
 }
 
@@ -259,7 +266,7 @@ const FAILURE_MARKERS = [
   "Uncaught",
   "panicked at",
   "error while loading shared libraries",
-  "Segmentation fault"
+  "Segmentation fault",
 ];
 
 interface LogLine {
@@ -287,10 +294,10 @@ function parseLogLines(output: string): LogLine[] {
 function findLine(
   lines: LogLine[],
   scope: string,
-  fragment: string
+  fragment: string,
 ): LogLine | undefined {
   return lines.find(
-    (line) => line.scope === scope && (line.message ?? "").includes(fragment)
+    (line) => line.scope === scope && (line.message ?? "").includes(fragment),
   );
 }
 
@@ -305,14 +312,14 @@ async function probeInterfacePort(origin: string): Promise<string> {
   try {
     const connection = await Deno.connect({
       hostname,
-      port: Number.parseInt(port, 10)
+      port: Number.parseInt(port, 10),
     });
     try {
       await connection.write(
         new TextEncoder().encode(
           `GET ${HEALTH_PATH} HTTP/1.1\r\nHost: ${hostname}:${port}\r\n` +
-            `Connection: close\r\n\r\n`
-        )
+            `Connection: close\r\n\r\n`,
+        ),
       );
       const buffer = new Uint8Array(4096);
       const read = await connection.read(buffer);
@@ -357,7 +364,7 @@ async function smokeTest(options: SmokeOptions): Promise<number> {
     env: { ...isolated.env, ...launchable.env },
     stdout: "piped",
     stderr: "piped",
-    stdin: "null"
+    stdin: "null",
   }).spawn();
 
   // Both pipes have to be drained while the application runs, or a chatty
@@ -367,7 +374,7 @@ async function smokeTest(options: SmokeOptions): Promise<number> {
   const decoder = new TextDecoder();
   const drain = async (
     stream: ReadableStream<Uint8Array>,
-    append: (text: string) => void
+    append: (text: string) => void,
   ) => {
     for await (const chunk of stream) {
       append(decoder.decode(chunk, { stream: true }));
@@ -402,7 +409,7 @@ async function smokeTest(options: SmokeOptions): Promise<number> {
   if (ready && !exited) {
     await Promise.race([
       exitPromise,
-      new Promise((resolve) => setTimeout(resolve, 3000))
+      new Promise((resolve) => setTimeout(resolve, 3000)),
     ]);
   }
 
@@ -420,28 +427,39 @@ async function smokeTest(options: SmokeOptions): Promise<number> {
       "fail",
       `exited with code ${exited.code}${
         exited.signal ? ` (signal ${exited.signal})` : ""
-      } after ${timeout / 1000}s`
+      } after ${timeout / 1000}s`,
     );
   } else {
-    record("process survives start-up", "pass", `pid ${child.pid} still running`);
+    record(
+      "process survives start-up",
+      "pass",
+      `pid ${child.pid} still running`,
+    );
   }
 
   // ---- 2 -------------------------------------------------------------------
   const servedRoot = serverLine?.context?.root;
   const expectedUi = join(launchable.payloadRoot, "ui");
-  if (typeof servedRoot === "string" && resolve(servedRoot) === resolve(expectedUi)) {
-    record("interface travelled with the build", "pass", `serving ${servedRoot}`);
+  if (
+    typeof servedRoot === "string" &&
+    resolve(servedRoot) === resolve(expectedUi)
+  ) {
+    record(
+      "interface travelled with the build",
+      "pass",
+      `serving ${servedRoot}`,
+    );
   } else if (typeof servedRoot === "string") {
     record(
       "interface travelled with the build",
       "fail",
-      `serving ${servedRoot}, expected ${expectedUi}`
+      `serving ${servedRoot}, expected ${expectedUi}`,
     );
   } else {
     record(
       "interface travelled with the build",
       "fail",
-      "the interface server never reported a root directory"
+      "the interface server never reported a root directory",
     );
   }
 
@@ -456,13 +474,13 @@ async function smokeTest(options: SmokeOptions): Promise<number> {
       record(
         "native libraries travelled, encryption is live",
         "pass",
-        `${libraryPath}; the runtime verified the engine encrypts in-process`
+        `${libraryPath}; the runtime verified the engine encrypts in-process`,
       );
     } else {
       record(
         "native libraries travelled, encryption is live",
         "fail",
-        `loaded ${libraryPath} but the encryption check never reported`
+        `loaded ${libraryPath} but the encryption check never reported`,
       );
     }
   } else {
@@ -471,7 +489,7 @@ async function smokeTest(options: SmokeOptions): Promise<number> {
       "fail",
       typeof libraryPath === "string"
         ? `loaded ${libraryPath}, expected something under ${expectedNative}`
-        : `no bundled SQLite library was reported (expected one under ${expectedNative})`
+        : `no bundled SQLite library was reported (expected one under ${expectedNative})`,
     );
   }
 
@@ -482,17 +500,20 @@ async function smokeTest(options: SmokeOptions): Promise<number> {
     record(
       "application reports itself started",
       "pass",
-      `"${startedLine.message}"${version ? `, version ${version}` : ""}`
+      `"${startedLine.message}"${version ? `, version ${version}` : ""}`,
     );
   } else {
     record(
       "application reports itself started",
       "fail",
       `the log is missing ${
-        [!readyLine && '"Application ready"', !startedLine && "the start-up line"]
+        [
+          !readyLine && '"Application ready"',
+          !startedLine && "the start-up line",
+        ]
           .filter(Boolean)
           .join(" and ")
-      }`
+      }`,
     );
   }
 
@@ -505,7 +526,7 @@ async function smokeTest(options: SmokeOptions): Promise<number> {
     }
     await Promise.race([
       exitPromise,
-      new Promise((resolve) => setTimeout(resolve, 5000))
+      new Promise((resolve) => setTimeout(resolve, 5000)),
     ]);
     if (!exited) {
       try {
@@ -524,7 +545,7 @@ async function smokeTest(options: SmokeOptions): Promise<number> {
   // end would wait forever.
   await Promise.race([
     Promise.allSettled([stdoutDrained, stderrDrained]),
-    new Promise((resolve) => setTimeout(resolve, 3000))
+    new Promise((resolve) => setTimeout(resolve, 3000)),
   ]);
 
   // ---- 5 -------------------------------------------------------------------
@@ -534,13 +555,13 @@ async function smokeTest(options: SmokeOptions): Promise<number> {
     record(
       "no start-up errors logged",
       "pass",
-      `${combined.length} bytes of output, no failure markers`
+      `${combined.length} bytes of output, no failure markers`,
     );
   } else {
     record(
       "no start-up errors logged",
       "fail",
-      `output contains: ${hits.join("; ")}`
+      `output contains: ${hits.join("; ")}`,
     );
   }
 
@@ -553,7 +574,7 @@ async function smokeTest(options: SmokeOptions): Promise<number> {
     "skipped",
     origin
       ? await probeInterfacePort(origin)
-      : "no origin was reported, so there was nothing to probe"
+      : "no origin was reported, so there was nothing to probe",
   );
 
   const failed = checks.filter((check) => check.status === "fail");
@@ -578,7 +599,7 @@ async function smokeTest(options: SmokeOptions): Promise<number> {
       `               interface rendered, whether a note can be written, or\n` +
       `               whether sync works. It also cannot reach the interface\n` +
       `               server over the network: deno desktop wires that socket\n` +
-      `               to the webview, not to the machine.`
+      `               to the webview, not to the machine.`,
   );
 
   if (failed.length === 0) {
@@ -589,7 +610,7 @@ async function smokeTest(options: SmokeOptions): Promise<number> {
   console.error(
     `\nFAILED — ${failed.length} of ${checks.length} checks failed: ${
       failed.map((check) => check.name).join(", ")
-    }`
+    }`,
   );
   return 1;
 }
@@ -602,7 +623,7 @@ function usage() {
                     (default: the newest build in dist/)
   --dist <dir>      where to look for a build (default: dist/)
   --timeout <secs>  how long to wait for the start-up line (default: 90)
-  -h, --help        show this message`
+  -h, --help        show this message`,
   );
 }
 
@@ -614,6 +635,8 @@ if (import.meta.main) {
 
   for (let index = 0; index < Deno.args.length; index++) {
     const argument = Deno.args[index];
+    // `deno task <name> -- --flag` forwards the separator verbatim.
+    if (argument === "--") continue;
     if (argument === "--app") app = Deno.args[++index];
     else if (argument === "--dist") distDirectory = Deno.args[++index];
     else if (argument === "--timeout") {
@@ -634,7 +657,7 @@ if (import.meta.main) {
       console.error(
         `\nSmoke test could not run: ${
           error instanceof Error ? error.message : String(error)
-        }`
+        }`,
       );
       Deno.exit(1);
     }

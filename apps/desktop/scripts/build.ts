@@ -74,9 +74,9 @@ import {
   APP_IDENTIFIER,
   APP_NAME,
   APP_VERSION,
-  RELEASE_BASE_URL
+  RELEASE_BASE_URL,
 } from "../src/constants.ts";
-import { buildUi, uiIsBuilt, UI_DIR } from "./build-ui.ts";
+import { buildUi, UI_DIR, uiIsBuilt } from "./build-ui.ts";
 
 const ROOT = fromFileUrl(new URL("../../../", import.meta.url));
 const DESKTOP_DIR = join(ROOT, "apps", "desktop");
@@ -96,7 +96,7 @@ const ICON_SIZES = [
   "64x64",
   "128x128",
   "256x256",
-  "512x512"
+  "512x512",
 ];
 
 export type TargetOs = "linux" | "windows";
@@ -117,23 +117,23 @@ export const TARGETS: Record<string, Target> = {
   "x86_64-unknown-linux-gnu": {
     triple: "x86_64-unknown-linux-gnu",
     os: "linux",
-    arch: "x86_64"
+    arch: "x86_64",
   },
   "aarch64-unknown-linux-gnu": {
     triple: "aarch64-unknown-linux-gnu",
     os: "linux",
-    arch: "aarch64"
+    arch: "aarch64",
   },
   "x86_64-pc-windows-msvc": {
     triple: "x86_64-pc-windows-msvc",
     os: "windows",
-    arch: "x86_64"
+    arch: "x86_64",
   },
   "aarch64-pc-windows-msvc": {
     triple: "aarch64-pc-windows-msvc",
     os: "windows",
-    arch: "aarch64"
-  }
+    arch: "aarch64",
+  },
 };
 
 export type Format =
@@ -151,7 +151,7 @@ export const LINUX_FORMATS: Format[] = [
   "tar.gz",
   "appimage",
   "deb",
-  "rpm"
+  "rpm",
 ];
 export const WINDOWS_FORMATS: Format[] = ["dir", "zip", "msi", "exe"];
 
@@ -164,7 +164,7 @@ export function hostTriple(): string {
   if (Deno.build.os === "windows") return `${arch}-pc-windows-msvc`;
   if (Deno.build.os === "linux") return `${arch}-unknown-linux-gnu`;
   throw new Error(
-    `Openotes does not build on ${Deno.build.os}; use Linux or Windows.`
+    `Openotes does not build on ${Deno.build.os}; use Linux or Windows.`,
   );
 }
 
@@ -179,7 +179,7 @@ export function nativeArtifacts(os: TargetOs): string[] {
 export function artifactName(
   target: Target,
   format: Format,
-  version: string
+  version: string,
 ): string {
   const base = `${APP_NAME}-${version}-${target.os}-${target.arch}`;
   switch (format) {
@@ -226,7 +226,7 @@ interface RunResult {
 async function run(
   command: string,
   args: string[],
-  options: { cwd?: string; env?: Record<string, string>; quiet?: boolean } = {}
+  options: { cwd?: string; env?: Record<string, string>; quiet?: boolean } = {},
 ): Promise<void> {
   if (!options.quiet) console.log(`  $ ${command} ${args.join(" ")}`);
   const { code } = await new Deno.Command(command, {
@@ -234,7 +234,7 @@ async function run(
     cwd: options.cwd,
     env: options.env,
     stdout: "inherit",
-    stderr: "inherit"
+    stderr: "inherit",
   }).output();
   if (code !== 0) {
     throw new Error(`${command} ${args.join(" ")} exited with code ${code}`);
@@ -244,18 +244,18 @@ async function run(
 async function capture(
   command: string,
   args: string[],
-  options: { cwd?: string } = {}
+  options: { cwd?: string } = {},
 ): Promise<RunResult> {
   const output = await new Deno.Command(command, {
     args,
     cwd: options.cwd,
     stdout: "piped",
-    stderr: "piped"
+    stderr: "piped",
   }).output();
   return {
     code: output.code,
     stdout: new TextDecoder().decode(output.stdout),
-    stderr: new TextDecoder().decode(output.stderr)
+    stderr: new TextDecoder().decode(output.stderr),
   };
 }
 
@@ -263,7 +263,7 @@ async function which(command: string): Promise<boolean> {
   try {
     const probe = new Deno.Command(
       Deno.build.os === "windows" ? "where" : "which",
-      { args: [command], stdout: "null", stderr: "null" }
+      { args: [command], stdout: "null", stderr: "null" },
     );
     return (await probe.output()).code === 0;
   } catch {
@@ -276,7 +276,7 @@ async function requireTool(command: string, why: string) {
   throw new Error(
     `"${command}" is not on PATH and is required to ${why}.\n` +
       `Install it (Debian/Ubuntu: apt-get install ${toolPackage(command)}) ` +
-      `or drop this format from --format.`
+      `or drop this format from --format.`,
   );
 }
 
@@ -326,7 +326,7 @@ async function ensureNative(target: Target, nativeDir: string, skip: boolean) {
     throw new Error(
       `--skip-native was passed but ${missing.join(", ")} ${
         missing.length === 1 ? "is" : "are"
-      } missing from ${nativeDir}.`
+      } missing from ${nativeDir}.`,
     );
   }
   if (target.os !== Deno.build.os) {
@@ -335,7 +335,7 @@ async function ensureNative(target: Target, nativeDir: string, skip: boolean) {
         `They have to be built on ${target.os} — apps/desktop/scripts/` +
         `build-native.ts compiles with the host toolchain — and then placed ` +
         `here with --native-dir. CI does this by passing the Windows job's ` +
-        `artifact to the Linux packaging job.`
+        `artifact to the Linux packaging job.`,
     );
   }
 
@@ -343,13 +343,13 @@ async function ensureNative(target: Target, nativeDir: string, skip: boolean) {
   await run(Deno.execPath(), [
     "run",
     "-A",
-    join(DESKTOP_DIR, "scripts", "build-native.ts")
+    join(DESKTOP_DIR, "scripts", "build-native.ts"),
   ], { cwd: ROOT });
 
   for (const name of required) {
     if (!(await exists(join(nativeDir, name)))) {
       throw new Error(
-        `build-native.ts finished but ${name} is still missing from ${nativeDir}`
+        `build-native.ts finished but ${name} is still missing from ${nativeDir}`,
       );
     }
   }
@@ -364,7 +364,7 @@ async function ensureUi(skip: boolean, force: boolean) {
   } else if (skip) {
     throw new Error(
       `--skip-ui was passed but there is no built interface at ${UI_DIR}. ` +
-        `Run "deno task build:ui" first.`
+        `Run "deno task build:ui" first.`,
     );
   }
   if (skip) return;
@@ -414,7 +414,7 @@ async function denoDesktop({ target, output, nativeStage }: CompileOptions) {
     nativeStage,
     "--output",
     output,
-    ENTRY_POINT
+    ENTRY_POINT,
   ], { cwd: ROOT });
 }
 
@@ -438,7 +438,7 @@ interface Prepared {
 async function preparePayload(
   target: Target,
   version: string,
-  nativeStage: string
+  nativeStage: string,
 ): Promise<Prepared> {
   const base = binaryBaseName(target);
   const appParent = join(WORK_DIR, target.triple, "app");
@@ -462,7 +462,7 @@ async function preparePayload(
           (await Array.fromAsync(Deno.readDir(payloadDir)))
             .map((entry) => entry.name)
             .join(", ")
-        }`
+        }`,
     );
   }
   return { directory: payloadDir, parent: payloadParent, binary };
@@ -472,7 +472,7 @@ async function preparePayload(
 async function addResources(
   destination: string,
   target: Target,
-  nativeStage: string
+  nativeStage: string,
 ) {
   const overwrite = { overwrite: true };
   await copy(UI_DIR, join(destination, "ui"), overwrite);
@@ -483,7 +483,7 @@ async function addResources(
     await copy(
       join(ROOT, "UPSTREAM.md"),
       join(destination, "UPSTREAM.md"),
-      overwrite
+      overwrite,
     );
   }
 
@@ -494,13 +494,17 @@ async function addResources(
       await copy(
         join(ICONS_DIR, `${size}.png`),
         join(icons, `${size}.png`),
-        overwrite
+        overwrite,
       );
     }
     const desktopEntry = join(PACKAGING_DIR, "linux", `${APP_ID}.desktop`);
     const manPage = join(PACKAGING_DIR, "linux", `${APP_ID}.1`);
     if (await exists(desktopEntry)) {
-      await copy(desktopEntry, join(destination, `${APP_ID}.desktop`), overwrite);
+      await copy(
+        desktopEntry,
+        join(destination, `${APP_ID}.desktop`),
+        overwrite,
+      );
     }
     if (await exists(manPage)) {
       await copy(manPage, join(destination, `${APP_ID}.1`), overwrite);
@@ -530,7 +534,7 @@ async function produceDir(prepared: Prepared, output: string) {
     await copy(
       join(prepared.directory, entry.name),
       join(output, entry.name),
-      { overwrite: true }
+      { overwrite: true },
     );
   }
   console.log(`  -> ${output}`);
@@ -552,7 +556,7 @@ async function produceZip(prepared: Prepared, output: string) {
   const inner = basename(prepared.directory);
   if (await which("zip")) {
     await run("zip", ["-r", "-q", "-9", output, inner], {
-      cwd: prepared.parent
+      cwd: prepared.parent,
     });
   } else if (Deno.build.os === "windows") {
     await run("powershell", [
@@ -560,11 +564,11 @@ async function produceZip(prepared: Prepared, output: string) {
       "-Command",
       `Compress-Archive -Force -Path '${
         join(prepared.parent, inner)
-      }' -DestinationPath '${output}'`
+      }' -DestinationPath '${output}'`,
     ]);
   } else {
     throw new Error(
-      `Neither "zip" nor PowerShell is available to build ${output}.`
+      `Neither "zip" nor PowerShell is available to build ${output}.`,
     );
   }
   console.log(`  -> ${output}`);
@@ -582,7 +586,7 @@ async function produceZip(prepared: Prepared, output: string) {
 async function produceAppImage(
   target: Target,
   nativeStage: string,
-  output: string
+  output: string,
 ) {
   await requireTool("mksquashfs", "repack the AppImage");
   const work = join(WORK_DIR, target.triple, "appimage");
@@ -596,7 +600,7 @@ async function produceAppImage(
   const offsetResult = await capture(staged, ["--appimage-offset"]);
   if (offsetResult.code !== 0) {
     throw new Error(
-      `Could not read the AppImage payload offset: ${offsetResult.stderr.trim()}`
+      `Could not read the AppImage payload offset: ${offsetResult.stderr.trim()}`,
     );
   }
   const offset = Number.parseInt(offsetResult.stdout.trim(), 10);
@@ -604,10 +608,13 @@ async function produceAppImage(
     throw new Error(`Nonsensical AppImage offset: ${offsetResult.stdout}`);
   }
 
-  const { compressor, blockSize } = await readSquashfsSuperblock(staged, offset);
+  const { compressor, blockSize } = await readSquashfsSuperblock(
+    staged,
+    offset,
+  );
   console.log(
     `  runtime is ${offset} bytes; squashfs uses ${compressor} with ` +
-      `${blockSize}-byte blocks`
+      `${blockSize}-byte blocks`,
   );
 
   const extracted = join(work, "squashfs-root");
@@ -629,7 +636,7 @@ async function produceAppImage(
     "-comp",
     compressor,
     "-b",
-    String(blockSize)
+    String(blockSize),
   ]);
 
   const runtime = (await Deno.readFile(staged)).subarray(0, offset);
@@ -648,12 +655,12 @@ const SQUASHFS_COMPRESSORS: Record<number, string> = {
   3: "lzo",
   4: "xz",
   5: "lz4",
-  6: "zstd"
+  6: "zstd",
 };
 
 async function readSquashfsSuperblock(
   path: string,
-  offset: number
+  offset: number,
 ): Promise<{ compressor: string; blockSize: number }> {
   using file = await Deno.open(path, { read: true });
   await file.seek(offset, Deno.SeekMode.Start);
@@ -668,7 +675,7 @@ async function readSquashfsSuperblock(
   const magic = String.fromCharCode(...header.subarray(0, 4));
   if (magic !== "hsqs") {
     throw new Error(
-      `No squashfs image at offset ${offset} of ${path} (magic "${magic}")`
+      `No squashfs image at offset ${offset} of ${path} (magic "${magic}")`,
     );
   }
   const blockSize = view.getUint32(12, true);
@@ -693,7 +700,7 @@ async function produceDeb(
   prepared: Prepared,
   nativeStage: string,
   version: string,
-  output: string
+  output: string,
 ) {
   await requireTool("dpkg-deb", "build the .deb");
   const work = join(WORK_DIR, target.triple, "deb");
@@ -709,7 +716,7 @@ async function produceDeb(
   const libDir = join(tree, "usr", "lib", APP_ID);
   if (!(await exists(libDir))) {
     throw new Error(
-      `Expected deno desktop's .deb to install into /usr/lib/${APP_ID}; it did not.`
+      `Expected deno desktop's .deb to install into /usr/lib/${APP_ID}; it did not.`,
     );
   }
   await addResources(libDir, target, nativeStage);
@@ -732,11 +739,11 @@ async function installSharedLinuxFiles(tree: string, prepared: Prepared) {
   const docDir = join(tree, "usr", "share", "doc", APP_ID);
   await ensureDir(docDir);
   await copy(join(ROOT, "LICENSE"), join(docDir, "copyright"), {
-    overwrite: true
+    overwrite: true,
   });
   if (await exists(join(ROOT, "UPSTREAM.md"))) {
     await copy(join(ROOT, "UPSTREAM.md"), join(docDir, "UPSTREAM.md"), {
-      overwrite: true
+      overwrite: true,
     });
   }
 
@@ -749,7 +756,7 @@ async function installSharedLinuxFiles(tree: string, prepared: Prepared) {
       "hicolor",
       size,
       "apps",
-      `${APP_ID}.png`
+      `${APP_ID}.png`,
     );
     await ensureDir(join(target, ".."));
     await copy(join(ICONS_DIR, `${size}.png`), target, { overwrite: true });
@@ -760,7 +767,7 @@ async function installSharedLinuxFiles(tree: string, prepared: Prepared) {
   if (await exists(sharedEntry)) {
     await ensureDir(applications);
     await copy(sharedEntry, join(applications, `${APP_ID}.desktop`), {
-      overwrite: true
+      overwrite: true,
     });
   }
 }
@@ -768,7 +775,7 @@ async function installSharedLinuxFiles(tree: string, prepared: Prepared) {
 async function rewriteDebianControl(
   path: string,
   version: string,
-  target: Target
+  target: Target,
 ) {
   const original = await Deno.readTextFile(path);
   const fields = new Map<string, string>();
@@ -808,7 +815,7 @@ async function rewriteDebianControl(
     `Offline-first, end-to-end-encrypted notes with WebDAV sync\n` +
       ` ${APP_NAME} is a desktop fork of Notesnook with no account, no\n` +
       ` subscription and no cloud service. Notes are stored locally in an\n` +
-      ` encrypted SQLite database and synchronised through any WebDAV server.`
+      ` encrypted SQLite database and synchronised through any WebDAV server.`,
   );
 
   const order = [
@@ -821,7 +828,7 @@ async function rewriteDebianControl(
     "Section",
     "Priority",
     "Homepage",
-    "Description"
+    "Description",
   ];
   const lines: string[] = [];
   for (const key of order) {
@@ -848,7 +855,7 @@ async function produceRpm(
   prepared: Prepared,
   nativeStage: string,
   version: string,
-  output: string
+  output: string,
 ) {
   await requireTool("rpmbuild", "build the .rpm");
   await requireTool("cpio", "unpack deno desktop's .rpm");
@@ -863,13 +870,13 @@ async function produceRpm(
   await ensureDir(tree);
   await run("sh", [
     "-c",
-    `rpm2cpio "${staged}" | cpio -idm --quiet --no-absolute-filenames`
+    `rpm2cpio "${staged}" | cpio -idm --quiet --no-absolute-filenames`,
   ], { cwd: tree });
 
   const libDir = join(tree, "usr", "lib", APP_ID);
   if (!(await exists(libDir))) {
     throw new Error(
-      `Expected deno desktop's .rpm to install into /usr/lib/${APP_ID}; it did not.`
+      `Expected deno desktop's .rpm to install into /usr/lib/${APP_ID}; it did not.`,
     );
   }
   await addResources(libDir, target, nativeStage);
@@ -882,7 +889,7 @@ async function produceRpm(
   const specPath = join(topDir, "SPECS", `${APP_ID}.spec`);
   await Deno.writeTextFile(
     specPath,
-    await renderRpmSpec(tree, version, target)
+    await renderRpmSpec(tree, version, target),
   );
 
   await run("rpmbuild", [
@@ -893,10 +900,14 @@ async function produceRpm(
     `_openotes_tree ${tree}`,
     "--target",
     target.arch === "aarch64" ? "aarch64" : "x86_64",
-    specPath
+    specPath,
   ]);
 
-  const rpmDir = join(topDir, "RPMS", target.arch === "aarch64" ? "aarch64" : "x86_64");
+  const rpmDir = join(
+    topDir,
+    "RPMS",
+    target.arch === "aarch64" ? "aarch64" : "x86_64",
+  );
   let produced: string | undefined;
   for await (const entry of Deno.readDir(rpmDir)) {
     if (entry.isFile && entry.name.endsWith(".rpm")) {
@@ -911,7 +922,7 @@ async function produceRpm(
 async function renderRpmSpec(
   tree: string,
   version: string,
-  target: Target
+  target: Target,
 ): Promise<string> {
   const files: string[] = [];
   const directories: string[] = [];
@@ -933,7 +944,7 @@ async function renderRpmSpec(
 
   const fileList = [
     ...directories.sort().map((entry) => `%dir "${entry}"`),
-    ...files.sort().map((entry) => `"${entry}"`)
+    ...files.sort().map((entry) => `"${entry}"`),
   ].join("\n");
 
   return `# Generated by apps/desktop/scripts/build.ts — do not edit by hand.
@@ -993,24 +1004,27 @@ async function produceMsi(
   target: Target,
   prepared: Prepared,
   version: string,
-  output: string
+  output: string,
 ) {
   const work = join(WORK_DIR, target.triple, "msi");
   await emptyDir(work);
   const wxsPath = join(work, `${APP_ID}.wxs`);
   await Deno.writeTextFile(
     wxsPath,
-    await renderWxs(prepared, version, target)
+    await renderWxs(prepared, version, target),
   );
 
   if (await which("wixl")) {
+    // wixl prints "WixlWixPackage has no property named 'Platform'" and
+    // carries on: it takes the architecture from --arch instead. The
+    // attribute stays in the document because WiX v3's candle does read it.
     await run("wixl", [
       "-v",
       "--arch",
       target.arch === "aarch64" ? "arm64" : "x64",
       "-o",
       output,
-      wxsPath
+      wxsPath,
     ]);
   } else if ((await which("candle")) && (await which("light"))) {
     const wixobj = join(work, `${APP_ID}.wixobj`);
@@ -1019,14 +1033,14 @@ async function produceMsi(
       target.arch === "aarch64" ? "arm64" : "x64",
       "-out",
       wixobj,
-      wxsPath
+      wxsPath,
     ]);
     await run("light", ["-out", output, wixobj]);
   } else {
     throw new Error(
       `Building an .msi needs "wixl" (Debian/Ubuntu: apt-get install wixl) ` +
         `or the WiX v3 toolset ("candle" and "light") on PATH. Neither was ` +
-        `found.`
+        `found.`,
     );
   }
   console.log(`  -> ${output}`);
@@ -1051,7 +1065,7 @@ async function uuid5(name: string): Promise<string> {
     0x4f,
     0xd4,
     0x30,
-    0xc8
+    0xc8,
   ]);
   const nameBytes = new TextEncoder().encode(name);
   const input = new Uint8Array(namespace.length + nameBytes.length);
@@ -1088,7 +1102,7 @@ function xmlEscape(value: string): string {
 async function renderWxs(
   prepared: Prepared,
   version: string,
-  target: Target
+  target: Target,
 ): Promise<string> {
   const componentRefs: string[] = [];
   let directoryCounter = 0;
@@ -1098,11 +1112,11 @@ async function renderWxs(
   const renderDirectory = async (
     absolute: string,
     relative: string,
-    indent: string
+    indent: string,
   ): Promise<string> => {
     const entries = (await Array.fromAsync(Deno.readDir(absolute))).sort((
       a,
-      b
+      b,
     ) => (a.name < b.name ? -1 : 1));
     const files = entries.filter((entry) => entry.isFile);
     const directories = entries.filter((entry) => entry.isDirectory);
@@ -1113,7 +1127,7 @@ async function renderWxs(
       const guid = await uuid5(`component:${relative || "."}`);
       componentRefs.push(componentId);
       chunks.push(
-        `${indent}<Component Id="${componentId}" Guid="{${guid}}" Win64="yes">`
+        `${indent}<Component Id="${componentId}" Guid="{${guid}}" Win64="yes">`,
       );
       let first = true;
       for (const entry of files) {
@@ -1121,7 +1135,7 @@ async function renderWxs(
         chunks.push(
           `${indent}  <File Id="fil${fileCounter++}" Name="${
             xmlEscape(entry.name)
-          }" Source="${xmlEscape(source)}"${first ? ' KeyPath="yes"' : ""} />`
+          }" Source="${xmlEscape(source)}"${first ? ' KeyPath="yes"' : ""} />`,
         );
         first = false;
       }
@@ -1131,14 +1145,14 @@ async function renderWxs(
     for (const entry of directories) {
       const id = `dir${directoryCounter++}`;
       chunks.push(
-        `${indent}<Directory Id="${id}" Name="${xmlEscape(entry.name)}">`
+        `${indent}<Directory Id="${id}" Name="${xmlEscape(entry.name)}">`,
       );
       chunks.push(
         await renderDirectory(
           join(absolute, entry.name),
           `${relative}/${entry.name}`,
-          `${indent}  `
-        )
+          `${indent}  `,
+        ),
       );
       chunks.push(`${indent}</Directory>`);
     }
@@ -1226,7 +1240,7 @@ async function produceExe(
   target: Target,
   prepared: Prepared,
   version: string,
-  output: string
+  output: string,
 ) {
   await requireTool("makensis", "build the Windows installer");
   const work = join(WORK_DIR, target.triple, "nsis");
@@ -1240,7 +1254,7 @@ async function produceExe(
 function renderNsis(
   prepared: Prepared,
   version: string,
-  output: string
+  output: string,
 ): string {
   // makensis accepts forward slashes on every platform it runs on.
   const payload = prepared.directory.replaceAll("\\", "/");
@@ -1347,19 +1361,19 @@ export async function build(options: BuildOptions): Promise<string[]> {
 
   for (const target of options.targets) {
     const formats = (options.formats ?? formatsFor(target)).filter(
-      (format) => formatsFor(target).includes(format)
+      (format) => formatsFor(target).includes(format),
     );
     if (formats.length === 0) {
       throw new Error(
         `None of the requested formats can be built for ${target.triple}. ` +
-          `Valid formats: ${formatsFor(target).join(", ")}`
+          `Valid formats: ${formatsFor(target).join(", ")}`,
       );
     }
 
     console.log(
       `\n=== ${APP_NAME} ${version} — ${target.triple} — ${
         formats.join(", ")
-      } ===`
+      } ===`,
     );
 
     await ensureNative(target, nativeDirectory, !!options.skipNative);
@@ -1369,7 +1383,10 @@ export async function build(options: BuildOptions): Promise<string[]> {
     const prepared = await preparePayload(target, version, nativeStage);
 
     for (const format of formats) {
-      const output = join(outputDirectory, artifactName(target, format, version));
+      const output = join(
+        outputDirectory,
+        artifactName(target, format, version),
+      );
       console.log(`\nProducing ${basename(output)}…`);
       switch (format) {
         case "dir":
@@ -1419,7 +1436,7 @@ function parseFormats(value: string): Format[] {
     const normalised = name === "targz" || name === "tgz" ? "tar.gz" : name;
     if (!known.has(normalised)) {
       throw new Error(
-        `Unknown format "${raw}". Valid formats: ${[...known].join(", ")}`
+        `Unknown format "${raw}". Valid formats: ${[...known].join(", ")}`,
       );
     }
     formats.push(normalised as Format);
@@ -1432,7 +1449,10 @@ function usage() {
     `Usage: deno run -A apps/desktop/scripts/build.ts [options]
 
   --target <triple>   one of:
-${Object.keys(TARGETS).map((triple) => `                        ${triple}`).join("\n")}
+${
+      Object.keys(TARGETS).map((triple) => `                        ${triple}`)
+        .join("\n")
+    }
                       (default: the host triple; may be repeated)
   --format <list>     comma separated; default is every format for the target
                         linux:   ${LINUX_FORMATS.join(", ")}
@@ -1446,7 +1466,7 @@ ${Object.keys(TARGETS).map((triple) => `                        ${triple}`).join
   --rebuild-ui        rebuild the interface even if one is present
   --skip-native       do not build the native libraries; fail if missing
   --keep-work         keep apps/desktop/.build for inspection
-  -h, --help          show this message`
+  -h, --help          show this message`,
   );
 }
 
@@ -1472,6 +1492,9 @@ if (import.meta.main) {
         return next;
       };
       switch (argument) {
+        // `deno task <name> -- --flag` forwards the separator verbatim.
+        case "--":
+          break;
         case "--target": {
           const triple = value();
           const target = TARGETS[triple];
@@ -1479,7 +1502,7 @@ if (import.meta.main) {
             throw new Error(
               `Unknown target "${triple}". Valid targets: ${
                 Object.keys(TARGETS).join(", ")
-              }`
+              }`,
             );
           }
           targets.push(target);
@@ -1545,11 +1568,13 @@ if (import.meta.main) {
         skipUi,
         rebuildUi,
         skipNative,
-        keepWork
+        keepWork,
       });
     }
   } catch (error) {
-    console.error(`\n${error instanceof Error ? error.message : String(error)}`);
+    console.error(
+      `\n${error instanceof Error ? error.message : String(error)}`,
+    );
     Deno.exit(1);
   }
 }

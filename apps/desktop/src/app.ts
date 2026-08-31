@@ -40,6 +40,7 @@ import {
   ThemeWatcher
 } from "./native/shell.ts";
 import { CredentialStore } from "./security/credentials.ts";
+import { SafeStorage } from "./security/safe-storage.ts";
 import { DatabaseSyncStore } from "./sync/store-adapter.ts";
 import { SyncService } from "./sync/service.ts";
 import { BackupService } from "./backup/service.ts";
@@ -73,6 +74,7 @@ export interface AppContext {
   files: FileStorage;
   exports: ExportWriter;
   storage: KeyValueStore;
+  safeStorage: SafeStorage;
   sync: SyncService;
   backups: BackupService;
   updater: UpdateService;
@@ -125,6 +127,7 @@ export async function createApp(options: CreateAppOptions): Promise<AppContext> 
   const files = new FileStorage();
   await files.cleanupPartials();
   const storage = new KeyValueStore(appDataDir());
+  const safeStorage = new SafeStorage(appDataDir());
 
   const shell = new Shell();
   const dialogs = new Dialogs();
@@ -163,6 +166,7 @@ export async function createApp(options: CreateAppOptions): Promise<AppContext> 
     files,
     exports,
     storage,
+    safeStorage,
     shell,
     dialogs,
     notifications,

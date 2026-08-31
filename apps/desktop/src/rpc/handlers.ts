@@ -219,6 +219,13 @@ export function createHandlers(): Record<string, Handler> {
       context.clipboard.writeText(asString(input, "text", 5_000_000));
     },
 
+    // Electron-era session features with no webview equivalent; accepted
+    // and inert so the interface's start-up queries do not error.
+    "integration.customDns": () => false,
+    "integration.setCustomDns": () => false,
+    "integration.proxyRules": () => "",
+    "integration.setProxyRules": () => "",
+
     "integration.openLogDirectory": async (_input, context) => {
       await context.shell.openPath(context.logDirectory);
     },
@@ -297,17 +304,20 @@ export function createHandlers(): Record<string, Handler> {
 
     // ---------------- key storage ----------------
 
-    // Upstream used the OS keychain here when available and fell back to
-    // wrapping keys in the renderer. There is no reliable cross-platform
-    // Deno keychain binding, so this reports "unavailable" and the renderer
-    // uses its existing, already-shipping fallback path.
-    "safeStorage.isEncryptionAvailable": () => false,
-    "safeStorage.encryptString": () => {
-      throw new Error("OS-backed encryption is not available on this platform");
-    },
-    "safeStorage.decryptString": () => {
-      throw new Error("OS-backed encryption is not available on this platform");
-    },
+    // The renderer's key store wraps its AES key through these two calls
+    // and persists only the ciphertext — upstream's own desktop path,
+    // running unchanged. See security/safe-storage.ts for what the
+    // encryption is and, more importantly, what it is not.
+    "safeStorage.isEncryptionAvailable": (_input, context) =>
+      context.safeStorage.isAvailable(),
+    "safeStorage.encryptString": async (input, context) =>
+      await context.safeStorage.encryptString(
+        asString(input, "plaintext", 1_000_000)
+      ),
+    "safeStorage.decryptString": async (input, context) =>
+      await context.safeStorage.decryptString(
+        asString(input, "payload", 1_000_000)
+      ),
 
     // ---------------- compression ----------------
 

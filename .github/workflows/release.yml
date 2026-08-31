@@ -1,0 +1,330 @@
+# This file is part of the Notesnook project (https://notesnook.com/)
+#
+# Copyright (C) 2023 Streetwriters (Private) Limited
+# Copyright (C) 2026 Openotes contributors
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+# Publishes a release for a v* tag.
+#
+# ORDER MATTERS (spec §34): the full test suite runs first and every later
+# job depends on it, so a tag whose tests fail publishes nothing at all — no
+# release, no draft, no uploaded asset.
+#
+# SECRETS (spec §35, §43): this workflow has exactly one trigger, a tag push
+# to this repository. There is no `pull_request` or `pull_request_target`
+# trigger, so a pull request from a fork can never run it and can never see
+# the signing key. Authenticode signing is optional: when
+# WINDOWS_SIGNING_CERTIFICATE is not configured — which is the case in every
+# fork — the Windows installers are published unsigned and the release notes
+# say so, rather than the build failing.
+
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Existing v* tag to build and publish"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  DENO_VERSION: "2.9.6"
+
+jobs:
+  # -------------------------------------------------------------------------
+  version:
+    name: Resolve the version
+    runs-on: ubuntu-24.04
+    outputs:
+      tag: ${{ steps.resolve.outputs.tag }}
+      version: ${{ steps.resolve.outputs.version }}
+      prerelease: ${{ steps.resolve.outputs.prerelease }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Resolve and cross-check the version
+        id: resolve
+        run: |
+          set -euo pipefail
+          tag="${{ inputs.tag || github.ref_name }}"
+          case "$tag" in
+            v*) ;;
+            *) echo "Refusing to release from \"$tag\": tags must start with v" >&2
+               exit 1 ;;
+          esac
+          version="${tag#v}"
+
+          declared=$(sed -n 's/^export const APP_VERSION = "\(.*\)";$/\1/p' \
+            apps/desktop/src/constants.ts)
+          if [ "$declared" != "$version" ]; then
+            echo "Tag $tag says $version but APP_VERSION in" \
+                 "apps/desktop/src/constants.ts says $declared." >&2
+            echo "The version the application reports about itself and the" \
+                 "version on the release have to agree." >&2
+            exit 1
+          fi
+
+          case "$version" in
+            *-*) prerelease=true ;;
+            *)   prerelease=false ;;
+          esac
+
+          {
+            echo "tag=$tag"
+            echo "version=$version"
+            echo "prerelease=$prerelease"
+          } >> "$GITHUB_OUTPUT"
+          echo "Releasing $tag (version $version, prerelease=$prerelease)"
+
+  # -------------------------------------------------------------------------
+  # Everything below waits on this. Nothing is published if it fails.
+  # -------------------------------------------------------------------------
+  test:
+    name: Test suite
+    needs: version
+    uses: ./.github/workflows/test.yml
+
+  build:
+    name: Build
+    needs: [version, test]
+    uses: ./.github/workflows/build.yml
+    with:
+      version: ${{ needs.version.outputs.version }}
+
+  # -------------------------------------------------------------------------
+  publish:
+    name: Sign, checksum and publish
+    needs: [version, build]
+    runs-on: ubuntu-24.04
+    permissions:
+      # Creating the release and uploading its assets.
+      contents: write
+    env:
+      VERSION: ${{ needs.version.outputs.version }}
+      TAG: ${{ needs.version.outputs.tag }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: ${{ env.DENO_VERSION }}
+
+      - name: Collect the built artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: openotes-*
+          path: downloaded
+          merge-multiple: false
+
+      # download-artifact keeps one directory per artifact; the release wants
+      # them all in one place. openotes-ui (the intermediate web bundle) and
+      # openotes-native-* (the Windows DLLs handed between jobs) are build
+      # inputs, not release assets, so they are pruned rather than filtered
+      # by extension.
+      - name: Gather them into dist/
+        run: |
+          set -euo pipefail
+          mkdir -p dist
+          find downloaded \
+            \( -path 'downloaded/openotes-ui' \
+               -o -path 'downloaded/openotes-native-*' \) -prune -o \
+            -type f \
+            \( -name '*.AppImage' -o -name '*.deb' -o -name '*.rpm' \
+               -o -name '*.tar.gz' -o -name '*.exe' -o -name '*.msi' \
+               -o -name '*.zip' -o -name '*.flatpak' -o -name '*.pkg.tar.zst' \) \
+            -exec cp -v {} dist/ \;
+          ls -la dist
+
+      - name: Check that nothing is missing
+        run: |
+          set -euo pipefail
+          missing=0
+          for artifact in \
+            "Openotes-$VERSION-linux-x86_64.AppImage" \
+            "Openotes-$VERSION-linux-x86_64.deb" \
+            "Openotes-$VERSION-linux-x86_64.rpm" \
+            "Openotes-$VERSION-linux-x86_64.tar.gz" \
+            "Openotes-$VERSION-windows-x86_64.exe" \
+            "Openotes-$VERSION-windows-x86_64.msi" \
+            "Openotes-$VERSION-windows-x86_64.zip" \
+            "openotes-$VERSION-1-x86_64.pkg.tar.zst" \
+            "Openotes-$VERSION-x86_64.flatpak"; do
+            if [ ! -f "dist/$artifact" ]; then
+              echo "missing: $artifact" >&2
+              missing=1
+            fi
+          done
+          [ "$missing" -eq 0 ] || {
+            echo "Refusing to publish a partial release." >&2
+            exit 1
+          }
+          echo "All expected artifacts are present."
+
+      # ---- Authenticode, only if this repository has a certificate ----------
+      #
+      # osslsigncode signs PE and MSI files with a PKCS#12 bundle, on Linux,
+      # so no Windows runner and no proprietary toolchain is needed. The
+      # certificate is a base64-encoded .pfx in WINDOWS_SIGNING_CERTIFICATE
+      # and its passphrase in WINDOWS_SIGNING_PASSWORD.
+      - name: Is Authenticode signing configured?
+        env:
+          CERTIFICATE: ${{ secrets.WINDOWS_SIGNING_CERTIFICATE }}
+        run: |
+          set -euo pipefail
+          if [ -n "${CERTIFICATE:-}" ]; then
+            echo "SIGN_WINDOWS=true" >> "$GITHUB_ENV"
+            echo "Signing certificate present; the .exe and .msi will be signed."
+          else
+            echo "SIGN_WINDOWS=false" >> "$GITHUB_ENV"
+            echo "No signing certificate configured; publishing unsigned" \
+                 "Windows installers. This is expected in a fork."
+          fi
+
+      - name: Install osslsigncode
+        if: env.SIGN_WINDOWS == 'true'
+        run: |
+          sudo apt-get update
+          sudo apt-get install --no-install-recommends -y osslsigncode
+
+      - name: Sign the Windows installers
+        if: env.SIGN_WINDOWS == 'true'
+        env:
+          CERTIFICATE: ${{ secrets.WINDOWS_SIGNING_CERTIFICATE }}
+          CERTIFICATE_PASSWORD: ${{ secrets.WINDOWS_SIGNING_PASSWORD }}
+          TIMESTAMP_URL: ${{ vars.WINDOWS_TIMESTAMP_URL || 'http://timestamp.digicert.com' }}
+        run: |
+          set -euo pipefail
+          umask 077
+          certificate=$(mktemp /tmp/openotes-signing-XXXXXX.pfx)
+          # The secret never reaches the log or the process table: it is
+          # decoded from an environment variable into a private temporary
+          # file and the passphrase is passed with -readpass.
+          printf '%s' "$CERTIFICATE" | base64 -d > "$certificate"
+          passfile=$(mktemp /tmp/openotes-signing-XXXXXX.pass)
+          printf '%s' "$CERTIFICATE_PASSWORD" > "$passfile"
+          trap 'shred -u "$certificate" "$passfile" 2>/dev/null || rm -f "$certificate" "$passfile"' EXIT
+
+          for target in dist/*.exe dist/*.msi; do
+            [ -e "$target" ] || continue
+            echo "Signing $target"
+            osslsigncode sign \
+              -pkcs12 "$certificate" \
+              -readpass "$passfile" \
+              -n "Openotes" \
+              -i "https://github.com/${{ github.repository }}" \
+              -t "$TIMESTAMP_URL" \
+              -h sha256 \
+              -in "$target" \
+              -out "$target.signed"
+            mv "$target.signed" "$target"
+            osslsigncode verify -in "$target" || {
+              echo "The signature on $target did not verify" >&2
+              exit 1
+            }
+          done
+
+      # ---- SBOM (spec §43) ---------------------------------------------------
+      - name: Generate an SBOM
+        uses: anchore/sbom-action@v0
+        with:
+          path: .
+          format: spdx-json
+          artifact-name: openotes-${{ env.VERSION }}.spdx.json
+          output-file: dist/openotes-${{ env.VERSION }}.spdx.json
+          upload-artifact: false
+          upload-release-assets: false
+
+      # ---- checksums --------------------------------------------------------
+      # After signing, so the digests match the files people download.
+      - name: Write SHA256SUMS
+        run: |
+          set -euo pipefail
+          deno run -A apps/desktop/scripts/checksums.ts dist
+          echo "--- verifying with coreutils ---"
+          (cd dist && sha256sum -c SHA256SUMS)
+
+      # ---- publish ----------------------------------------------------------
+      - name: Compose the release notes
+        run: |
+          set -euo pipefail
+          {
+            echo "## Openotes $VERSION"
+            echo
+            echo "A desktop-only, Deno-based fork of Notesnook: no account, no"
+            echo "subscription and no cloud service. Notes live in an encrypted"
+            echo "SQLite database on your machine and sync through any WebDAV"
+            echo "server you control."
+            echo
+            echo "### Downloads"
+            echo
+            echo "| Platform | File |"
+            echo "| --- | --- |"
+            echo "| Linux (portable) | \`Openotes-$VERSION-linux-x86_64.AppImage\` |"
+            echo "| Debian / Ubuntu | \`Openotes-$VERSION-linux-x86_64.deb\` |"
+            echo "| Fedora / openSUSE | \`Openotes-$VERSION-linux-x86_64.rpm\` |"
+            echo "| Arch | \`openotes-$VERSION-1-x86_64.pkg.tar.zst\` |"
+            echo "| Flatpak | \`Openotes-$VERSION-x86_64.flatpak\` |"
+            echo "| Linux (tarball) | \`Openotes-$VERSION-linux-x86_64.tar.gz\` |"
+            echo "| Windows (installer) | \`Openotes-$VERSION-windows-x86_64.exe\` |"
+            echo "| Windows (MSI) | \`Openotes-$VERSION-windows-x86_64.msi\` |"
+            echo "| Windows (portable) | \`Openotes-$VERSION-windows-x86_64.zip\` |"
+            if [ -f "dist/Openotes-$VERSION-linux-aarch64.AppImage" ]; then
+              echo "| Linux arm64 | \`Openotes-$VERSION-linux-aarch64.AppImage\`, \`.deb\`, \`.rpm\`, \`.tar.gz\` |"
+            fi
+            echo
+            echo "### Verifying a download"
+            echo
+            echo '```sh'
+            echo "sha256sum -c SHA256SUMS"
+            echo '```'
+            echo
+            if [ "${SIGN_WINDOWS:-false}" = "true" ]; then
+              echo "The Windows installer and MSI are Authenticode signed."
+            else
+              echo "> The Windows installer and MSI in this release are **not**"
+              echo "> code signed: this build had no signing certificate"
+              echo "> configured. Windows SmartScreen will warn about them."
+              echo "> Check \`SHA256SUMS\` against your download."
+            fi
+            echo
+            echo "An SPDX SBOM for this build is attached as"
+            echo "\`openotes-$VERSION.spdx.json\`."
+          } > release-notes.md
+          cat release-notes.md
+
+      - name: Create the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PRERELEASE: ${{ needs.version.outputs.prerelease }}
+        run: |
+          set -euo pipefail
+          args=(
+            "$TAG"
+            --title "Openotes $VERSION"
+            --notes-file release-notes.md
+            --repo "${{ github.repository }}"
+          )
+          if [ "$PRERELEASE" = "true" ]; then args+=(--prerelease); fi
+          gh release create "${args[@]}" dist/*

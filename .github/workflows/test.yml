@@ -26,6 +26,9 @@ on:
     branches: ["main", "master"]
   pull_request:
   workflow_dispatch:
+  # release.yml runs this whole workflow before it builds anything, so a tag
+  # can never publish a release that the suite would have rejected (spec §34).
+  workflow_call:
 
 permissions:
   contents: read
@@ -168,7 +171,7 @@ jobs:
       # skip the suite, and a skipped integration run must never be mistaken
       # for a passing one.
       - name: WebDAV integration suite
-        run: deno task test:webdav -- --require-server --no-download
+        run: deno task test:webdav --require-server --no-download
 
   # -------------------------------------------------------------------------
   # Does the thing we ship actually start? Builds the application directory
@@ -213,6 +216,17 @@ jobs:
               'apps/web/vite.config.ts',
               'apps/web/src/**'
             ) }}
+
+      # Vite itself runs under Deno (build-ui.ts executes vite's Node entry
+      # point directly), but the `file:` workspace packages apps/web imports
+      # are compiled by the repository's own npm task runner — a
+      # build-time-only dependency recorded in PORTING_NOTES.md §11.1.
+      # build-ui.ts installs them itself; setup-node is here for the cache.
+      - uses: actions/setup-node@v4
+        if: steps.ui-cache.outputs.cache-hit != 'true'
+        with:
+          node-version: "22"
+          cache: npm
 
       - name: Build the user interface
         if: steps.ui-cache.outputs.cache-hit != 'true'

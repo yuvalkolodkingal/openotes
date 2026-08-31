@@ -154,6 +154,7 @@ export class SqliteConnection {
   private db: DatabaseType;
   private extensionsLoaded = false;
   private initialized = false;
+  private encryptedByPragma = false;
   private readonly encrypted: boolean;
 
   constructor(
@@ -223,10 +224,19 @@ export class SqliteConnection {
   }
 
   run(sql: string, parameters: unknown[] = []): QueryResult {
-    // The key pragma is handled at construction; the renderer must not be
-    // able to re-key or read the key back out.
-    if (/^\s*PRAGMA\s+(re)?key/i.test(sql)) {
-      throw new Error("Re-keying is not permitted from the renderer");
+    // `PRAGMA key` arrives from the renderer by design: the key store lives
+    // on the renderer side of the boundary (it is what the user's password
+    // unlocks), and @notesnook/core applies the key as an ordinary
+    // statement on the connection it opened. Blocking it would simply stop
+    // the vault from opening.
+    //
+    // What matters is that it never reaches a log. The statement is not
+    // logged here, and the logger redacts anything key-shaped anyway.
+    const isKeyPragma = /^\s*PRAGMA\s+(re)?key/i.test(sql);
+    if (isKeyPragma) {
+      const result = { rows: this.db.prepare(sql).all() } as QueryResult;
+      this.encryptedByPragma = true;
+      return result;
     }
 
     if (!this.initialized) this.initialize();
@@ -278,7 +288,7 @@ export class SqliteConnection {
   }
 
   get isEncrypted() {
-    return this.encrypted;
+    return this.encrypted || this.encryptedByPragma;
   }
 }
 

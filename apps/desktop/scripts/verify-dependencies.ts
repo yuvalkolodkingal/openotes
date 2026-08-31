@@ -86,7 +86,7 @@ const FORBIDDEN_PACKAGES = [
   "jetifier",
   "expo",
   "expo-cli",
-  "@notesnook/editor-mobile"
+  "@notesnook/editor-mobile",
 ];
 
 /** Forbidden scopes: every package under them is out. */
@@ -107,7 +107,7 @@ const FORBIDDEN_COMMANDS = [
   "gradlew",
   "fastlane",
   "detox",
-  "xcodebuild"
+  "xcodebuild",
 ];
 
 /** Module specifiers a runtime source file must never reference. */
@@ -123,7 +123,7 @@ const FORBIDDEN_MODULES = [
   "electron-store",
   "react-native",
   "@react-native-async-storage/async-storage",
-  "react-native-webview"
+  "react-native-webview",
 ];
 
 /** Directories never walked: build output, caches, installed packages. */
@@ -139,7 +139,7 @@ const SKIPPED_DIRECTORIES = new Set([
   "coverage",
   "playwright-report",
   "test-results",
-  ".vscode"
+  ".vscode",
 ]);
 
 /** Manifest keys whose values are dependency maps. */
@@ -151,7 +151,7 @@ const DEPENDENCY_SECTIONS = [
   "bundledDependencies",
   "bundleDependencies",
   "overrides",
-  "resolutions"
+  "resolutions",
 ];
 
 const SOURCE_EXTENSIONS = new Set([
@@ -162,7 +162,7 @@ const SOURCE_EXTENSIONS = new Set([
   ".mjs",
   ".cjs",
   ".mts",
-  ".cts"
+  ".cts",
 ]);
 
 export interface Finding {
@@ -176,7 +176,7 @@ function isForbiddenPackage(name: string): boolean {
   const lower = name.toLowerCase();
   if (FORBIDDEN_PACKAGES.some((forbidden) => forbidden === lower)) return true;
   return FORBIDDEN_SCOPES.some(
-    (scope) => lower === scope || lower.startsWith(`${scope}/`)
+    (scope) => lower === scope || lower.startsWith(`${scope}/`),
   );
 }
 
@@ -184,7 +184,9 @@ function isForbiddenPackage(name: string): boolean {
  * Pulls the bare package name out of an npm/jsr specifier so
  * `npm:electron@^37` and `npm:/electron/main` both resolve to `electron`.
  */
-export function packageNameFromSpecifier(specifier: string): string | undefined {
+export function packageNameFromSpecifier(
+  specifier: string,
+): string | undefined {
   let rest = specifier;
   for (const prefix of ["npm:", "jsr:", "node:"]) {
     if (rest.startsWith(prefix)) {
@@ -210,7 +212,9 @@ function scriptMentionsForbiddenCommand(script: string): string | undefined {
     // Whole-word match: `electron` matches `electron .` but not
     // `electron-to-chromium` and not `no-electron`.
     const escaped = command.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-    if (new RegExp(`(^|[\\s;&|"'\`/=])${escaped}($|[\\s;&|"'\`.])`).test(script)) {
+    if (
+      new RegExp(`(^|[\\s;&|"'\`/=])${escaped}($|[\\s;&|"'\`.])`).test(script)
+    ) {
       return command;
     }
   }
@@ -248,7 +252,7 @@ function checkManifest(path: string, manifest: unknown): Finding[] {
         findings.push({
           file: path,
           kind: "dependency",
-          detail: `${section}.${name}`
+          detail: `${section}.${name}`,
         });
       }
     }
@@ -256,14 +260,16 @@ function checkManifest(path: string, manifest: unknown): Finding[] {
 
   const scripts = record.scripts;
   if (scripts && typeof scripts === "object") {
-    for (const [name, body] of Object.entries(scripts as Record<string, unknown>)) {
+    for (
+      const [name, body] of Object.entries(scripts as Record<string, unknown>)
+    ) {
       if (typeof body !== "string") continue;
       const command = scriptMentionsForbiddenCommand(body);
       if (command) {
         findings.push({
           file: path,
           kind: "script",
-          detail: `scripts.${name} runs "${command}"`
+          detail: `scripts.${name} runs "${command}"`,
         });
       }
     }
@@ -279,16 +285,18 @@ function checkDenoConfig(path: string, config: unknown): Finding[] {
 
   const imports = record.imports;
   if (imports && typeof imports === "object") {
-    for (const [alias, specifier] of Object.entries(
-      imports as Record<string, unknown>
-    )) {
+    for (
+      const [alias, specifier] of Object.entries(
+        imports as Record<string, unknown>,
+      )
+    ) {
       if (typeof specifier !== "string") continue;
       const name = packageNameFromSpecifier(specifier);
       if ((name && isForbiddenPackage(name)) || isForbiddenPackage(alias)) {
         findings.push({
           file: path,
           kind: "import-map",
-          detail: `imports["${alias}"] = "${specifier}"`
+          detail: `imports["${alias}"] = "${specifier}"`,
         });
       }
     }
@@ -296,7 +304,9 @@ function checkDenoConfig(path: string, config: unknown): Finding[] {
 
   const tasks = record.tasks;
   if (tasks && typeof tasks === "object") {
-    for (const [name, body] of Object.entries(tasks as Record<string, unknown>)) {
+    for (
+      const [name, body] of Object.entries(tasks as Record<string, unknown>)
+    ) {
       const command = typeof body === "string"
         ? body
         : typeof (body as { command?: unknown })?.command === "string"
@@ -308,7 +318,7 @@ function checkDenoConfig(path: string, config: unknown): Finding[] {
         findings.push({
           file: path,
           kind: "script",
-          detail: `tasks.${name} runs "${forbidden}"`
+          detail: `tasks.${name} runs "${forbidden}"`,
         });
       }
     }
@@ -331,9 +341,10 @@ function checkDenoLock(path: string, lock: unknown): Finding[] {
     findings.push({ file: path, kind: "lockfile", detail: identifier });
   };
 
-  const npm = (record.npm ?? (record.packages as Record<string, unknown>)?.npm) as
-    | Record<string, unknown>
-    | undefined;
+  const npm =
+    (record.npm ?? (record.packages as Record<string, unknown>)?.npm) as
+      | Record<string, unknown>
+      | undefined;
   if (npm && typeof npm === "object") Object.keys(npm).forEach(collect);
 
   const specifiers = (record.specifiers ??
@@ -348,7 +359,9 @@ function checkDenoLock(path: string, lock: unknown): Finding[] {
   if (workspace) {
     const walk = (node: unknown) => {
       if (!node || typeof node !== "object") return;
-      for (const [key, value] of Object.entries(node as Record<string, unknown>)) {
+      for (
+        const [key, value] of Object.entries(node as Record<string, unknown>)
+      ) {
         if (key === "dependencies" && Array.isArray(value)) {
           value.forEach((entry) => {
             if (typeof entry === "string") collect(entry);
@@ -372,7 +385,11 @@ function checkNpmLock(path: string, lock: unknown): Finding[] {
   const report = (name: string, where: string) => {
     if (!isForbiddenPackage(name) || seen.has(name)) return;
     seen.add(name);
-    findings.push({ file: path, kind: "lockfile", detail: `${where}: ${name}` });
+    findings.push({
+      file: path,
+      kind: "lockfile",
+      detail: `${where}: ${name}`,
+    });
   };
 
   const packages = record.packages as Record<string, unknown> | undefined;
@@ -386,7 +403,9 @@ function checkNpmLock(path: string, lock: unknown): Finding[] {
     }
   }
 
-  const dependencies = record.dependencies as Record<string, unknown> | undefined;
+  const dependencies = record.dependencies as
+    | Record<string, unknown>
+    | undefined;
   if (dependencies) {
     for (const name of Object.keys(dependencies)) report(name, "dependencies");
   }
@@ -406,7 +425,7 @@ export function findForbiddenImports(source: string): string[] {
     new RegExp(`\\bimport\\s*["'\`](${alternation})["'\`]`, "g"),
     // require("m") and dynamic import("m")
     new RegExp(`\\brequire\\s*\\(\\s*["'\`](${alternation})["'\`]`, "g"),
-    new RegExp(`\\bimport\\s*\\(\\s*["'\`](${alternation})["'\`]`, "g")
+    new RegExp(`\\bimport\\s*\\(\\s*["'\`](${alternation})["'\`]`, "g"),
   ];
   for (const pattern of patterns) {
     for (const match of source.matchAll(pattern)) found.add(match[1]);
@@ -434,22 +453,22 @@ export async function verifyDependencies(root = ROOT): Promise<Finding[]> {
     if (name === "package.json") {
       manifests++;
       findings.push(
-        ...checkManifest(relativePath, await readJsonIfPossible(path))
+        ...checkManifest(relativePath, await readJsonIfPossible(path)),
       );
     } else if (name === "deno.json" || name === "deno.jsonc") {
       manifests++;
       findings.push(
-        ...checkDenoConfig(relativePath, await readJsonIfPossible(path))
+        ...checkDenoConfig(relativePath, await readJsonIfPossible(path)),
       );
     } else if (name === "deno.lock") {
       manifests++;
       findings.push(
-        ...checkDenoLock(relativePath, await readJsonIfPossible(path))
+        ...checkDenoLock(relativePath, await readJsonIfPossible(path)),
       );
     } else if (name === "package-lock.json" || name === "npm-shrinkwrap.json") {
       manifests++;
       findings.push(
-        ...checkNpmLock(relativePath, await readJsonIfPossible(path))
+        ...checkNpmLock(relativePath, await readJsonIfPossible(path)),
       );
     } else {
       const dot = name.lastIndexOf(".");
@@ -466,7 +485,7 @@ export async function verifyDependencies(root = ROOT): Promise<Finding[]> {
         findings.push({
           file: relativePath,
           kind: "import",
-          detail: `imports "${module}"`
+          detail: `imports "${module}"`,
         });
       }
     }
@@ -474,7 +493,7 @@ export async function verifyDependencies(root = ROOT): Promise<Finding[]> {
 
   console.log(
     `Scanned ${manifests} manifest/lock files and ${sources} source files ` +
-      `under ${root}`
+      `under ${root}`,
   );
   return findings;
 }
@@ -484,7 +503,7 @@ const KIND_LABEL: Record<Finding["kind"], string> = {
   script: "package script",
   "import-map": "import map entry",
   lockfile: "lockfile entry",
-  import: "source import"
+  import: "source import",
 };
 
 if (import.meta.main) {
@@ -492,14 +511,16 @@ if (import.meta.main) {
   const findings = await verifyDependencies();
 
   if (args.has("--json")) {
-    console.log(JSON.stringify({ ok: findings.length === 0, findings }, null, 2));
+    console.log(
+      JSON.stringify({ ok: findings.length === 0, findings }, null, 2),
+    );
     Deno.exit(findings.length === 0 ? 0 : 1);
   }
 
   if (findings.length === 0) {
     console.log(
       "\nOK — no Electron, electron-builder, electron-updater, electron-trpc,\n" +
-        "react-native or mobile build tooling in the dependency tree."
+        "react-native or mobile build tooling in the dependency tree.",
     );
     Deno.exit(0);
   }
@@ -507,7 +528,7 @@ if (import.meta.main) {
   console.error(
     `\nFAILED — ${findings.length} forbidden ${
       findings.length === 1 ? "reference" : "references"
-    } found.\n`
+    } found.\n`,
   );
   const byFile = new Map<string, Finding[]>();
   for (const finding of findings) {
@@ -523,7 +544,7 @@ if (import.meta.main) {
   }
   console.error(
     `\nOpenotes is a Deno Desktop application (PORTING_NOTES.md §10). Remove\n` +
-      `these entries, or the runtime they belong to comes back with them.`
+      `these entries, or the runtime they belong to comes back with them.`,
   );
   Deno.exit(1);
 }

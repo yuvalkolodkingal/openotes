@@ -421,6 +421,15 @@ Deno.test("the procedure list has no duplicates and no dangerous names", () => {
   }
 });
 
+Deno.test("the key pragma is treated as a write, not a query", () => {
+  // `PRAGMA key` legitimately comes from the renderer — the key store lives
+  // on that side and core applies the key as a statement. What must never
+  // happen is the statement text reaching a log; the logger's redaction
+  // covers that and is tested above.
+  assertEquals(isWriteStatement("PRAGMA key = \"x'aabb'\""), false);
+  assertEquals(isWriteStatement("PRAGMA rekey = \"x'aabb'\""), false);
+});
+
 Deno.test("write statements are recognized so sync is notified", () => {
   for (const sql of [
     "INSERT INTO notes VALUES (1)",

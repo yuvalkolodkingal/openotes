@@ -45,7 +45,7 @@ const EXCLUDED = new Set([
   CHECKSUM_FILE,
   `${CHECKSUM_FILE}.asc`,
   `${CHECKSUM_FILE}.sig`,
-  ".DS_Store"
+  ".DS_Store",
 ]);
 
 /**
@@ -60,7 +60,9 @@ export async function sha256File(path: string): Promise<string> {
   const bytes = await Deno.readFile(path);
   const buffer = new ArrayBuffer(bytes.byteLength);
   new Uint8Array(buffer).set(bytes);
-  return encodeHex(new Uint8Array(await crypto.subtle.digest("SHA-256", buffer)));
+  return encodeHex(
+    new Uint8Array(await crypto.subtle.digest("SHA-256", buffer)),
+  );
 }
 
 /** Every regular file directly inside `directory`, sorted by name. */
@@ -82,7 +84,7 @@ export interface ChecksumEntry {
 
 /** Hashes every artifact in `directory`, printing each line as it goes. */
 export async function checksumDirectory(
-  directory: string
+  directory: string,
 ): Promise<ChecksumEntry[]> {
   const entries: ChecksumEntry[] = [];
   for (const name of await artifactNames(directory)) {
@@ -94,7 +96,9 @@ export async function checksumDirectory(
 }
 
 export function formatChecksums(entries: ChecksumEntry[]): string {
-  return `${entries.map((entry) => `${entry.digest}  ${entry.name}`).join("\n")}\n`;
+  return `${
+    entries.map((entry) => `${entry.digest}  ${entry.name}`).join("\n")
+  }\n`;
 }
 
 /** Parses a SHA256SUMS file. Accepts both the text and binary separators. */
@@ -144,7 +148,7 @@ export async function verifyDirectory(directory: string): Promise<number> {
     console.error(
       `\n${failures} checksum ${
         failures === 1 ? "problem" : "problems"
-      } in ${directory}`
+      } in ${directory}`,
     );
   } else {
     console.log(`\nAll ${expected.length} checksums match.`);
@@ -159,7 +163,7 @@ function usage() {
   directory        directory of artifacts to hash (default: dist)
   --output <file>  write somewhere other than <directory>/${CHECKSUM_FILE}
   --check          verify an existing ${CHECKSUM_FILE} instead of writing one
-  -h, --help       show this message`
+  -h, --help       show this message`,
   );
 }
 
@@ -171,6 +175,8 @@ if (import.meta.main) {
 
   for (let index = 0; index < Deno.args.length; index++) {
     const argument = Deno.args[index];
+    // `deno task <name> -- --flag` forwards the separator verbatim.
+    if (argument === "--") continue;
     if (argument === "--check") check = true;
     else if (argument === "-h" || argument === "--help") help = true;
     else if (argument === "--output") output = Deno.args[++index];
@@ -193,7 +199,7 @@ if (import.meta.main) {
       console.error(
         `Cannot read ${directory}: ${
           error instanceof Error ? error.message : String(error)
-        }`
+        }`,
       );
       Deno.exit(1);
     }
@@ -216,7 +222,7 @@ if (import.meta.main) {
     console.log(
       `\nWrote ${entries.length} ${
         entries.length === 1 ? "checksum" : "checksums"
-      } to ${target} (${basename(target)})`
+      } to ${target} (${basename(target)})`,
     );
   }
 }

@@ -66,7 +66,7 @@ interface RunOptions {
 export async function run(
   command: string,
   args: string[],
-  options: RunOptions = {}
+  options: RunOptions = {},
 ): Promise<number> {
   console.log(`  $ ${command} ${args.join(" ")}`);
   const process = new Deno.Command(command, {
@@ -74,7 +74,7 @@ export async function run(
     cwd: options.cwd,
     env: options.env,
     stdout: "inherit",
-    stderr: "inherit"
+    stderr: "inherit",
   });
   const { code } = await process.output();
   if (code !== 0 && !options.tolerant) {
@@ -88,7 +88,7 @@ export async function which(command: string): Promise<boolean> {
     const probe = new Deno.Command(isWindows ? "where" : "which", {
       args: [command],
       stdout: "null",
-      stderr: "null"
+      stderr: "null",
     });
     return (await probe.output()).code === 0;
   } catch {
@@ -120,13 +120,13 @@ async function ensureNodeToolchain(): Promise<string | undefined> {
     if (!haveNode) {
       await Deno.writeTextFile(
         join(shimDir, "node.cmd"),
-        `@echo off\r\n"${denoPath}" run -A --node-modules-dir=manual %*\r\n`
+        `@echo off\r\n"${denoPath}" run -A --node-modules-dir=manual %*\r\n`,
       );
     }
     if (!haveNpm) {
       await Deno.writeTextFile(
         join(shimDir, "npm.cmd"),
-        `@echo off\r\n"${denoPath}" run -A npm:npm@${NPM_VERSION} %*\r\n`
+        `@echo off\r\n"${denoPath}" run -A npm:npm@${NPM_VERSION} %*\r\n`,
       );
     }
   } else {
@@ -134,7 +134,7 @@ async function ensureNodeToolchain(): Promise<string | undefined> {
       const shim = join(shimDir, "node");
       await Deno.writeTextFile(
         shim,
-        `#!/bin/sh\nexec "${denoPath}" run -A --node-modules-dir=manual "$@"\n`
+        `#!/bin/sh\nexec "${denoPath}" run -A --node-modules-dir=manual "$@"\n`,
       );
       await Deno.chmod(shim, 0o755);
     }
@@ -142,7 +142,7 @@ async function ensureNodeToolchain(): Promise<string | undefined> {
       const shim = join(shimDir, "npm");
       await Deno.writeTextFile(
         shim,
-        `#!/bin/sh\nexec "${denoPath}" run -A npm:npm@${NPM_VERSION} "$@"\n`
+        `#!/bin/sh\nexec "${denoPath}" run -A npm:npm@${NPM_VERSION} "$@"\n`,
       );
       await Deno.chmod(shim, 0o755);
     }
@@ -151,7 +151,7 @@ async function ensureNodeToolchain(): Promise<string | undefined> {
   console.log(
     `  installed Deno-backed shims for ${
       [!haveNode && "node", !haveNpm && "npm"].filter(Boolean).join(" and ")
-    } in ${shimDir}`
+    } in ${shimDir}`,
   );
   return shimDir;
 }
@@ -172,7 +172,7 @@ export async function workspaceDependencies(): Promise<
   const manifest = await readJson(join(WEB_DIR, "package.json"));
   const dependencies = {
     ...(manifest.dependencies as Record<string, string> | undefined),
-    ...(manifest.devDependencies as Record<string, string> | undefined)
+    ...(manifest.devDependencies as Record<string, string> | undefined),
   };
   const resolved: { name: string; directory: string }[] = [];
   for (const [name, specifier] of Object.entries(dependencies ?? {})) {
@@ -181,7 +181,7 @@ export async function workspaceDependencies(): Promise<
     }
     resolved.push({
       name,
-      directory: join(WEB_DIR, specifier.slice("file:".length))
+      directory: join(WEB_DIR, specifier.slice("file:".length)),
     });
   }
   return resolved;
@@ -200,7 +200,7 @@ async function isLibraryBuilt(directory: string): Promise<boolean> {
     return false;
   }
   const entries = [manifest.main, manifest.module].filter(
-    (entry): entry is string => typeof entry === "string"
+    (entry): entry is string => typeof entry === "string",
   );
   // A package with no compiled entry (source-only, resolved through exports)
   // has nothing to build.
@@ -228,7 +228,7 @@ async function buildWorkspaceLibraries(force: boolean) {
   console.log(
     `Building ${unbuilt.length} workspace ${
       unbuilt.length === 1 ? "library" : "libraries"
-    }: ${unbuilt.map((dependency) => dependency.name).join(", ")}`
+    }: ${unbuilt.map((dependency) => dependency.name).join(", ")}`,
   );
 
   // After this call `node` and `npm` both resolve, either natively or through
@@ -246,13 +246,45 @@ async function buildWorkspaceLibraries(force: boolean) {
   }
 }
 
+const VITE_ENTRY = join(WEB_DIR, "node_modules", "vite", "bin", "vite.js");
+
+/**
+ * Installs the npm dependencies if they are not there yet.
+ *
+ * CONTRIBUTING.md promises that Deno and a C compiler are all a contributor
+ * needs, so this has to be able to bootstrap the npm side itself rather than
+ * telling the reader to go and run something. `scripts/bootstrap.mjs` is the
+ * repository's own installer — it understands the `file:` package layout and
+ * the postinstall whitelist — and the root `npm ci` provides the packages
+ * that script itself imports.
+ */
+async function ensureNpmDependencies(shimDir: string | undefined) {
+  if (await exists(VITE_ENTRY)) return;
+
+  console.log("Installing npm dependencies (first run)…");
+  const env = withShim(shimDir);
+  if (!(await exists(join(ROOT, "node_modules", "listr2")))) {
+    await run("npm", ["ci", "--no-audit", "--no-fund"], { cwd: ROOT, env });
+  }
+  await run("node", [join(ROOT, "scripts", "bootstrap.mjs"), "--scope=web"], {
+    cwd: ROOT,
+    env,
+  });
+
+  if (!(await exists(VITE_ENTRY))) {
+    throw new Error(
+      `Installed the workspace but Vite is still missing from ${VITE_ENTRY}.`,
+    );
+  }
+}
+
 /** Runs Vite through Deno, with the desktop code paths switched on. */
 async function buildBundle() {
-  const viteEntry = join(WEB_DIR, "node_modules", "vite", "bin", "vite.js");
+  const viteEntry = VITE_ENTRY;
   if (!(await exists(viteEntry))) {
     throw new Error(
       `Vite is not installed at ${viteEntry}. Run "npm ci" in the repository ` +
-        `root (or "deno run -A npm:npm@${NPM_VERSION} ci") and try again.`
+        `root (or "deno run -A npm:npm@${NPM_VERSION} ci") and try again.`,
     );
   }
 
@@ -267,9 +299,9 @@ async function buildBundle() {
         // vite.config.ts branches on this: esnext target, no service worker,
         // and the /desktop-bridge + /sqlite aliases point at index.desktop.
         PLATFORM: "desktop",
-        NODE_ENV: "production"
-      }
-    }
+        NODE_ENV: "production",
+      },
+    },
   );
 }
 
@@ -278,7 +310,7 @@ async function publishToUiRoot() {
   if (!(await exists(indexHtml))) {
     throw new Error(
       `Vite reported success but ${indexHtml} does not exist. Refusing to ` +
-        `publish an empty user interface.`
+        `publish an empty user interface.`,
     );
   }
   console.log(`Publishing ${WEB_BUILD_DIR} -> ${UI_DIR}`);
@@ -304,12 +336,13 @@ export interface BuildUiOptions {
 
 /** Builds the UI and publishes it to apps/desktop/ui. */
 export async function buildUi(options: BuildUiOptions = {}): Promise<string> {
+  await ensureNpmDependencies(await ensureNodeToolchain());
   if (!options.skipLibraries) await buildWorkspaceLibraries(!!options.force);
   await buildBundle();
   await publishToUiRoot();
   const bytes = await directorySize(UI_DIR);
   console.log(
-    `User interface ready: ${UI_DIR} (${(bytes / 1024 / 1024).toFixed(1)} MiB)`
+    `User interface ready: ${UI_DIR} (${(bytes / 1024 / 1024).toFixed(1)} MiB)`,
   );
   return UI_DIR;
 }
@@ -326,7 +359,7 @@ function usage() {
   --force             rebuild the workspace libraries even if they look built
   --skip-libraries    go straight to Vite (libraries must already be built)
   --check             report whether a build is needed and exit
-  -h, --help          show this message`
+  -h, --help          show this message`,
   );
 }
 
@@ -339,13 +372,13 @@ if (import.meta.main) {
     console.log(
       built
         ? `Built user interface present at ${UI_DIR}`
-        : `No user interface at ${UI_DIR} — run "deno task build:ui"`
+        : `No user interface at ${UI_DIR} — run "deno task build:ui"`,
     );
     Deno.exit(built ? 0 : 1);
   } else {
     await buildUi({
       force: args.has("--force"),
-      skipLibraries: args.has("--skip-libraries")
+      skipLibraries: args.has("--skip-libraries"),
     });
   }
 }
