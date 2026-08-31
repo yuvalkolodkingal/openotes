@@ -41,6 +41,15 @@ const SectionKeys = [
 
 export type SectionKeys = (typeof SectionKeys)[number];
 
+/**
+ * The settings section that holds sync configuration. Openotes syncs to a
+ * user-owned WebDAV server, so the WebDAV connection panel (server URL,
+ * credentials, sync passphrase) belongs in this section and anything that
+ * needs to route the user to it should use this constant instead of
+ * hardcoding the key.
+ */
+export const WEBDAV_SETTINGS_SECTION: SectionKeys = "sync";
+
 export type SectionGroupKeys =
   | "sync"
   | "customization"

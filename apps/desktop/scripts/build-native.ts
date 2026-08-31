@@ -191,6 +191,17 @@ async function buildSqlite(target: Target, verifyHash: boolean) {
       output,
       source,
       ...defines,
+      // -Bsymbolic is not an optimization here, it is a correctness
+      // requirement. The application runs inside a process that has already
+      // loaded the system libsqlite3 (WebKitGTK links it). Without this,
+      // this library's own internal calls get interposed by those symbols,
+      // and SQLite calls are silently served by the *system* SQLite — which
+      // has no encryption support, so `PRAGMA key` becomes a no-op and the
+      // vault is written in plaintext. Verified: the same dlopen reports
+      // 3.45.1 (the system library) without this flag and 3.53.4 (this one)
+      // with it. verifyEncryptionInProcess() checks the outcome at runtime
+      // rather than trusting the build.
+      "-Wl,-Bsymbolic",
       "-lpthread",
       "-lm",
       ...(target.os === "linux" ? ["-ldl"] : [])

@@ -146,17 +146,6 @@ const staticCommands: Command[] = [
     type: "command"
   },
   {
-    id: "monographs",
-    title: strings.dataTypesPluralCamelCase.monograph(),
-    icon: ArrowTopRight,
-    action: () => {
-      useAppStore.getState().setNavigationTab("home");
-      navigate("/monographs");
-    },
-    group: strings.navigate(),
-    type: "command"
-  },
-  {
     id: "trash",
     title: strings.trash(),
     icon: ArrowTopRight,

@@ -219,30 +219,9 @@ test(`sort tags`, async ({ page }, info) => {
   }
 });
 
-test("creating more than 50 tags shouldn't be possible on free plan", async ({
-  page
-}, info) => {
-  info.setTimeout(2 * 60 * 1000);
-  const app = new AppModel(page);
-  await app.goto();
-  const tags = await app.goToTags();
-  for (let i = 0; i < 50; i++) {
-    await tags.createItem({ title: `tag${i}` });
-  }
-
-  const result = await Promise.race([
-    tags.createItem({ title: "tag50" }),
-    page
-      .waitForSelector(getTestId("upgrade-dialog"), { state: "visible" })
-      .then(() => true)
-  ]);
-  expect(result).toBe(true);
-});
-
 test("when default tag is set, created note in notes context should have default tag", async ({
   page
 }) => {
-  await page.exposeBinding("isPro", () => true);
   const app = new AppModel(page);
   await app.goto();
   let tags = await app.goToTags();
@@ -261,7 +240,6 @@ test("when default tag is set, created note in notes context should have default
 test("when default tag is set, created note in other tag's context should not have default tag", async ({
   page
 }) => {
-  await page.exposeBinding("isPro", () => true);
   const app = new AppModel(page);
   await app.goto();
   let tags = await app.goToTags();
@@ -283,7 +261,6 @@ test("when default tag is set, created note in other tag's context should not ha
 test("when default tag is set, created note in notebooks context should have default tag", async ({
   page
 }) => {
-  await page.exposeBinding("isPro", () => true);
   const app = new AppModel(page);
   await app.goto();
   let tags = await app.goToTags();
@@ -304,7 +281,6 @@ test("when default tag is set, created note in notebooks context should have def
 test("when default tag is set, created note in colors context should have default tag", async ({
   page
 }) => {
-  await page.exposeBinding("isPro", () => true);
   const coloredNote = { title: "Red note", content: NOTE.content };
   const app = new AppModel(page);
   await app.goto();

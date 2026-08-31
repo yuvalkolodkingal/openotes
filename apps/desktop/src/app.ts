@@ -113,7 +113,13 @@ export async function createApp(options: CreateAppOptions): Promise<AppContext> 
 
   const settings = await SettingsStore.load();
   const credentials = new CredentialStore(appDataDir());
+
+  // The FFI module binds its library the moment it is imported, so the
+  // encrypted build has to be selected and loaded before anything opens a
+  // database. Failing here is deliberate: the alternative is an
+  // unencrypted vault nobody notices.
   const sqlite = new SqliteService();
+  await sqlite.initialize();
   const files = new FileStorage();
   await files.cleanupPartials();
 

@@ -1,0 +1,18 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "paths": {
+      "@nn/test": ["./__e2e__/utils/test.ts"],
+      "@notesnook/common": ["../../packages/common/src/index.ts"],
+      "@notesnook/core": ["../../packages/core/src/index.ts"],
+      "@notesnook/crypto": ["../../packages/crypto/src/index.ts"],
+      "@notesnook/editor": ["../../packages/editor/src/index.ts"],
+      "@notesnook/intl": ["../../packages/intl/src/index.ts"],
+      "@notesnook/logger": ["../../packages/logger/src/index.ts"],
+      "@notesnook/streamable-fs": ["../../packages/streamable-fs/src/index.ts"],
+      "@notesnook/theme": ["../../packages/theme/src/index.ts"],
+      "@notesnook/theme/*": ["../../packages/theme/src/*"],
+      "@notesnook/ui": ["../../packages/ui/src/index.ts"]
+    }
+  }
+}

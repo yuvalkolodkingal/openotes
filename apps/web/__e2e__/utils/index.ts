@@ -37,21 +37,6 @@ type Note = {
 
 dotenv.config({ path: path.join(__dirname, ".env.local") });
 
-const USER = {
-  NEW: {
-    email: process.env.USER_EMAIL,
-    password: process.env.NEW_USER_PASSWORD,
-    key: process.env.NEW_USER_KEY,
-    totpSecret: process.env.USER_TOTP_SECRET
-  },
-  CURRENT: {
-    email: process.env.USER_EMAIL,
-    password: process.env.USER_PASSWORD,
-    key: process.env.USER_KEY,
-    totpSecret: process.env.USER_TOTP_SECRET
-  }
-};
-
 const NOTEBOOK: Notebook = {
   title: "Test notebook 1",
   description: "This is test notebook 1"
@@ -193,7 +178,6 @@ export async function createHistorySession(page: Page, locked = false) {
 }
 
 export {
-  USER,
   NOTE,
   TITLE_ONLY_NOTE,
   NOTEBOOK,

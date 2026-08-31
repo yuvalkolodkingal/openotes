@@ -40,7 +40,7 @@ Two properties of that layout are load-bearing:
   a `ui` directory and a `native` directory next to its own executable
   (`apps/desktop/main.ts:51-71`, `apps/desktop/src/native/sqlite.ts:63-80`) and
   checks `OPENOTES_UI_ROOT` / `OPENOTES_NATIVE_DIR` first. Both packages keep
-  the three together under a private lib directory and put a three-line
+  the three together under a private lib directory and put a four-line `sh`
   launcher on `PATH` that pins the two variables, so an unset variable can
   never make an installed copy load a stale UI.
 
@@ -118,8 +118,10 @@ command line implemented in `apps/desktop/src/cli.ts` — `--hidden`,
 `-v/--version`, `-h/--help`, `new note|notebook|reminder`,
 `open note|notebook --id <id>` — the `openotes://` scheme, and the environment
 variables the app actually reads: `OPENOTES_DATA_DIR`, `OPENOTES_PORTABLE`,
-`OPENOTES_UI_ROOT`, `OPENOTES_NATIVE_DIR`, `OPENOTES_LOG_LEVEL`, plus the
-`XDG_*` directories consulted in `apps/desktop/src/native/paths.ts`.
+`OPENOTES_UI_ROOT`, `OPENOTES_NATIVE_DIR`, `OPENOTES_LOG_LEVEL`,
+`OPENOTES_UI_PORT`, plus the `XDG_*` directories consulted in
+`apps/desktop/src/native/paths.ts`. Keep it in step with the `Environment:`
+block that `apps/desktop/src/cli.ts` prints for `--help`.
 
 CI copies this file into the release tarball and installs it from there.
 

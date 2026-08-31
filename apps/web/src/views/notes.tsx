@@ -72,8 +72,6 @@ function Notes(props: NotesProps) {
               ? "favorites"
               : context.type === "archive"
               ? "archive"
-              : context.type === "monographs"
-              ? "monographs"
               : "notes"
           }
         />

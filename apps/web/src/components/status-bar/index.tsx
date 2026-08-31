@@ -20,7 +20,6 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 import { Button, Flex, Text } from "@theme-ui/components";
 import EditorFooter from "../editor/footer";
 import {
-  Circle,
   Sync,
   Loading,
   Update,
@@ -32,15 +31,12 @@ import {
   CellphoneLock,
   ConsoleLine
 } from "../icons";
-import { useStore as useUserStore } from "../../stores/user-store";
 import { useStore as useAppStore } from "../../stores/app-store";
-import { hardNavigate, hashNavigate } from "../../navigation";
 import { useAutoUpdater, UpdateStatus } from "../../hooks/use-auto-updater";
 import useStatus, { statusToString } from "../../hooks/use-status";
 import { ScopedThemeProvider } from "../theme-provider";
 import { checkForUpdate, installUpdate } from "../../utils/updater";
 import { getTimeAgo, toTitleCase } from "@notesnook/common";
-import { User } from "@notesnook/core";
 import { showUpdateAvailableNotice } from "../../dialogs/confirm";
 import { strings } from "@notesnook/intl";
 import { useVault } from "../../hooks/use-vault";
@@ -49,8 +45,6 @@ import { STATUS_BAR_HEIGHT } from "../../common/constants";
 import { CommandPaletteDialog } from "../../dialogs/command-palette";
 
 function StatusBar() {
-  const user = useUserStore((state) => state.user);
-  const isLoggedIn = useUserStore((state) => state.isLoggedIn);
   const statuses = useStatus();
   const updateStatus = useAutoUpdater();
   const isFocusMode = useAppStore((state) => state.isFocusMode);
@@ -89,40 +83,7 @@ function StatusBar() {
           >
             <ConsoleLine size={12} />
           </Button>
-          {isLoggedIn ? (
-            <>
-              {user?.isEmailConfirmed ? (
-                <Circle
-                  size={7}
-                  color={"var(--icon-success)"}
-                  sx={{ p: "small" }}
-                  data-test-id="logged-in"
-                />
-              ) : (
-                <Button
-                  onClick={() => hashNavigate("/email/verify")}
-                  variant="statusitem"
-                  sx={{
-                    alignItems: "center",
-                    justifyContent: "center",
-                    display: "flex",
-                    height: "100%"
-                  }}
-                >
-                  <Circle
-                    size={7}
-                    color={"var(--icon-error)"}
-                    data-test-id="logged-in"
-                  />
-                  <Text variant="subBody" ml={1} sx={{ color: "paragraph" }}>
-                    {strings.emailNotConfirmed()}
-                  </Text>
-                </Button>
-              )}
-
-              <SyncStatus />
-            </>
-          ) : null}
+          <SyncStatus />
           {activeCredentials().length > 0 && (
             <Button
               variant="statusitem"
@@ -237,10 +198,9 @@ function SyncStatus() {
   const lastSynced = useAppStore((state) => state.lastSynced);
   const isSyncEnabled = useAppStore((state) => state.isSyncEnabled);
   const sync = useAppStore((state) => state.sync);
-  const user = useUserStore((state) => state.user);
 
   const status = syncStatusFilters.find((f) =>
-    f.isActive(syncStatus.key, user, lastSynced)
+    f.isActive(syncStatus.key, lastSynced)
   );
 
   if (!status) return null;
@@ -282,13 +242,9 @@ type SyncStatus =
   | "offline"
   | "disabled";
 type SyncStatusFilter = {
-  key: SyncStatus | "emailNotConfirmed";
+  key: SyncStatus;
   icon: Icon;
-  isActive: (
-    syncStatus: SyncStatus,
-    user: User | undefined,
-    lastSynced: number
-  ) => boolean;
+  isActive: (syncStatus: SyncStatus, lastSynced: number) => boolean;
   text?: (props: {
     type?: "download" | "upload" | "sync";
     lastSynced: number;
@@ -325,14 +281,6 @@ const syncStatusFilters: SyncStatusFilter[] = [
     iconColor: "var(--icon-error)",
     text: () => "Merge conflicts",
     tooltip: "Please resolve all merge conflicts and run the sync again."
-  },
-  {
-    key: "emailNotConfirmed",
-    isActive: (_syncStatus, user) => !user?.isEmailConfirmed,
-    icon: Alert,
-    iconColor: "var(--icon-error)",
-    text: () => "Sync disabled",
-    tooltip: "Please confirm your email to start syncing."
   },
   {
     key: "failed",

@@ -88,5 +88,64 @@
     "apps/web/node_modules",
     "node_modules",
     "**/dist"
-  ]
+  ],
+  "permissions": {
+    "app": {
+      "env": [
+        "OPENOTES_DATA_DIR",
+        "OPENOTES_UI_ROOT",
+        "OPENOTES_NATIVE_DIR",
+        "OPENOTES_LOG_LEVEL",
+        "OPENOTES_DEV",
+        "OPENOTES_PORTABLE",
+        "OPENOTES_UI_PORT",
+        "OPENOTES_SQLITE3MC_SHA256",
+        "DENO_SQLITE_PATH",
+        "HOME",
+        "USERPROFILE",
+        "APPDATA",
+        "TMPDIR",
+        "TEMP",
+        "TMP",
+        "XDG_DATA_HOME",
+        "XDG_CONFIG_HOME",
+        "XDG_CACHE_HOME",
+        "XDG_DOCUMENTS_DIR",
+        "GTK_THEME",
+        "APPIMAGE",
+        "FLATPAK_ID",
+        "SNAP",
+        "CI",
+        "DENO_SQLITE_LOCAL",
+        "DENO_DIR"
+      ],
+      "run": [
+        "xdg-open",
+        "open",
+        "explorer",
+        "cmd",
+        "notify-send",
+        "osascript",
+        "zenity",
+        "kdialog",
+        "wl-copy",
+        "wl-paste",
+        "xclip",
+        "dbus-send"
+      ],
+      "read": true,
+      "write": true,
+      "net": true,
+      "ffi": true,
+      "sys": [
+        "hostname",
+        "osRelease",
+        "uid"
+      ],
+      "import": false
+    }
+  },
+  "exports": {
+    ".": "./apps/desktop/main.ts"
+  }
 }

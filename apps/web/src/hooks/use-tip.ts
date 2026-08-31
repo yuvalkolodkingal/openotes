@@ -46,7 +46,6 @@ export type TipContext =
   | "search"
   | "favorites"
   | "reminders"
-  | "monographs"
   | "trash"
   | "archive"
   | "attachments";
@@ -118,18 +117,6 @@ const tips: Tip[] = [
     contexts: ["notes", "notebooks", "tags"]
   },
   {
-    text: "Monographs enable you to share your notes in a secure and private way.",
-    contexts: ["monographs"]
-  },
-  {
-    text: "Monographs can be encrypted with a secret key and shared with anyone.",
-    contexts: ["monographs"]
-  },
-  {
-    text: "Published notes can be encrypted. Which means only you and the person you share the password with can read them.",
-    contexts: ["monographs"]
-  },
-  {
     text: "You can pin frequently used Notebooks to the Side Menu to quickly access them.",
     contexts: ["notebooks", "notebooks"]
   },
@@ -174,19 +161,6 @@ const DEFAULT_TIPS: Record<TipContext, Omit<Tip, "contexts">> = {
     text: "You have no attachments."
   },
   favorites: { text: "Notes you favorite will appear here." },
-  monographs: {
-    text: "You haven't published any notes yet.",
-    button: {
-      title: "What are monographs?",
-      icon: ArrowTopRight,
-      onClick() {
-        window.open(
-          "https://notesnook.com/help/publish-notes-with-monographs",
-          "_blank"
-        );
-      }
-    }
-  },
   notebooks: {
     text: "You haven't created any notebooks.",
     button: { ...CREATE_BUTTON_MAP.notebooks, icon: Plus }

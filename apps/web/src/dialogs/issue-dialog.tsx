@@ -21,27 +21,28 @@ import { Flex, Link, Text } from "@theme-ui/components";
 import Field from "../components/field";
 import Dialog from "../components/dialog";
 import { useState } from "react";
-import { writeText } from "clipboard-polyfill";
-import { store as userstore } from "../stores/user-store";
-
 import { ErrorText } from "../components/error-text";
-import { Debug, IssueReportResponse } from "@notesnook/core";
-import { ConfirmDialog } from "./confirm";
 import { BaseDialogProps, DialogManager } from "../common/dialog-manager";
 import { strings } from "@notesnook/intl";
 import { getDeviceInfo } from "../utils/platform";
-import { getSubscriptionInfo } from "./settings/components/user-profile";
 
 const PLACEHOLDERS = {
   title: strings.issueTitlePlaceholder(),
   body: strings.issuePlaceholder()
 };
 
+/**
+ * Openotes has no bug-reporting backend of its own (upstream posted reports
+ * to issues.streetwriters.co through an account). Reports are filed straight
+ * on this fork's issue tracker instead: the dialog only composes the report
+ * and opens a prefilled GitHub issue in the browser.
+ */
+const ISSUES_URL = "https://github.com/yuvalkolodkingal/notesnook/issues";
+
 type IssueDialogProps = BaseDialogProps<boolean>;
 export const IssueDialog = DialogManager.register(function IssueDialog(
   props: IssueDialogProps
 ) {
-  const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string>();
 
   return (
@@ -51,9 +52,7 @@ export const IssueDialog = DialogManager.register(function IssueDialog(
       onClose={() => props.onClose(false)}
       positiveButton={{
         text: strings.submit(),
-        form: "issueForm",
-        loading: isSubmitting,
-        disabled: isSubmitting
+        form: "issueForm"
       }}
       negativeButton={{
         text: strings.cancel(),
@@ -63,10 +62,9 @@ export const IssueDialog = DialogManager.register(function IssueDialog(
       <Flex
         id="issueForm"
         as="form"
-        onSubmit={async (e) => {
+        onSubmit={(e) => {
           e.preventDefault();
           try {
-            setIsSubmitting(true);
             setError(undefined);
 
             const formData = new FormData(e.target as HTMLFormElement);
@@ -75,21 +73,20 @@ export const IssueDialog = DialogManager.register(function IssueDialog(
             );
 
             if (!requestData.title.trim() || !requestData.body.trim()) return;
-            requestData.body = BODY_TEMPLATE(requestData.body);
-            const response = await Debug.report({
-              title: requestData.title,
-              body: requestData.body,
-              userId: userstore.get().user?.id
-            });
-            if (!response) throw new Error("Could not submit bug report.");
-            if ("error" in response) throw new Error(response.error);
+
+            const url = new URL(`${ISSUES_URL}/new`);
+            url.searchParams.set("title", requestData.title);
+            url.searchParams.set("body", BODY_TEMPLATE(requestData.body));
+
+            const opened = window.open(url.href, "_blank");
+            if (!opened)
+              throw new Error(
+                `Could not open the issue tracker. Please file the report at ${ISSUES_URL} manually.`
+              );
 
             props.onClose(true);
-            await showIssueReportedDialog(response);
           } catch (e) {
             if (e instanceof Error) setError(e.message);
-          } finally {
-            setIsSubmitting(false);
           }
         }}
         sx={{ flexDirection: "column" }}
@@ -125,25 +122,12 @@ export const IssueDialog = DialogManager.register(function IssueDialog(
           sx={{ borderRadius: "default" }}
         >
           {strings.issueNotice[0]()}{" "}
-          <Link
-            href="https://github.com/streetwriters/notesnook/issues"
-            title="github.com/streetwriters/notesnook/issues"
-            target="_blank"
-          >
-            github.com/streetwriters/notesnook/issues
+          <Link href={ISSUES_URL} title={ISSUES_URL} target="_blank">
+            {ISSUES_URL.replace("https://", "")}
           </Link>
-          {strings.issueNotice[1]()}{" "}
-          <Link
-            href="https://discord.gg/zQBK97EE22"
-            title={strings.issueNotice[2]()}
-            target="_blank"
-          >
-            {strings.issueNotice[2]()}
-          </Link>
-          /
         </Text>
         <Text variant="subBody" mt={1}>
-          {getDeviceInfo([`Plan: ${getSubscriptionInfo().title}`])
+          {getDeviceInfo()
             .split("\n")
             .map((t) => (
               <>
@@ -158,43 +142,8 @@ export const IssueDialog = DialogManager.register(function IssueDialog(
   );
 });
 
-function showIssueReportedDialog(response: IssueReportResponse) {
-  if ("error" in response) return;
-
-  switch (response.type) {
-    case "email": {
-      return ConfirmDialog.show({
-        title: strings.yourSupportRequestHasBeenForwarded(),
-        message: strings.supportEmailMessage()
-      });
-    }
-    case "discussion": {
-      const url = response.url;
-      return ConfirmDialog.show({
-        title: strings.thankYouForFeedback(),
-        positiveButtonText: strings.copyLink(),
-        message: strings.featureRequestMessage(url)
-      }).then((result) => {
-        result && writeText(url);
-      });
-    }
-    case "issue": {
-      const url = response.url;
-      return ConfirmDialog.show({
-        title: strings.thankYouForReporting(),
-        positiveButtonText: strings.copyLink(),
-        message: strings.bugReportMessage(url)
-      }).then((result) => {
-        result && writeText(url);
-      });
-    }
-  }
-}
-
 const BODY_TEMPLATE = (body: string) => {
-  const info = `**Device information:**\n${getDeviceInfo([
-    `Plan: ${getSubscriptionInfo().title}`
-  ])}`;
+  const info = `**Device information:**\n${getDeviceInfo()}`;
   if (!body) return info;
   return `${body}\n\n${info}`;
 };

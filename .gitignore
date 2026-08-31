@@ -16,3 +16,7 @@ node_modules.backup
 apps/desktop/native/
 apps/desktop/.native-build/
 apps/desktop/dist/
+# The release tarball CI drops beside the flatpak manifest before building
+packaging/flatpak/*.tar.gz
+apps/desktop/.build/
+apps/desktop/ui/

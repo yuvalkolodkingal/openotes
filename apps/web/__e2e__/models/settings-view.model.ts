@@ -19,13 +19,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 import type { Page } from "@playwright/test";
 import { downloadAndReadFile, getTestId, uploadFile } from "../utils";
-import {
-  confirmDialog,
-  fillConfirmPasswordDialog,
-  fillPasswordDialog,
-  waitForDialog,
-  waitToHaveText
-} from "./utils";
+import { fillConfirmPasswordDialog, fillPasswordDialog } from "./utils";
 import { NavigationMenuModel } from "./navigation-menu.model";
 
 export class SettingsViewModel {
@@ -44,77 +38,7 @@ export class SettingsViewModel {
     await this.page.waitForTimeout(1000);
   }
 
-  async logout() {
-    const item = await this.navigation.findItem("Profile");
-    await item?.click();
-
-    const logoutButton = this.page
-      .locator(getTestId("setting-logout"))
-      .locator("button");
-
-    await logoutButton.click();
-    await confirmDialog(this.page.locator(getTestId("confirm-dialog")));
-
-    await this.page
-      .locator(getTestId("progress-dialog"))
-      .waitFor({ state: "hidden" });
-
-    await this.page
-      .locator(getTestId("logged-in"))
-      .waitFor({ state: "hidden" });
-  }
-
-  async getRecoveryKey(password: string) {
-    const item = await this.navigation.findItem("Profile");
-    await item?.click();
-
-    const backupRecoveryKeyButton = this.page
-      .locator(getTestId("setting-recovery-key"))
-      .locator("button");
-
-    await backupRecoveryKeyButton.click();
-    await fillPasswordDialog(this.page, password);
-
-    await waitToHaveText(this.page, "recovery-key");
-
-    const key = await this.page
-      .locator(getTestId("recovery-key"))
-      .textContent();
-
-    const dialog = this.page.locator(getTestId("recovery-key-dialog"));
-    await confirmDialog(dialog);
-    return key;
-  }
-
-  async isLoggedIn() {
-    const loggedInButton = this.page.locator(getTestId("logged-in"));
-    return await loggedInButton.isVisible();
-  }
-
-  async isBackupEncryptionEnabled(state: boolean) {
-    const encyptBackups = this.page
-      .locator(getTestId("setting-encrypt-backups"))
-      .locator(
-        state ? `input[data-checked="true"]` : `input[data-checked="false"]`
-      );
-    await encyptBackups.waitFor({ state: "visible" });
-    return (await encyptBackups.getAttribute("data-checked")) === "true";
-  }
-
-  async toggleBackupEncryption(password?: string) {
-    const item = await this.navigation.findItem("Backup & export");
-    await item?.click();
-
-    const encyptBackups = this.page
-      .locator(getTestId("setting-encrypt-backups"))
-      .locator("label");
-
-    await encyptBackups.click();
-
-    if (password) await fillPasswordDialog(this.page, password);
-  }
-
-  async createBackup(password?: string) {
+  async createBackup() {
     const item = await this.navigation.findItem("Backup & export");
     await item?.click();
 
@@ -123,7 +47,6 @@ export class SettingsViewModel {
         .locator(getTestId("setting-create-backup"))
         .locator("select");
       await backupData.selectOption({ value: "partial", label: "Backup" });
-      if (password) await fillPasswordDialog(this.page, password);
     };
 
     return await downloadAndReadFile(this.page, saveBackup, "utf-8");
@@ -152,7 +75,7 @@ export class SettingsViewModel {
     await imageCompressionDropdown.selectOption(option);
   }
 
-  async enableAppLock(userPassword: string, appLockPassword: string) {
+  async enableAppLock(appLockPassword: string) {
     const item = await this.navigation.findItem("App lock");
     await item?.click();
 
@@ -161,7 +84,6 @@ export class SettingsViewModel {
       .locator("label");
 
     await appLockSwitch.click();
-    await fillPasswordDialog(this.page, userPassword);
     await this.page.waitForTimeout(500);
     await fillConfirmPasswordDialog(this.page, appLockPassword);
     await this.page.waitForTimeout(500);

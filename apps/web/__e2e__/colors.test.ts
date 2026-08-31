@@ -64,31 +64,6 @@ test("rename color", async ({ page }) => {
   expect(await app.navigation.findItem("priority-33")).toBeDefined();
 });
 
-test("creating more than 7 colors shouldn't be possible on free plan", async ({
-  page
-}) => {
-  const app = new AppModel(page);
-  await app.goto();
-  const notes = await app.goToNotes();
-  const note = await notes.createNote(NOTE);
-
-  for (let i = 0; i < 7; ++i) {
-    await note?.contextMenu.newColor({
-      title: `red${i}`,
-      color: getRandomColor()
-    });
-  }
-
-  const result = await Promise.race([
-    note?.contextMenu.newColor({
-      title: `color`,
-      color: getRandomColor()
-    }),
-    page.waitForSelector(getTestId("upgrade-dialog")).then(() => true)
-  ]);
-  expect(result).toBe(true);
-});
-
 function getRandomColor() {
   const letters = "0123456789ABCDEF";
   let color = "#";

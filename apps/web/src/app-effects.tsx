@@ -35,6 +35,10 @@ import { updateStatus, removeStatus, getStatus } from "./hooks/use-status";
 import { hashNavigate, navigate } from "./navigation";
 import { desktop } from "./common/desktop-bridge";
 import { FeatureDialog } from "./dialogs/feature-dialog";
+import {
+  isOnboardingComplete,
+  OnboardingDialog
+} from "./dialogs/onboarding-dialog";
 import { logger } from "./utils/logger";
 import { showToast } from "./utils/toast";
 import { strings } from "@notesnook/intl";
@@ -45,20 +49,22 @@ export default function AppEffects() {
   const updateLastSynced = useStore((store) => store.updateLastSynced);
   const isFocusMode = useStore((store) => store.isFocusMode);
   const initStore = useStore((store) => store.init);
-  const initSettingStore = useSettingStore((store) => store.init);
   const setIsVaultCreated = useStore((store) => store.setIsVaultCreated);
   const initEditorStore = useEditorStore((store) => store.init);
 
   useEffect(
     function initializeApp() {
       initStore();
-      initSettingStore();
 
       (async function () {
         await initEditorStore();
         await attachDesktopListeners();
         await refreshNavItems();
         await updateLastSynced();
+
+        // First run: no account to create, just the local setup walkthrough.
+        if (!IS_TESTING && !isOnboardingComplete())
+          await OnboardingDialog.show({});
 
         await FeatureDialog.show({ featureName: "highlights" });
         await scheduleBackups();

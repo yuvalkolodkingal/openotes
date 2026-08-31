@@ -17,12 +17,11 @@ You should have received a copy of the GNU General Public License
 along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { Box, Button, Flex, Image, Text } from "@theme-ui/components";
 import {
   Note,
   StarOutline,
-  Monographs,
   Trash,
   Settings,
   Notebook2,
@@ -30,14 +29,11 @@ import {
   Topic,
   DarkMode,
   LightMode,
-  Login,
   Circle,
   Icon,
   Reminders,
   User,
-  Pro,
   Documentation,
-  Logout,
   Reset,
   Rename,
   ExpandSidebar,
@@ -62,12 +58,10 @@ import {
 import { db } from "../../common/db";
 import { isMobile } from "../../hooks/use-mobile";
 import { useStore as useAppStore } from "../../stores/app-store";
-import { useStore as useUserStore } from "../../stores/user-store";
 import { useStore as useThemeStore } from "../../stores/theme-store";
 import { useStore as useSettingStore } from "../../stores/setting-store";
 import { useStore as useNoteStore } from "../../stores/note-store";
 import { useStore as useReminderStore } from "../../stores/reminder-store";
-import { useStore as useMonographStore } from "../../stores/monograph-store";
 import { useStore as useTrashStore } from "../../stores/trash-store";
 import { useStore as useSearchStore } from "../../stores/search-store";
 import useLocation from "../../hooks/use-location";
@@ -100,11 +94,9 @@ import { showToast } from "../../utils/toast";
 import { strings } from "@notesnook/intl";
 import Tags from "../../views/tags";
 import { Notebooks } from "../../views/notebooks";
-import { UserProfile } from "../../dialogs/settings/components/user-profile";
 import {
   checkFeature,
   createSetDefaultHomepageMenuItem,
-  logout,
   withFeatureCheck
 } from "../../common";
 import { TabItem } from "./tab-item";
@@ -113,23 +105,20 @@ import { CREATE_BUTTON_MAP } from "../../common";
 import { useStore as useNotebookStore } from "../../stores/notebook-store";
 import { useStore as useTagStore } from "../../stores/tag-store";
 import { showSortMenu } from "../group-header";
-import { BuyDialog } from "../../dialogs/buy-dialog";
 import {
   FeatureResult,
   isFeatureAvailable,
   useIsFeatureAvailable
 } from "@notesnook/common";
-import { isUserSubscribed } from "../../hooks/use-is-user-premium";
 import { shouldShowWrapped } from "../../utils/should-show-wrapped";
 import { writeToClipboard } from "../../utils/clipboard";
 
 type Route = {
-  id: "notes" | "favorites" | "reminders" | "monographs" | "trash" | "archive";
+  id: "notes" | "favorites" | "reminders" | "trash" | "archive";
   title: string;
   path: string;
   icon: Icon;
   tag?: string;
-  loginRequired?: boolean;
 };
 
 const routes: Route[] = [
@@ -145,13 +134,6 @@ const routes: Route[] = [
     title: strings.routes.Reminders(),
     path: "/reminders",
     icon: Reminders
-  },
-  {
-    id: "monographs",
-    title: strings.routes.Monographs(),
-    path: "/monographs",
-    icon: Monographs,
-    loginRequired: true
   },
   { id: "trash", title: strings.routes.Trash(), path: "/trash", icon: Trash },
   {
@@ -500,7 +482,6 @@ function Routes({
 }) {
   const customizableSidebar = useIsFeatureAvailable("customizableSidebar");
   const hiddenRoutes = useAppStore((store) => store.hiddenRoutes);
-  const isLoggedIn = useUserStore((store) => store.isLoggedIn);
   return (
     <ReorderableList
       items={routes
@@ -509,7 +490,7 @@ function Routes({
             ? (r) => !hiddenRoutes.includes(r.id)
             : () => true
         )
-        .filter((r) => (r.loginRequired ? isLoggedIn : true))}
+        }
       orderKey={`sidebarOrder:routes`}
       order={() => db.settings.getSideBarOrder("routes")}
       onOrderChanged={(order) => db.settings.setSideBarOrder("routes", order)}
@@ -824,7 +805,6 @@ function ItemCount({ item }: { item: Route | Color | Notebook | Tag }) {
   const notes = useNoteStore((store) => store.notes);
   const reminders = useReminderStore((store) => store.reminders);
   const trash = useTrashStore((store) => store.trash);
-  const monographs = useMonographStore((store) => store.monographs);
   const [count, setCount] = useState(0);
 
   useEffect(() => {
@@ -843,8 +823,6 @@ function ItemCount({ item }: { item: Route | Color | Notebook | Tag }) {
             return reminders?.length || 0;
           case "trash":
             return trash?.length || 0;
-          case "monographs":
-            return monographs?.length || 0;
           case "archive":
             return db.notes.archived.count();
           default:
@@ -852,22 +830,17 @@ function ItemCount({ item }: { item: Route | Color | Notebook | Tag }) {
         }
       }
     })().then((c) => setCount(c || 0));
-  }, [item, notes, trash, monographs, reminders]);
+  }, [item, notes, trash, reminders]);
   return <Text variant="subBody">{count}</Text>;
 }
 
 function NavigationDropdown() {
-  const user = useUserStore((store) => store.user);
   const profile = useSettingStore((store) => store.profile);
   const theme = useThemeStore((store) => store.colorScheme);
   const toggleNightMode = useThemeStore((store) => store.toggleColorScheme);
   const setFollowSystemTheme = useThemeStore(
     (store) => store.setFollowSystemTheme
   );
-
-  const isSubscribed = useMemo(() => isUserSubscribed(user), [user]);
-
-  const notLoggedIn = Boolean(!user || !user.id);
 
   return (
     <Button
@@ -877,15 +850,6 @@ function NavigationDropdown() {
         Menu.openMenu(
           [
             {
-              type: "popup",
-              component: () => <UserProfile minimal />,
-              key: "profile"
-            },
-            {
-              type: "separator",
-              key: "sep"
-            },
-            {
               type: "button",
               title: strings.toggleDarkLightMode(),
               key: "toggle-theme-mode",
@@ -894,14 +858,6 @@ function NavigationDropdown() {
                 setFollowSystemTheme(false);
                 toggleNightMode();
               }
-            },
-            {
-              type: "button",
-              title: strings.upgradeToPro(),
-              icon: Pro.path,
-              key: "upgrade",
-              onClick: () => BuyDialog.show({}),
-              isHidden: notLoggedIn || isSubscribed
             },
             {
               type: "button",
@@ -920,22 +876,6 @@ function NavigationDropdown() {
               onClick: () => {
                 window.open("https://notesnook.com/help/", "_blank");
               }
-            },
-            {
-              type: "button",
-              title: strings.login(),
-              icon: Login.path,
-              key: "login",
-              isHidden: !notLoggedIn,
-              onClick: () => hardNavigate("/login")
-            },
-            {
-              type: "button",
-              title: strings.logout(),
-              icon: Logout.path,
-              key: "logout",
-              isHidden: notLoggedIn,
-              onClick: () => logout()
             }
           ],
           {
@@ -959,7 +899,7 @@ function NavigationDropdown() {
         p: 0
       }}
     >
-      {!user || !user.id || !profile?.profilePicture ? (
+      {!profile?.profilePicture ? (
         <User size={14} color="icon" />
       ) : (
         <Image

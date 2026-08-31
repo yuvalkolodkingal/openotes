@@ -31,7 +31,6 @@ import {
   getListItemDefaultHeight,
   getListItemPlaceholderData
 } from "./list-profiles";
-import Announcements from "../announcements";
 import { ListLoader } from "../loaders/list-loader";
 import ScrollContainer, { ScrollContainerProps } from "../scroll-container";
 import { useKeyboardListNavigation } from "../../hooks/use-keyboard-list-navigation";
@@ -430,7 +429,9 @@ function VirtuosoItem({
 }
 
 function ListHeader({ context }: { context?: ListContext }) {
-  return context?.header ? context.header : <Announcements />;
+  // Openotes has no server-driven announcements banner, so a list only ever
+  // renders the header its own context supplies.
+  return context?.header ? context.header : null;
 }
 
 /**

@@ -17,7 +17,7 @@ You should have received a copy of the GNU General Public License
 along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
-import { Database } from "@db/sqlite";
+import type { Database as DatabaseType } from "@db/sqlite";
 import { join } from "@std/path";
 import { appDataDir, assertInside, ensureDirSync } from "./paths.ts";
 import { logger } from "./logger.ts";
@@ -108,8 +108,13 @@ function extensionSuffix(): string {
 }
 
 /**
- * Point @db/sqlite at the bundled encryption-capable library. Must run
- * before the first Database is constructed.
+ * Point @db/sqlite at the bundled encryption-capable library.
+ *
+ * @db/sqlite opens the dynamic library at *module load*, so this must run
+ * before that module is imported — which is why the import below is
+ * dynamic and why nothing in this file imports it at the top level. A
+ * static import here silently loads whatever stock SQLite the FFI layer
+ * finds first, which has no encryption support at all.
  */
 export function configureNativeLibrary(): { path: string; encrypted: boolean } {
   const existing = Deno.env.get("DENO_SQLITE_PATH");
@@ -134,15 +139,27 @@ export function configureNativeLibrary(): { path: string; encrypted: boolean } {
   }
 }
 
+/** Cached after the first load; see configureNativeLibrary(). */
+let DatabaseConstructor: typeof DatabaseType | undefined;
+
+export async function loadDatabaseConstructor(): Promise<typeof DatabaseType> {
+  if (DatabaseConstructor) return DatabaseConstructor;
+  configureNativeLibrary();
+  const module = await import("@db/sqlite");
+  DatabaseConstructor = module.Database;
+  return DatabaseConstructor;
+}
+
 export class SqliteConnection {
-  private db: Database;
+  private db: DatabaseType;
   private extensionsLoaded = false;
   private initialized = false;
   private readonly encrypted: boolean;
 
   constructor(
     readonly id: string,
-    private readonly options: SqliteOptions
+    private readonly options: SqliteOptions,
+    Database: typeof DatabaseType
   ) {
     this.encrypted = !!options.password && options.filePath !== ":memory:";
     if (options.filePath !== ":memory:") {
@@ -275,13 +292,87 @@ function normalizeParameter(value: unknown): unknown {
 }
 
 /**
+ * Confirm that keying a database in *this process* actually encrypts it.
+ *
+ * This is not paranoia about the build. The application runs inside a
+ * process that has already loaded the system libsqlite3 (WebKitGTK links
+ * it), and without careful linking the dynamic loader serves SQLite calls
+ * from that copy instead of the bundled one. The system copy has no
+ * encryption support, so `PRAGMA key` succeeds, does nothing, and leaves
+ * the vault in plaintext — a failure a user would never notice.
+ *
+ * The library is built with -Wl,-Bsymbolic to prevent that. This checks the
+ * outcome rather than trusting the flag: it writes a recognisable string
+ * into a keyed temporary database and fails startup if that string is
+ * readable in the file.
+ */
+export function verifyEncryptionInProcess(Database: typeof DatabaseType): void {
+  const canary = "openotes-encryption-canary";
+  let path: string;
+  try {
+    path = Deno.makeTempFileSync({ prefix: "openotes-enc-", suffix: ".db" });
+  } catch (error) {
+    log.warn("Could not create a temporary file to verify encryption", {
+      error: error instanceof Error ? error.message : String(error)
+    });
+    return;
+  }
+
+  try {
+    const db = new Database(path);
+    db.exec(`PRAGMA key = "x'${"cd".repeat(32)}'"`);
+    db.exec("CREATE TABLE canary (v TEXT)");
+    db.prepare("INSERT INTO canary (v) VALUES (?)").run(canary);
+    db.exec("PRAGMA wal_checkpoint(TRUNCATE)");
+    db.close();
+
+    const raw = Deno.readFileSync(path);
+    const asText = new TextDecoder("utf-8", { fatal: false }).decode(raw);
+    if (asText.includes(canary)) {
+      throw new Error(
+        "The database engine is not encrypting. SQLite calls in this " +
+          "process are being served by an unencrypted SQLite library " +
+          "instead of the bundled encrypted one, so `PRAGMA key` silently " +
+          "does nothing. Refusing to start rather than write your notes to " +
+          "disk in plaintext. Rebuild the native library with " +
+          '"deno task build:native" (it must be linked with -Wl,-Bsymbolic).'
+      );
+    }
+    log.info("Verified that the database engine encrypts in this process");
+  } finally {
+    for (const suffix of ["", "-wal", "-shm", "-journal"]) {
+      try {
+        Deno.removeSync(path + suffix);
+      } catch {
+        /* the sidecar file may not exist */
+      }
+    }
+  }
+}
+
+/**
  * Owns every open connection. Handles are opaque strings; the renderer can
  * only reference a database it opened through a validated path.
  */
 export class SqliteService {
   private readonly connections = new Map<string, SqliteConnection>();
   private nextId = 1;
-  private configured = false;
+  private Database?: typeof DatabaseType;
+
+  /**
+   * Load the native library and prove, in this process, that it really is
+   * the encryption-capable build.
+   *
+   * Call once at startup, before open(): the FFI module binds the library
+   * when it is first imported, so this cannot be done lazily inside open()
+   * without making open() async, and open() is called synchronously from
+   * the renderer bridge.
+   */
+  async initialize(): Promise<void> {
+    if (this.Database) return;
+    this.Database = await loadDatabaseConstructor();
+    verifyEncryptionInProcess(this.Database);
+  }
 
   open(options: {
     filePath: string;
@@ -293,9 +384,11 @@ export class SqliteService {
     cacheSize?: number;
     tempStore?: SqliteOptions["tempStore"];
   }): string {
-    if (!this.configured) {
-      configureNativeLibrary();
-      this.configured = true;
+    if (!this.Database) {
+      throw new Error(
+        "The SQLite service was not initialized. This is a programming " +
+          "error: call initialize() during startup."
+      );
     }
 
     const filePath =
@@ -314,7 +407,7 @@ export class SqliteService {
     const id = `db${this.nextId++}`;
     this.connections.set(
       id,
-      new SqliteConnection(id, { ...options, filePath })
+      new SqliteConnection(id, { ...options, filePath }, this.Database)
     );
     log.info("Opened database", {
       id,

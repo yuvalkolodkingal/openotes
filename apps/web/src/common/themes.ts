@@ -17,16 +17,16 @@ You should have received a copy of the GNU General Public License
 along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
-import type { ThemesRouter as ThemesRouterType } from "@notesnook/themes-server";
-import { createTRPCProxyClient, httpBatchLink } from "@trpc/client";
-import { createTRPCReact } from "@trpc/react-query";
+import { PreviewColors, ThemeDefinition } from "@notesnook/theme";
 
-export const THEME_SERVER_URL = "https://themes-api.notesnook.com";
-export const ThemesRouter = createTRPCProxyClient<ThemesRouterType>({
-  links: [
-    httpBatchLink({
-      url: THEME_SERVER_URL
-    })
-  ]
-});
-export const ThemesTRPC = createTRPCReact<ThemesRouterType>();
+/**
+ * A theme plus the colors used to render its preview card.
+ *
+ * Upstream this type came from the hosted theme marketplace
+ * (`@notesnook/themes-server`). Openotes has no marketplace: themes are
+ * either the two bundled defaults or a JSON file the user loads from disk,
+ * so the metadata is derived locally from the theme itself.
+ */
+export type ThemeMetadata = ThemeDefinition & {
+  previewColors: PreviewColors;
+};

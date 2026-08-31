@@ -136,6 +136,18 @@ Log verbosity: one of
 The default is
 .BR info .
 .TP
+.B OPENOTES_UI_PORT
+Loopback port the interface is served on, an integer between
+.B 1024
+and
+.BR 65535 .
+The default is
+.BR 49732 .
+The origin decides which webview storage a profile sees, so a given profile
+must always use the same port; change it only to run a second profile
+alongside the first, together with its own
+.BR OPENOTES_DATA_DIR .
+.TP
 .B XDG_DATA_HOME
 Base directory for application data. Defaults to
 .IR ~/.local/share .

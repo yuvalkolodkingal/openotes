@@ -165,7 +165,7 @@ export const AboutSettings: SettingsGroup[] = [
             type: "button",
             action: () => {
               window.open(
-                "https://github.com/streetwriters/notesnook",
+                "https://github.com/yuvalkolodkingal/notesnook",
                 "_blank"
               );
             },
@@ -323,7 +323,7 @@ export const LegalSettings: SettingsGroup[] = [
             type: "button",
             action: () =>
               void window.open(
-                "https://github.com/streetwriters/notesnook/blob/master/LICENSE",
+                "https://github.com/yuvalkolodkingal/notesnook/blob/master/LICENSE",
                 "_blank"
               ),
             title: strings.open(),
@@ -350,30 +350,6 @@ export const SupportSettings: SettingsGroup[] = [
             type: "button",
             action: () => IssueDialog.show({}),
             title: strings.report(),
-            variant: "secondary"
-          }
-        ]
-      },
-      {
-        key: "email-us",
-        title: strings.emailSupport(),
-        description: strings.emailSupportDesc(),
-        components: [
-          {
-            type: "button",
-            action: async () => {
-              await navigator.clipboard.writeText("support@streetwriters.co");
-              showToast("info", strings.copied());
-            },
-            title: strings.copy(),
-            variant: "secondary"
-          },
-          {
-            type: "button",
-            action: () => {
-              window.open("mailto:support@streetwriters.co", "_blank");
-            },
-            title: strings.send(),
             variant: "secondary"
           }
         ]

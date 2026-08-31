@@ -21,13 +21,7 @@ import createStore from "../common/store";
 import BaseStore from "./index";
 import Config from "../utils/config";
 import { desktop } from "../common/desktop-bridge";
-import {
-  THEME_COMPATIBILITY_VERSION,
-  ThemeDark,
-  ThemeDefinition,
-  ThemeLight
-} from "@notesnook/theme";
-import { ThemesRouter } from "../common/themes-router";
+import { ThemeDark, ThemeDefinition, ThemeLight } from "@notesnook/theme";
 
 type ColorScheme = "dark" | "light";
 class ThemeStore extends BaseStore<ThemeStore> {
@@ -42,10 +36,6 @@ class ThemeStore extends BaseStore<ThemeStore> {
       colorScheme === "dark" ? darkTheme : lightTheme,
       this.get().followSystemTheme
     );
-    this.set({
-      darkTheme: await updateTheme(darkTheme),
-      lightTheme: await updateTheme(lightTheme)
-    });
   };
 
   setTheme = (theme: ThemeDefinition) => {
@@ -62,13 +52,8 @@ class ThemeStore extends BaseStore<ThemeStore> {
     const theme = getTheme(colorScheme);
     this.set({ colorScheme, [getKey(theme)]: theme });
     changeDesktopTheme(theme, this.get().followSystemTheme);
-
-    updateTheme(theme).then((theme) => {
-      changeDesktopTheme(theme, this.get().followSystemTheme);
-      Config.set("colorScheme", colorScheme);
-      Config.set(`theme:${theme.colorScheme}`, theme);
-      this.set({ [getKey(theme)]: theme });
-    });
+    Config.set("colorScheme", colorScheme);
+    Config.set(`theme:${theme.colorScheme}`, theme);
   };
 
   toggleColorScheme = () => {
@@ -107,21 +92,6 @@ function getTheme(colorScheme: ColorScheme) {
   return colorScheme === "dark"
     ? Config.get("theme:dark", ThemeDark)
     : Config.get("theme:light", ThemeLight);
-}
-
-async function updateTheme(theme: ThemeDefinition) {
-  const { id, version } = theme;
-  try {
-    const updatedTheme = await ThemesRouter.updateTheme.query({
-      compatibilityVersion: THEME_COMPATIBILITY_VERSION,
-      id,
-      version
-    });
-    if (!updatedTheme) return theme;
-    return updatedTheme;
-  } catch (e) {
-    return theme;
-  }
 }
 
 function changeDesktopTheme(theme: ThemeDefinition, system: boolean) {
