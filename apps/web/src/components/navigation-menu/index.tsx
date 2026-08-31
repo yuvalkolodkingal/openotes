@@ -484,13 +484,11 @@ function Routes({
   const hiddenRoutes = useAppStore((store) => store.hiddenRoutes);
   return (
     <ReorderableList
-      items={routes
-        .filter(
-          customizableSidebar?.isAllowed
-            ? (r) => !hiddenRoutes.includes(r.id)
-            : () => true
-        )
-        }
+      items={routes.filter(
+        customizableSidebar?.isAllowed
+          ? (r) => !hiddenRoutes.includes(r.id)
+          : () => true
+      )}
       orderKey={`sidebarOrder:routes`}
       order={() => db.settings.getSideBarOrder("routes")}
       onOrderChanged={(order) => db.settings.setSideBarOrder("routes", order)}

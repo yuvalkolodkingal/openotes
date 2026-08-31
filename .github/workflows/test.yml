@@ -1,0 +1,235 @@
+# This file is part of the Notesnook project (https://notesnook.com/)
+#
+# Copyright (C) 2023 Streetwriters (Private) Limited
+# Copyright (C) 2026 Openotes contributors
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+name: Tests
+
+# `pull_request`, never `pull_request_target`: this workflow checks out and
+# runs the contributor's code, so it must run with the fork's own read-only
+# token and no access to repository secrets (spec §43).
+on:
+  push:
+    branches: ["main", "master"]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: tests-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  DENO_VERSION: "2.9.6"
+  # Deno writes its module cache here; keyed on the lockfile below.
+  DENO_DIR: ${{ github.workspace }}/.deno-cache
+
+jobs:
+  # -------------------------------------------------------------------------
+  # Formatting, linting, type checking, unit tests, and the guard that keeps
+  # Electron and the mobile toolchain out of the tree.
+  # -------------------------------------------------------------------------
+  check:
+    name: Format, lint, types, unit tests
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: ${{ env.DENO_VERSION }}
+
+      - name: Cache the Deno module cache
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.DENO_DIR }}
+          key: deno-${{ runner.os }}-${{ hashFiles('deno.lock') }}
+          restore-keys: deno-${{ runner.os }}-
+
+      - name: deno fmt --check
+        run: deno fmt --check
+
+      - name: deno lint
+        run: deno lint
+
+      - name: deno check
+        run: deno task check
+
+      # Also type-check the build tooling: a broken build script should fail
+      # here rather than three jobs later in the release pipeline.
+      - name: deno check (build scripts)
+        run: >
+          deno check
+          apps/desktop/scripts/build.ts
+          apps/desktop/scripts/build-ui.ts
+          apps/desktop/scripts/build-native.ts
+          apps/desktop/scripts/checksums.ts
+          apps/desktop/scripts/smoke-test.ts
+          apps/desktop/scripts/verify-dependencies.ts
+
+      - name: Unit tests
+        run: deno task test
+
+  forbidden-dependencies:
+    name: No Electron, no mobile toolchain
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: ${{ env.DENO_VERSION }}
+      # Spec §10 and §33. The guard parses manifests and lockfiles rather than
+      # grepping for the word "electron", so the audit notes and the comments
+      # that explain what replaced it do not trip it.
+      - name: deno task verify:no-electron
+        run: deno task verify:no-electron
+
+  # -------------------------------------------------------------------------
+  # The WebDAV suite against a real server, not the in-process double
+  # (spec §49).
+  #
+  # bytemark/webdav:2.4 is Apache httpd 2.4 with mod_dav — a WebDAV
+  # implementation nobody on this project wrote, and the one most people
+  # actually sync against. It is configured entirely through environment
+  # variables and needs no command line, which is what makes it usable as a
+  # bare service container: the image's entrypoint is docker-entrypoint.sh
+  # with `httpd-foreground` as its command, and it listens on port 80.
+  # -------------------------------------------------------------------------
+  webdav-integration:
+    name: WebDAV integration (real server)
+    runs-on: ubuntu-24.04
+
+    services:
+      webdav:
+        image: bytemark/webdav:2.4
+        env:
+          AUTH_TYPE: Basic
+          USERNAME: openotes
+          PASSWORD: integration-test-password
+          LOCATION: /
+        ports:
+          - 8080:80
+
+    env:
+      WEBDAV_TEST_URL: http://127.0.0.1:8080
+      WEBDAV_TEST_USER: openotes
+      WEBDAV_TEST_PASSWORD: integration-test-password
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: ${{ env.DENO_VERSION }}
+
+      - name: Cache the Deno module cache
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.DENO_DIR }}
+          key: deno-${{ runner.os }}-${{ hashFiles('deno.lock') }}
+          restore-keys: deno-${{ runner.os }}-
+
+      # Confirm the container is actually serving WebDAV — a PROPFIND, not a
+      # GET — before handing it to the suite, so a container that never came
+      # up fails here with a clear message instead of inside a test. The
+      # image has no curl of its own, hence a check from the runner rather
+      # than a docker health check.
+      - name: Wait for the WebDAV server
+        run: |
+          set -euo pipefail
+          for attempt in $(seq 1 30); do
+            if curl -fsS -u "$WEBDAV_TEST_USER:$WEBDAV_TEST_PASSWORD" \
+                 -X PROPFIND -H 'Depth: 0' "$WEBDAV_TEST_URL/" >/dev/null 2>&1; then
+              echo "WebDAV server answered PROPFIND on $WEBDAV_TEST_URL"
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "The WebDAV service container never answered on $WEBDAV_TEST_URL" >&2
+          docker ps -a || true
+          exit 1
+
+      # --require-server: without it a missing server would make the runner
+      # skip the suite, and a skipped integration run must never be mistaken
+      # for a passing one.
+      - name: WebDAV integration suite
+        run: deno task test:webdav -- --require-server --no-download
+
+  # -------------------------------------------------------------------------
+  # Does the thing we ship actually start? Builds the application directory
+  # for this host and runs the start-up assertions against it.
+  # -------------------------------------------------------------------------
+  build-smoke-test:
+    name: Build and start the application
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: ${{ env.DENO_VERSION }}
+
+      - name: Cache the Deno module cache
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.DENO_DIR }}
+          key: deno-${{ runner.os }}-${{ hashFiles('deno.lock') }}
+          restore-keys: deno-${{ runner.os }}-
+
+      # WebKitGTK is the webview the window is made of; xvfb gives the window
+      # somewhere to open. The compiler and unzip are for build-native.ts.
+      - name: Install the runtime and build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install --no-install-recommends -y \
+            libwebkit2gtk-4.1-0 libgtk-3-0 libxdo3 xvfb unzip build-essential
+
+      - name: Build the native libraries
+        run: deno task build:native
+
+      - name: Cache the built user interface
+        id: ui-cache
+        uses: actions/cache@v4
+        with:
+          path: apps/desktop/ui
+          key: >-
+            ui-${{ runner.os }}-${{ hashFiles(
+              'apps/web/package-lock.json',
+              'apps/web/vite.config.ts',
+              'apps/web/src/**'
+            ) }}
+
+      - name: Build the user interface
+        if: steps.ui-cache.outputs.cache-hit != 'true'
+        run: deno task build:ui
+
+      - name: Build the application directory
+        run: >
+          deno run -A apps/desktop/scripts/build.ts
+          --target x86_64-unknown-linux-gnu --format dir --skip-ui
+
+      - name: Smoke test
+        run: deno run -A apps/desktop/scripts/smoke-test.ts
+
+      - name: Upload the smoke-tested build
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: smoke-test-failure-build
+          path: dist/
+          retention-days: 3

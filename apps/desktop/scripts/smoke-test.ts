@@ -21,38 +21,51 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 /**
  * Starts a built Openotes and checks that it actually comes up.
  *
- * Three assertions, in order of how much they prove:
+ * WHY THIS READS THE LOG INSTEAD OF CURLING THE APPLICATION
  *
- *   1. the process is still running after start-up;
- *   2. the interface server answers on its health endpoint
- *      (`/__openotes/health`, see apps/desktop/src/native/server.ts) and
- *      returns the instance header, which only the real server sets;
- *   3. `index.html` is served from that origin — so the interface bundle
- *      really did travel with the binary;
- *   4. nothing in the output looks like a start-up failure.
+ * The obvious smoke test is to fetch the interface server's health route.
+ * That does not work here, and the reason is documented at the top of
+ * apps/desktop/src/native/server.ts: under `deno desktop` the runtime owns
+ * the listening address, publishes it as DENO_SERVE_ADDRESS, and wires the
+ * socket to the embedded webview rather than to the machine's network
+ * stack. A connection to that port from another process is refused —
+ * measured here, not assumed. That is a security property worth keeping, so
+ * this test works with what the application does publish (its structured
+ * start-up log on stdout) and probes the port only to report,
+ * informationally, that it is closed.
  *
- * What it does NOT prove is stated in the summary at the end of every run:
- * this is a start-up check, not a UI test. It never opens a note, never
- * touches the database beyond whatever start-up does, and cannot see whether
- * anything was painted in the window.
+ * What is asserted, in order of how much it proves:
  *
- * The app is run against a throwaway HOME and XDG directory tree and a free
- * port, so it can never read or write the data of a real installation and
- * never collides with one that is already running.
+ *   1. the process survives start-up and is still running afterwards;
+ *   2. the interface server started, and the directory it serves is the
+ *      `ui/` directory that travelled with this build — so packaging really
+ *      did put the interface next to the binary;
+ *   3. the bundled SQLite3MultipleCiphers library loaded from this build's
+ *      `native/` directory and the runtime verified that the engine
+ *      encrypts in-process — so the native libraries travelled too, and the
+ *      vault is not silently plaintext;
+ *   4. the application logged that it is ready and started;
+ *   5. nothing in the output looks like a start-up failure.
+ *
+ * What is NOT asserted is printed at the end of every run: nothing inside
+ * the window. This cannot see whether the interface rendered, whether a
+ * note can be written, or whether sync works.
+ *
+ * The application runs against a throwaway HOME and XDG tree, so a smoke
+ * test can never touch the data of a real installation.
  *
  *   deno task smoke                                   newest build in dist/
  *   deno run -A .../smoke-test.ts --app dist/Openotes-1.0.0-linux-x86_64
  *   deno run -A .../smoke-test.ts --app dist/Openotes-1.0.0-linux-x86_64.AppImage
  */
 
-import { basename, fromFileUrl, join } from "@std/path";
+import { basename, fromFileUrl, join, resolve } from "@std/path";
 import { exists } from "@std/fs";
 import { APP_ID, APP_NAME } from "../src/constants.ts";
 
 const ROOT = fromFileUrl(new URL("../../../", import.meta.url));
 const DEFAULT_DIST = join(ROOT, "dist");
 const HEALTH_PATH = "/__openotes/health";
-const INSTANCE_HEADER = "x-openotes-instance";
 
 interface Check {
   name: string;
@@ -64,7 +77,7 @@ const checks: Check[] = [];
 
 function record(name: string, status: Check["status"], detail: string) {
   checks.push({ name, status, detail });
-  const marker = status === "pass" ? "PASS" : status === "fail" ? "FAIL" : "SKIP";
+  const marker = status === "pass" ? "PASS" : status === "fail" ? "FAIL" : "INFO";
   console.log(`  [${marker}] ${name}: ${detail}`);
 }
 
@@ -80,30 +93,19 @@ async function which(command: string): Promise<boolean> {
   }
 }
 
-/** An unused TCP port, handed to the app through OPENOTES_UI_PORT. */
-function freePort(): number {
-  const listener = Deno.listen({ hostname: "127.0.0.1", port: 0 });
-  const { port } = listener.addr as Deno.NetAddr;
-  listener.close();
-  return port;
-}
-
 /** Newest candidate in dist/: an application directory or an AppImage. */
 async function findBuiltApp(distDirectory: string): Promise<string> {
   const candidates: { path: string; modified: number }[] = [];
   for await (const entry of Deno.readDir(distDirectory)) {
     const path = join(distDirectory, entry.name);
-    if (entry.isDirectory && entry.name.startsWith(`${APP_NAME}-`)) {
-      candidates.push({
-        path,
-        modified: (await Deno.stat(path)).mtime?.getTime() ?? 0
-      });
-    } else if (entry.isFile && entry.name.endsWith(".AppImage")) {
-      candidates.push({
-        path,
-        modified: (await Deno.stat(path)).mtime?.getTime() ?? 0
-      });
-    }
+    const interesting =
+      (entry.isDirectory && entry.name.startsWith(`${APP_NAME}-`)) ||
+      (entry.isFile && entry.name.endsWith(".AppImage"));
+    if (!interesting) continue;
+    candidates.push({
+      path,
+      modified: (await Deno.stat(path)).mtime?.getTime() ?? 0
+    });
   }
   if (candidates.length === 0) {
     throw new Error(
@@ -117,6 +119,8 @@ async function findBuiltApp(distDirectory: string): Promise<string> {
 
 interface Launchable {
   executable: string;
+  /** Directory the bundled resources are expected to sit in. */
+  payloadRoot: string;
   /** Extra environment the launcher needs. */
   env: Record<string, string>;
   description: string;
@@ -127,8 +131,8 @@ interface Launchable {
  * Turns whatever `--app` pointed at into something executable.
  *
  * An AppImage is extracted rather than mounted: GitHub's runners have no
- * FUSE, and `--appimage-extract` is built into the runtime, so this works
- * everywhere and still exercises the real payload.
+ * FUSE, and `--appimage-extract` is built into the AppImage runtime, so this
+ * works everywhere and still exercises the real payload.
  */
 async function resolveLaunchable(path: string): Promise<Launchable> {
   const info = await Deno.stat(path);
@@ -139,6 +143,7 @@ async function resolveLaunchable(path: string): Promise<Launchable> {
       if (await exists(candidate)) {
         return {
           executable: candidate,
+          payloadRoot: path,
           env: {},
           description: `application directory ${path}`
         };
@@ -150,13 +155,12 @@ async function resolveLaunchable(path: string): Promise<Launchable> {
   if (path.endsWith(".AppImage")) {
     await Deno.chmod(path, 0o755).catch(() => {});
     const workDirectory = await Deno.makeTempDir({ prefix: "openotes-smoke-" });
-    const extract = new Deno.Command(path, {
+    const result = await new Deno.Command(path, {
       args: ["--appimage-extract"],
       cwd: workDirectory,
       stdout: "null",
       stderr: "piped"
-    });
-    const result = await extract.output();
+    }).output();
     if (result.code !== 0) {
       throw new Error(
         `Could not extract ${basename(path)}: ${
@@ -167,8 +171,9 @@ async function resolveLaunchable(path: string): Promise<Launchable> {
     const root = join(workDirectory, "squashfs-root");
     return {
       executable: join(root, APP_ID),
-      // Inside a real AppImage the runtime sets APPIMAGE; paths.ts uses it to
-      // decide it is running from one. Keep that true for the extracted copy.
+      payloadRoot: root,
+      // Inside a real AppImage the runtime sets APPIMAGE and APPDIR;
+      // paths.ts reads APPIMAGE to decide it is running from one.
       env: { APPIMAGE: path, APPDIR: root },
       description: `AppImage ${basename(path)} (extracted to ${root})`,
       cleanup: () =>
@@ -176,7 +181,12 @@ async function resolveLaunchable(path: string): Promise<Launchable> {
     };
   }
 
-  return { executable: path, env: {}, description: `executable ${path}` };
+  return {
+    executable: path,
+    payloadRoot: resolve(path, ".."),
+    env: {},
+    description: `executable ${path}`
+  };
 }
 
 interface DisplayWrapper {
@@ -188,7 +198,7 @@ interface DisplayWrapper {
 /**
  * On Linux the window needs a display server. If one is present it is used;
  * otherwise xvfb-run supplies a headless X server. Without either, the app
- * cannot start at all and the test says so rather than reporting a failure
+ * cannot start at all, and the test says so rather than reporting a failure
  * that is really a missing dependency.
  */
 async function resolveDisplay(executable: string): Promise<DisplayWrapper> {
@@ -212,9 +222,8 @@ async function resolveDisplay(executable: string): Promise<DisplayWrapper> {
 }
 
 /** Isolated HOME/XDG so a smoke test can never touch real notes. */
-async function isolatedEnvironment(port: number): Promise<{
+async function isolatedEnvironment(): Promise<{
   env: Record<string, string>;
-  home: string;
   cleanup: () => Promise<void>;
 }> {
   const home = await Deno.makeTempDir({ prefix: "openotes-smoke-home-" });
@@ -222,7 +231,6 @@ async function isolatedEnvironment(port: number): Promise<{
     await Deno.mkdir(join(home, sub), { recursive: true });
   }
   return {
-    home,
     env: {
       HOME: home,
       USERPROFILE: home,
@@ -233,7 +241,6 @@ async function isolatedEnvironment(port: number): Promise<{
       XDG_CACHE_HOME: join(home, "cache"),
       XDG_DOCUMENTS_DIR: join(home, "documents"),
       OPENOTES_DATA_DIR: join(home, "data", APP_ID),
-      OPENOTES_UI_PORT: String(port),
       OPENOTES_LOG_LEVEL: "debug"
     },
     cleanup: () => Deno.remove(home, { recursive: true }).catch(() => {})
@@ -243,13 +250,83 @@ async function isolatedEnvironment(port: number): Promise<{
 const FAILURE_MARKERS = [
   `${APP_NAME} could not start`,
   "Startup failed",
-  "could not find the built user interface",
+  "Could not find the built user interface",
   "The encrypted SQLite library was not found",
-  "PortUnavailableError",
+  "is already running",
   "Uncaught",
   "panicked at",
-  "error while loading shared libraries"
+  "error while loading shared libraries",
+  "Segmentation fault"
 ];
+
+interface LogLine {
+  level?: string;
+  scope?: string;
+  message?: string;
+  context?: Record<string, unknown>;
+}
+
+/** The application logs one JSON object per line; other output is ignored. */
+function parseLogLines(output: string): LogLine[] {
+  const lines: LogLine[] = [];
+  for (const raw of output.split("\n")) {
+    const trimmed = raw.trim();
+    if (!trimmed.startsWith("{") || !trimmed.endsWith("}")) continue;
+    try {
+      lines.push(JSON.parse(trimmed) as LogLine);
+    } catch {
+      // Not one of ours.
+    }
+  }
+  return lines;
+}
+
+function findLine(
+  lines: LogLine[],
+  scope: string,
+  fragment: string
+): LogLine | undefined {
+  return lines.find(
+    (line) => line.scope === scope && (line.message ?? "").includes(fragment)
+  );
+}
+
+/**
+ * Is the interface port reachable from this process? Expected to be "no";
+ * reported for information, never as a failure. See the file header.
+ */
+async function probeInterfacePort(origin: string): Promise<string> {
+  const match = /^http:\/\/([^:/]+):(\d+)/.exec(origin);
+  if (!match) return `could not parse an address out of "${origin}"`;
+  const [, hostname, port] = match;
+  try {
+    const connection = await Deno.connect({
+      hostname,
+      port: Number.parseInt(port, 10)
+    });
+    try {
+      await connection.write(
+        new TextEncoder().encode(
+          `GET ${HEALTH_PATH} HTTP/1.1\r\nHost: ${hostname}:${port}\r\n` +
+            `Connection: close\r\n\r\n`
+        )
+      );
+      const buffer = new Uint8Array(4096);
+      const read = await connection.read(buffer);
+      const response = new TextDecoder().decode(buffer.subarray(0, read ?? 0));
+      const status = /^HTTP\/1\.[01] (\d+)/.exec(response)?.[1] ?? "?";
+      return `reachable from outside — ${HEALTH_PATH} answered ${status}`;
+    } finally {
+      connection.close();
+    }
+  } catch (error) {
+    return (
+      `not reachable from outside the process (${
+        error instanceof Error ? error.message : String(error)
+      }) — the documented behaviour of deno desktop's serve socket, not a fault`
+    );
+  }
+}
 
 export interface SmokeOptions {
   app?: string;
@@ -258,22 +335,20 @@ export interface SmokeOptions {
 }
 
 async function smokeTest(options: SmokeOptions): Promise<number> {
-  const timeout = (options.timeoutSeconds ?? 60) * 1000;
+  const timeout = (options.timeoutSeconds ?? 90) * 1000;
   const appPath = options.app ??
     (await findBuiltApp(options.distDirectory ?? DEFAULT_DIST));
   console.log(`Smoke-testing ${appPath}\n`);
 
   const launchable = await resolveLaunchable(appPath);
   const display = await resolveDisplay(launchable.executable);
-  const port = freePort();
-  const isolated = await isolatedEnvironment(port);
-  const origin = `http://127.0.0.1:${port}`;
+  const isolated = await isolatedEnvironment();
 
   if (Deno.build.os !== "windows") {
     await Deno.chmod(launchable.executable, 0o755).catch(() => {});
   }
 
-  console.log(`  launching via ${display.note} on port ${port}`);
+  console.log(`  launching via ${display.note}`);
   const child = new Deno.Command(display.command, {
     args: display.prefix,
     env: { ...isolated.env, ...launchable.env },
@@ -282,8 +357,8 @@ async function smokeTest(options: SmokeOptions): Promise<number> {
     stdin: "null"
   }).spawn();
 
-  // Both pipes have to be drained while the app runs, or a chatty start-up
-  // fills the pipe buffer and the process blocks on its own logging.
+  // Both pipes have to be drained while the application runs, or a chatty
+  // start-up fills the pipe buffer and the process blocks on its own log.
   let stdout = "";
   let stderr = "";
   const decoder = new TextDecoder();
@@ -291,7 +366,9 @@ async function smokeTest(options: SmokeOptions): Promise<number> {
     stream: ReadableStream<Uint8Array>,
     append: (text: string) => void
   ) => {
-    for await (const chunk of stream) append(decoder.decode(chunk, { stream: true }));
+    for await (const chunk of stream) {
+      append(decoder.decode(chunk, { stream: true }));
+    }
   };
   const stdoutDrained = drain(child.stdout, (text) => {
     stdout += text;
@@ -306,101 +383,127 @@ async function smokeTest(options: SmokeOptions): Promise<number> {
     return status;
   });
 
-  // ---- 2. the health endpoint -------------------------------------------
+  // Wait for the line the application prints once everything is up.
   const deadline = Date.now() + timeout;
-  let healthy = false;
-  let instanceId: string | null = null;
-  let lastError = "no attempt made";
+  let ready = false;
   while (Date.now() < deadline && !exited) {
-    try {
-      const controller = new AbortController();
-      const timer = setTimeout(() => controller.abort(), 2000);
-      const response = await fetch(`${origin}${HEALTH_PATH}`, {
-        signal: controller.signal
-      });
-      clearTimeout(timer);
-      instanceId = response.headers.get(INSTANCE_HEADER);
-      const body = (await response.text()).trim();
-      if (response.ok && instanceId && body === "ok") {
-        healthy = true;
-        break;
-      }
-      lastError = `HTTP ${response.status}, body "${body}", header ${instanceId}`;
-    } catch (error) {
-      lastError = error instanceof Error ? error.message : String(error);
+    if (findLine(parseLogLines(`${stdout}\n${stderr}`), "main", "started")) {
+      ready = true;
+      break;
     }
-    await new Promise((resolve) => setTimeout(resolve, 500));
+    await new Promise((resolve) => setTimeout(resolve, 250));
   }
 
-  // ---- 1. the process is still alive ------------------------------------
+  // Give a started application a moment to fall over on its own before
+  // declaring that it survived start-up.
+  if (ready && !exited) {
+    await Promise.race([
+      exitPromise,
+      new Promise((resolve) => setTimeout(resolve, 3000))
+    ]);
+  }
+
+  const lines = parseLogLines(`${stdout}\n${stderr}`);
+  const serverLine = findLine(lines, "server", "Interface server started");
+  const sqliteLine = findLine(lines, "sqlite", "Using bundled SQLite");
+  const encryptionLine = findLine(lines, "sqlite", "encrypts in this process");
+  const readyLine = findLine(lines, "app", "Application ready");
+  const startedLine = findLine(lines, "main", "started");
+
+  // ---- 1 -------------------------------------------------------------------
   if (exited) {
     record(
-      "process stays alive",
+      "process survives start-up",
       "fail",
       `exited with code ${exited.code}${
         exited.signal ? ` (signal ${exited.signal})` : ""
-      } before the health check finished`
+      } after ${timeout / 1000}s`
     );
   } else {
-    record("process stays alive", "pass", `pid ${child.pid} still running`);
+    record("process survives start-up", "pass", `pid ${child.pid} still running`);
   }
 
-  if (healthy) {
+  // ---- 2 -------------------------------------------------------------------
+  const servedRoot = serverLine?.context?.root;
+  const expectedUi = join(launchable.payloadRoot, "ui");
+  if (typeof servedRoot === "string" && resolve(servedRoot) === resolve(expectedUi)) {
+    record("interface travelled with the build", "pass", `serving ${servedRoot}`);
+  } else if (typeof servedRoot === "string") {
     record(
-      "health endpoint answers",
-      "pass",
-      `${origin}${HEALTH_PATH} -> 200 "ok", instance ${instanceId}`
-    );
-  } else {
-    record(
-      "health endpoint answers",
+      "interface travelled with the build",
       "fail",
-      `no healthy response within ${timeout / 1000}s (${lastError})`
+      `serving ${servedRoot}, expected ${expectedUi}`
+    );
+  } else {
+    record(
+      "interface travelled with the build",
+      "fail",
+      "the interface server never reported a root directory"
     );
   }
 
-  // ---- 3. the interface is really there ---------------------------------
-  if (healthy) {
-    try {
-      const response = await fetch(`${origin}/index.html`);
-      const html = await response.text();
-      if (response.ok && /<html/i.test(html)) {
-        record(
-          "interface is served",
-          "pass",
-          `GET /index.html -> 200, ${html.length} bytes of HTML`
-        );
-      } else {
-        record(
-          "interface is served",
-          "fail",
-          `GET /index.html -> ${response.status}, ${html.length} bytes`
-        );
-      }
-    } catch (error) {
+  // ---- 3 -------------------------------------------------------------------
+  const libraryPath = sqliteLine?.context?.path;
+  const expectedNative = join(launchable.payloadRoot, "native");
+  if (
+    typeof libraryPath === "string" &&
+    resolve(libraryPath).startsWith(resolve(expectedNative))
+  ) {
+    if (encryptionLine) {
       record(
-        "interface is served",
+        "native libraries travelled, encryption is live",
+        "pass",
+        `${libraryPath}; the runtime verified the engine encrypts in-process`
+      );
+    } else {
+      record(
+        "native libraries travelled, encryption is live",
         "fail",
-        error instanceof Error ? error.message : String(error)
+        `loaded ${libraryPath} but the encryption check never reported`
       );
     }
   } else {
     record(
-      "interface is served",
-      "skipped",
-      "the health endpoint never answered"
+      "native libraries travelled, encryption is live",
+      "fail",
+      typeof libraryPath === "string"
+        ? `loaded ${libraryPath}, expected something under ${expectedNative}`
+        : `no bundled SQLite library was reported (expected one under ${expectedNative})`
     );
   }
 
-  // ---- shut down ---------------------------------------------------------
+  // ---- 4 -------------------------------------------------------------------
+  if (readyLine && startedLine) {
+    const version = (readyLine.context as { version?: string } | undefined)
+      ?.version;
+    record(
+      "application reports itself started",
+      "pass",
+      `"${startedLine.message}"${version ? `, version ${version}` : ""}`
+    );
+  } else {
+    record(
+      "application reports itself started",
+      "fail",
+      `the log is missing ${
+        [!readyLine && '"Application ready"', !startedLine && "the start-up line"]
+          .filter(Boolean)
+          .join(" and ")
+      }`
+    );
+  }
+
+  // ---- shut down -----------------------------------------------------------
   if (!exited) {
     try {
       child.kill(Deno.build.os === "windows" ? "SIGKILL" : "SIGTERM");
     } catch {
       // already gone
     }
-    const grace = new Promise((resolve) => setTimeout(resolve, 5000));
-    await Promise.race([exitPromise, grace]);
+    await Promise.race([
+      exitPromise,
+      new Promise((resolve) => setTimeout(resolve, 5000))
+    ]);
     if (!exited) {
       try {
         child.kill("SIGKILL");
@@ -413,15 +516,22 @@ async function smokeTest(options: SmokeOptions): Promise<number> {
     await exitPromise;
   }
 
-  // ---- 4. the output ------------------------------------------------------
-  await Promise.allSettled([stdoutDrained, stderrDrained]);
+  // Bounded: under xvfb-run the X server inherits these pipes and can hold
+  // them open after the application is gone, so waiting for the streams to
+  // end would wait forever.
+  await Promise.race([
+    Promise.allSettled([stdoutDrained, stderrDrained]),
+    new Promise((resolve) => setTimeout(resolve, 3000))
+  ]);
+
+  // ---- 5 -------------------------------------------------------------------
   const combined = `${stdout}\n${stderr}`;
   const hits = FAILURE_MARKERS.filter((marker) => combined.includes(marker));
   if (hits.length === 0) {
     record(
       "no start-up errors logged",
       "pass",
-      `${stdout.length + stderr.length} bytes of output, no failure markers`
+      `${combined.length} bytes of output, no failure markers`
     );
   } else {
     record(
@@ -430,6 +540,18 @@ async function smokeTest(options: SmokeOptions): Promise<number> {
       `output contains: ${hits.join("; ")}`
     );
   }
+
+  // ---- informational -------------------------------------------------------
+  const origin = typeof serverLine?.context?.origin === "string"
+    ? serverLine.context.origin
+    : undefined;
+  record(
+    "interface port from outside",
+    "skipped",
+    origin
+      ? await probeInterfacePort(origin)
+      : "no origin was reported, so there was nothing to probe"
+  );
 
   const failed = checks.filter((check) => check.status === "fail");
   if (failed.length > 0) {
@@ -443,18 +565,22 @@ async function smokeTest(options: SmokeOptions): Promise<number> {
 
   console.log(`\nSmoke test of ${launchable.description}`);
   console.log(
-    `  checked:     the process survives start-up, the interface server\n` +
-      `               answers on ${HEALTH_PATH} with its instance header, the\n` +
-      `               bundled index.html is served from that origin, and the\n` +
-      `               output carries no start-up failure.\n` +
-      `  not checked: nothing inside the window. This test cannot see whether\n` +
-      `               the interface rendered, whether the database opened, or\n` +
-      `               whether sync works — it only proves the application\n` +
-      `               starts and serves its own interface.`
+    `  checked:     the process survives start-up; the interface server is\n` +
+      `               serving this build's own ui/ directory; the encrypted\n` +
+      `               SQLite library loaded from this build's own native/\n` +
+      `               directory and the engine was verified to encrypt; the\n` +
+      `               application logged that it started; and the output\n` +
+      `               carries no start-up failure.\n` +
+      `  not checked: anything inside the window. This cannot see whether the\n` +
+      `               interface rendered, whether a note can be written, or\n` +
+      `               whether sync works. It also cannot reach the interface\n` +
+      `               server over the network: deno desktop wires that socket\n` +
+      `               to the webview, not to the machine.`
   );
 
   if (failed.length === 0) {
-    console.log(`\nOK — ${checks.length} checks passed.`);
+    const passed = checks.filter((check) => check.status === "pass").length;
+    console.log(`\nOK — ${passed} checks passed.`);
     return 0;
   }
   console.error(
@@ -472,7 +598,7 @@ function usage() {
   --app <path>      application directory, launcher or .AppImage to test
                     (default: the newest build in dist/)
   --dist <dir>      where to look for a build (default: dist/)
-  --timeout <secs>  how long to wait for the health endpoint (default: 60)
+  --timeout <secs>  how long to wait for the start-up line (default: 90)
   -h, --help        show this message`
   );
 }

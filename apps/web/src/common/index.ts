@@ -402,17 +402,14 @@ export function createSetDefaultHomepageMenuItem(
  * no longer consult a plan or open an upgrade dialog.
  */
 export async function checkFeature<TId extends FeatureId>(
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  idOrFeature: TId | FeatureResult<TId>,
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  options: { value?: number; type?: "toast" | "dialog" } = {}
+  _idOrFeature: TId | FeatureResult<TId>,
+  _options: { value?: number; type?: "toast" | "dialog" } = {}
 ): Promise<boolean> {
   return true;
 }
 
 export function withFeatureCheck<TId extends FeatureId>(
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  idOrFeature: TId | FeatureResult<TId> | undefined,
+  _idOrFeature: TId | FeatureResult<TId> | undefined,
   callback: (...args: any[]) => Promise<void> | void
 ) {
   return async (...args: any[]) => {

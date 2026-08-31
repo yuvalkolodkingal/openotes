@@ -272,6 +272,29 @@ export function createHandlers(): Record<string, Handler> {
     "backups.close": async (input, context) =>
       await context.exports.close(asString(input, "id", 64)),
 
+    // ---------------- durable renderer storage ----------------
+
+    "storage.get": (input, context) =>
+      context.storage.get(input?.namespace, input?.key),
+    "storage.set": async (input, context) => {
+      await context.storage.set(input?.namespace, input?.key, input?.value);
+      return { ok: true };
+    },
+    "storage.remove": async (input, context) => {
+      await context.storage.remove(input?.namespace, input?.key);
+      return { ok: true };
+    },
+    "storage.keys": (input, context) => context.storage.keys(input?.namespace),
+    "storage.entries": (input, context) =>
+      context.storage.entries(input?.namespace),
+    "storage.clear": async (input, context) => {
+      if (input?.confirm !== "clear") {
+        throw new Error("Clearing stored data requires explicit confirmation");
+      }
+      await context.storage.clear(input?.namespace);
+      return { ok: true };
+    },
+
     // ---------------- key storage ----------------
 
     // Upstream used the OS keychain here when available and fell back to

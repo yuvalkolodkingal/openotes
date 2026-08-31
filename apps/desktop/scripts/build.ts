@@ -505,13 +505,9 @@ async function addResources(
     if (await exists(manPage)) {
       await copy(manPage, join(destination, `${APP_ID}.1`), overwrite);
     }
-  } else {
-    await copy(
-      join(ICONS_DIR, "app.ico"),
-      join(destination, `${APP_ID}.ico`),
-      overwrite
-    );
   }
+  // Windows needs no extra icon copy: deno desktop already drops the --icon
+  // file into the application directory as AppIcon.ico.
 }
 
 /** Copies only the artifacts belonging to `target` into a staging directory. */
@@ -981,10 +977,6 @@ cp -a %{_openotes_tree}/. %{buildroot}/
 
 %files
 ${fileList}
-
-%changelog
-* Thu Jan 01 1970 Openotes contributors <${RELEASE_BASE_URL}> - ${version}-1
-- Built by apps/desktop/scripts/build.ts
 `;
 }
 

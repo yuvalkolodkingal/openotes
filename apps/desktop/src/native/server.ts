@@ -23,57 +23,34 @@ import { logger } from "./logger.ts";
 const log = logger.scope("server");
 
 /**
- * Serves the built React UI to the webview.
+ * Serves the built React interface to the webview.
  *
- * ORIGIN STABILITY — this matters for data safety.
+ * HOW THE ADDRESS WORKS, AND WHY IT MATTERS
  *
- * The webview stores things keyed by origin: IndexedDB (the key store) and
- * localStorage (settings). Upstream's Electron shell kept the origin fixed
- * by intercepting a constant https:// URL. Deno Desktop serves over
- * http://127.0.0.1:<port>, so a port that changed between launches would
- * silently orphan that data — the app would look freshly installed.
+ * Under `deno desktop` the runtime owns the listening address. A port
+ * passed to `Deno.serve` is ignored: the runtime substitutes its own and
+ * publishes it as DENO_SERVE_ADDRESS, and the socket is wired to the
+ * embedded webview rather than published on the machine — a fetch to that
+ * port from another process fails.
  *
- * So the port is *fixed*, not ephemeral. If it is already taken we do not
- * quietly fall back to a different one: we probe whether the listener is
- * another instance of this app (in which case we hand off to it) and
- * otherwise fail loudly with an explanation, because starting on a
- * different port would lose the user's local settings and keys.
+ * Two consequences, both measured rather than assumed:
  *
- * Attachments and the vault database deliberately live on the Deno side
- * (filesystem, under the app data directory) rather than in webview
- * storage, so the bulk of user data does not depend on this at all.
+ *  1. Nothing outside the application can reach this server. That is good
+ *     for security, and it is why the smoke test inspects the window
+ *     instead of curling a health endpoint.
+ *
+ *  2. The port differs on every launch, so the page's origin does too
+ *     (observed: http://127.0.0.1:34265, then http://127.0.0.1:42857 on
+ *     the next run). Browser storage is partitioned by origin, so
+ *     **anything the page writes to localStorage or IndexedDB is gone
+ *     after a restart** — a value written in one run read back as null in
+ *     the next.
+ *
+ * The second point is why nothing durable lives in webview storage. The
+ * vault, attachments, settings and key material are all held by the
+ * runtime (see native/keyvalue.ts) and reached through bindings. Treat any
+ * new use of localStorage or IndexedDB in the interface as a bug.
  */
-
-/**
- * Fixed loopback port, chosen from the IANA dynamic range.
- *
- * OPENOTES_UI_PORT overrides it. That is not a convenience: because the
- * origin determines which webview storage the profile sees, a *given
- * profile* must always use the same port. Overriding it is how you run a
- * second profile side by side (with its own OPENOTES_DATA_DIR), and
- * changing it for an existing profile orphans that profile's webview
- * storage exactly as a random port would.
- */
-function resolvePort(): number {
-  const override = Deno.env.get("OPENOTES_UI_PORT");
-  if (!override) return 49732;
-  const port = Number(override);
-  if (!Number.isInteger(port) || port < 1024 || port > 65535) {
-    throw new Error(
-      `OPENOTES_UI_PORT must be an integer between 1024 and 65535, ` +
-        `got ${JSON.stringify(override)}`
-    );
-  }
-  return port;
-}
-
-export const UI_PORT = resolvePort();
-export const UI_HOST = "127.0.0.1";
-export const UI_ORIGIN = `http://${UI_HOST}:${UI_PORT}`;
-
-/** Identifies our own listener during the single-instance probe. */
-const INSTANCE_HEADER = "x-openotes-instance";
-const HEALTH_PATH = "/__openotes/health";
 
 const MIME_TYPES: Record<string, string> = {
   ".html": "text/html; charset=utf-8",
@@ -98,117 +75,67 @@ const MIME_TYPES: Record<string, string> = {
 };
 
 export interface UiServerOptions {
-  /** Directory holding the built UI (index.html at its root). */
+  /** Directory holding the built interface (index.html at its root). */
   root: string;
-  /** Extra headers, e.g. a stricter CSP in production. */
+  /** Identifies this instance; returned by the health route. */
   instanceId: string;
-  /** Called with a deep link when another instance hands one off. */
-  onDeepLink?: (url: string) => void;
 }
 
 export interface RunningUiServer {
+  /** The origin the runtime actually assigned. */
   origin: string;
   shutdown(): Promise<void>;
 }
 
+/** Health route, used by the interface handshake and by the smoke test. */
+export const HEALTH_PATH = "/__openotes/health";
+const INSTANCE_HEADER = "x-openotes-instance";
+
 /**
- * Is something already listening on our fixed port, and is it us?
- * Returns "free", "ours" or "foreign".
+ * The address the runtime assigned, once serving has started. Read from
+ * DENO_SERVE_ADDRESS, which `deno desktop` sets before user code runs.
  */
-export async function probePort(): Promise<"free" | "ours" | "foreign"> {
-  try {
-    const listener = Deno.listen({ hostname: UI_HOST, port: UI_PORT });
-    listener.close();
-    return "free";
-  } catch (error) {
-    if (!(error instanceof Deno.errors.AddrInUse)) throw error;
+export function assignedOrigin(fallbackPort?: number): string {
+  const address = Deno.env.get("DENO_SERVE_ADDRESS");
+  if (address) {
+    // Format is "tcp:127.0.0.1:45597".
+    const parts = address.split(":");
+    const port = parts[parts.length - 1];
+    const host = parts.length >= 3 ? parts[parts.length - 2] : "127.0.0.1";
+    if (/^\d+$/.test(port)) return `http://${host}:${port}`;
   }
-
-  try {
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), 2000);
-    const response = await fetch(`${UI_ORIGIN}${HEALTH_PATH}`, {
-      signal: controller.signal
-    });
-    clearTimeout(timer);
-    if (response.ok && response.headers.get(INSTANCE_HEADER)) {
-      await response.body?.cancel();
-      return "ours";
-    }
-    await response.body?.cancel();
-  } catch {
-    // Not reachable or not speaking our protocol.
-  }
-  return "foreign";
-}
-
-/** Ask an already-running instance to focus itself, optionally with a link. */
-export async function handOffToRunningInstance(
-  deepLink?: string
-): Promise<boolean> {
-  try {
-    const response = await fetch(`${UI_ORIGIN}${HEALTH_PATH}`, {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ action: "focus", deepLink })
-    });
-    await response.body?.cancel();
-    return response.ok;
-  } catch {
-    return false;
-  }
-}
-
-export class PortUnavailableError extends Error {
-  constructor() {
-    super(
-      `Another program is already listening on ${UI_ORIGIN}. Openotes serves ` +
-        `its interface on a fixed port so the browser storage holding your ` +
-        `settings and keys keeps the same origin between launches; starting ` +
-        `on a different port would make the app look freshly installed. ` +
-        `Close whatever is using port ${UI_PORT} and start Openotes again.`
-    );
-    this.name = "PortUnavailableError";
-  }
+  return `http://127.0.0.1:${fallbackPort ?? 0}`;
 }
 
 export async function startUiServer(
   options: UiServerOptions
 ): Promise<RunningUiServer> {
   const root = await Deno.realPath(options.root);
-  const state = await probePort();
-  if (state === "foreign") throw new PortUnavailableError();
-  if (state === "ours") {
-    throw new Error(
-      "Another Openotes instance is already running. This one will hand over."
-    );
-  }
 
+  // The port here is a request, not a guarantee: under `deno desktop` the
+  // runtime overrides it. onListen reports what was actually assigned.
+  let origin = assignedOrigin();
   const server = Deno.serve(
-    { hostname: UI_HOST, port: UI_PORT, onListen: () => {} },
+    {
+      hostname: "127.0.0.1",
+      port: 0,
+      onListen: (address) => {
+        origin = `http://${address.hostname}:${address.port}`;
+      }
+    },
     async (request) => {
       const url = new URL(request.url);
 
       if (url.pathname === HEALTH_PATH) {
-        if (request.method === "POST") {
-          try {
-            const body = await request.json();
-            if (body?.deepLink && typeof body.deepLink === "string") {
-              options.onDeepLink?.(body.deepLink);
-            } else {
-              options.onDeepLink?.("");
+        return new Response(
+          JSON.stringify({ ok: true, instance: options.instanceId }),
+          {
+            headers: {
+              "content-type": "application/json",
+              [INSTANCE_HEADER]: options.instanceId
             }
-          } catch {
-            options.onDeepLink?.("");
           }
-          return new Response(null, {
-            status: 204,
-            headers: { [INSTANCE_HEADER]: options.instanceId }
-          });
-        }
-        return new Response("ok", {
-          headers: { [INSTANCE_HEADER]: options.instanceId }
-        });
+        );
       }
 
       if (request.method !== "GET" && request.method !== "HEAD") {
@@ -219,10 +146,12 @@ export async function startUiServer(
     }
   );
 
-  log.info("UI server listening", { origin: UI_ORIGIN, root });
+  log.info("Interface server started", { origin, root });
 
   return {
-    origin: UI_ORIGIN,
+    get origin() {
+      return origin;
+    },
     shutdown: () => server.shutdown()
   };
 }
@@ -239,8 +168,9 @@ async function serveStatic(
     return new Response("Bad Request", { status: 400 });
   }
 
-  // Normalize and confine to the UI root. The UI is trusted content, but a
-  // traversal here would turn an XSS in a note into arbitrary file reads.
+  // Normalize and confine to the interface root. The interface is trusted
+  // content, but a traversal here would turn an XSS in a note into
+  // arbitrary file reads.
   const relative = normalize(requested).replace(/^([/\\])+/, "");
   if (relative.split(/[/\\]/).includes("..")) {
     return new Response("Forbidden", { status: 403 });
@@ -259,7 +189,7 @@ async function serveStatic(
   }
 
   // Single-page app: unknown non-asset routes fall through to index.html so
-  // the hash/router-driven views keep working on a hard reload.
+  // the router-driven views keep working on a hard reload.
   if (!stat) {
     if (extname(relative)) return new Response("Not Found", { status: 404 });
     filePath = join(root, "index.html");
@@ -278,10 +208,7 @@ async function serveStatic(
     "content-type": MIME_TYPES[extname(filePath).toLowerCase()] ??
       "application/octet-stream",
     "content-length": String(stat.size),
-    // The renderer is local content that must not be reachable from a page
-    // in the user's browser, and must not reach the network on its own.
     "cross-origin-opener-policy": "same-origin",
-    "cross-origin-embedder-policy": "require-corp",
     "x-content-type-options": "nosniff",
     "cache-control": filePath.endsWith("index.html")
       ? "no-cache"

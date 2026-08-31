@@ -92,6 +92,7 @@
   "permissions": {
     "app": {
       "env": [
+        "DENO_SERVE_ADDRESS",
         "OPENOTES_DATA_DIR",
         "OPENOTES_UI_ROOT",
         "OPENOTES_NATIVE_DIR",

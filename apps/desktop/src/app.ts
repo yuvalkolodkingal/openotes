@@ -31,6 +31,7 @@ import { logger } from "./native/logger.ts";
 import { SettingsStore } from "./native/settings.ts";
 import { SqliteService } from "./native/sqlite.ts";
 import { ExportWriter, FileStorage } from "./native/filesystem.ts";
+import { KeyValueStore } from "./native/keyvalue.ts";
 import {
   Clipboard,
   Dialogs,
@@ -71,6 +72,7 @@ export interface AppContext {
   sqlite: SqliteService;
   files: FileStorage;
   exports: ExportWriter;
+  storage: KeyValueStore;
   sync: SyncService;
   backups: BackupService;
   updater: UpdateService;
@@ -122,6 +124,7 @@ export async function createApp(options: CreateAppOptions): Promise<AppContext> 
   await sqlite.initialize();
   const files = new FileStorage();
   await files.cleanupPartials();
+  const storage = new KeyValueStore(appDataDir());
 
   const shell = new Shell();
   const dialogs = new Dialogs();
@@ -159,6 +162,7 @@ export async function createApp(options: CreateAppOptions): Promise<AppContext> 
     sqlite,
     files,
     exports,
+    storage,
     shell,
     dialogs,
     notifications,
@@ -232,6 +236,7 @@ export async function createApp(options: CreateAppOptions): Promise<AppContext> 
       context.sync?.stop();
       exports.closeAll();
       files.closeAll();
+      await storage.flush();
       sqlite.closeAll();
       await settings.flush();
       logger.close();

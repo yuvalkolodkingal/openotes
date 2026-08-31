@@ -103,6 +103,17 @@ export const PROCEDURE_NAMES = [
   "backups.write",
   "backups.close",
 
+  // --- durable renderer storage ---
+  // The webview's own localStorage/IndexedDB cannot be used: the runtime
+  // assigns a different port on every launch, so the page's origin changes
+  // and its storage is orphaned. See native/keyvalue.ts.
+  "storage.get",
+  "storage.set",
+  "storage.remove",
+  "storage.keys",
+  "storage.entries",
+  "storage.clear",
+
   // --- key storage ---
   "safeStorage.isEncryptionAvailable",
   "safeStorage.encryptString",

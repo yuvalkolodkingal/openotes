@@ -33,12 +33,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 import { join } from "@std/path";
 import { APP_NAME, APP_VERSION, DEEP_LINK_SCHEME } from "./src/constants.ts";
 import { logger } from "./src/native/logger.ts";
-import {
-  handOffToRunningInstance,
-  probePort,
-  startUiServer,
-  UI_ORIGIN
-} from "./src/native/server.ts";
+import { startUiServer } from "./src/native/server.ts";
 import { createApp, type WindowController } from "./src/app.ts";
 import { createHandlers, dispatch } from "./src/rpc/handlers.ts";
 import type { EventName } from "./src/rpc/protocol.ts";
@@ -132,30 +127,24 @@ async function main() {
   const cli = await parseArguments(Deno.args);
   const deepLink = deepLinkFromArgs(Deno.args);
 
-  // Single instance: a second launch focuses the first and hands over the
-  // deep link rather than opening a second window on a taken port.
-  const portState = await probePort();
-  if (portState === "ours") {
-    log.info("Another instance is already running; handing over");
-    const handedOff = await handOffToRunningInstance(deepLink);
-    if (!handedOff) {
-      console.error(
-        `${APP_NAME} is already running but did not respond. ` +
-          `Close it and try again.`
-      );
-    }
+  // Single instance is enforced by a lock file rather than by probing a
+  // port: the interface server is only reachable by this process's own
+  // webview, so a second instance cannot talk to the first over HTTP.
+  const lock = await acquireInstanceLock();
+  if (lock === undefined) {
+    console.error(
+      `${APP_NAME} is already running. Bring the existing window to the ` +
+        `front instead of starting a second copy.`
+    );
     Deno.exit(0);
   }
+  // Held for the lifetime of the process; the kernel releases it on exit.
+  void lock;
 
   const uiRoot = resolveUiRoot();
   const instanceId = crypto.randomUUID();
 
-  let onDeepLink: (url: string) => void = () => {};
-  const server = await startUiServer({
-    root: uiRoot,
-    instanceId,
-    onDeepLink: (url) => onDeepLink(url)
-  });
+  const server = await startUiServer({ root: uiRoot, instanceId });
 
   const windowState = { maximized: false };
   const window = new Deno.BrowserWindow({
@@ -178,11 +167,6 @@ async function main() {
   }
   windowState.maximized = savedWindow.maximized;
 
-  onDeepLink = (url) => {
-    controller.focus();
-    if (url) app.emit("bridge.openLink", url);
-  };
-
   // ---- bindings: the entire renderer -> runtime surface ----
 
   const handlers = createHandlers();
@@ -200,7 +184,7 @@ async function main() {
   window.bind("hello", () => ({
     app: APP_NAME,
     version: APP_VERSION,
-    origin: UI_ORIGIN,
+    origin: server.origin,
     platform: Deno.build.os,
     deno: Deno.version.deno
   }));
@@ -264,22 +248,66 @@ async function main() {
 
   // ---- go ----
 
-  const startUrl = cli.hidden ? undefined : UI_ORIGIN;
-  if (startUrl) {
-    window.navigate(hashRouteFor(cli, startUrl));
-    window.show();
-  } else {
-    window.hide();
-  }
+  window.navigate(hashRouteFor(cli, server.origin));
+  if (cli.hidden) window.hide();
+  else window.show();
 
   log.info(`${APP_NAME} ${APP_VERSION} started`, {
-    origin: UI_ORIGIN,
+    origin: server.origin,
     uiRoot,
     cacheDir: cacheDir()
   });
 }
 
-/** Turn CLI intents into the UI's hash routes, as upstream did. */
+/**
+ * Single-instance lock.
+ *
+ * An advisory file lock, not a pid file. The kernel releases it when the
+ * process dies however it dies, so a crash cannot leave the application
+ * refusing to start — which a pid file does as soon as the recorded pid is
+ * reused by something unrelated.
+ *
+ * The lock is held for the process's lifetime; the returned handle exists
+ * so the caller keeps a reference and the file is not closed early.
+ */
+function instanceLockPath(): string {
+  return join(cacheDir(), "instance.lock");
+}
+
+async function acquireInstanceLock(): Promise<Deno.FsFile | undefined> {
+  const path = instanceLockPath();
+  await Deno.mkdir(cacheDir(), { recursive: true }).catch(() => {});
+
+  let file: Deno.FsFile;
+  try {
+    file = await Deno.open(path, { create: true, write: true, read: true });
+  } catch (error) {
+    // If the lock file cannot even be created, do not block start-up over
+    // it: opening the user's notes matters more than the guarantee.
+    log.warn("Could not create the instance lock; continuing without it", {
+      error: error instanceof Error ? error.message : String(error)
+    });
+    return undefined as unknown as Deno.FsFile;
+  }
+
+  try {
+    // Exclusive, non-blocking: fails immediately if another instance holds it.
+    file.lockSync(true);
+  } catch {
+    file.close();
+    return undefined;
+  }
+
+  try {
+    await file.write(new TextEncoder().encode(String(Deno.pid)));
+  } catch {
+    /* the pid is informational only */
+  }
+  return file;
+}
+
+
+/** Turn CLI intents into the interface's hash routes, as upstream did. */
 function hashRouteFor(
   cli: Awaited<ReturnType<typeof parseArguments>>,
   origin: string
