@@ -78,6 +78,37 @@
         --highlight-color: var(--hover);
       }
 
+      /*
+        The splash is painted before the theme engine has written anything
+        into #theme-colors, so every var() it uses resolves to nothing. An
+        SVG with an invalid stroke falls back to `none` and an invalid fill
+        falls back to black, which on a dark page is a black mark on a black
+        ground — the logo simply is not there until the app has loaded. In
+        light mode black happened to look deliberate, which is why it went
+        unnoticed. These are boot values for the splash alone; the real
+        theme replaces them the moment it lands, and the splash is gone by
+        then anyway.
+      */
+      #splash {
+        --background: #fafaf9;
+        --heading: #1c1917;
+        --paragraph: #57534e;
+      }
+
+      html[data-theme="dark"] #splash {
+        --background: #171412;
+        --heading: #f5f5f4;
+        --paragraph: #e7e5e4;
+      }
+
+      @media (prefers-color-scheme: dark) {
+        html:not([data-theme="light"]) #splash {
+          --background: #171412;
+          --heading: #f5f5f4;
+          --paragraph: #e7e5e4;
+        }
+      }
+
       #splash {
         background-color: var(--background);
         height: 100%;
