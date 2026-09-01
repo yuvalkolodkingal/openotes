@@ -210,15 +210,29 @@ export async function startUiServer(
         return new Response("Method Not Allowed", { status: 405 });
       }
 
-      // The webview's own requests are same-origin navigations and
-      // subresource loads, neither of which carries an Origin. A page in
-      // the user's browser trying to load the interface does.
-      if (request.headers.get("origin")) {
+      // Refuse anything that is not the application asking for itself.
+      //
+      // The Host must be loopback, and an Origin — when there is one — must
+      // name this very server.
+      //
+      // "Carries an Origin at all" was the first version of this check, on
+      // the reasoning that the webview only makes same-origin navigations
+      // and subresource loads, and those carry no Origin. That is wrong,
+      // and wrong in the worst way: Vite emits the entry bundle as
+      // `<script type="module" crossorigin>` and the stylesheet as
+      // `<link rel="stylesheet" crossorigin>`, and a crossorigin
+      // subresource is fetched in CORS mode, which sends an Origin —
+      // naming this server. So the application 403'd its own JavaScript
+      // and every window stopped at the splash screen. Comparing, rather
+      // than refusing outright, keeps the property that matters (a page on
+      // another origin cannot read the interface) without that.
+      const authority = request.headers.get("host") ?? "";
+      const hostname = authority.replace(/:\d+$/, "").replace(/^\[|\]$/g, "");
+      if (hostname && !isLoopbackHost(hostname)) {
         return new Response("Forbidden", { status: 403 });
       }
-      const host = (request.headers.get("host") ?? "").replace(/:\d+$/, "")
-        .replace(/^\[|\]$/g, "");
-      if (host && !isLoopbackHost(host)) {
+      const requestOrigin = request.headers.get("origin");
+      if (requestOrigin && requestOrigin !== `http://${authority}`) {
         return new Response("Forbidden", { status: 403 });
       }
 

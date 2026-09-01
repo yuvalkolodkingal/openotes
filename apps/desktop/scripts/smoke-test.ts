@@ -305,7 +305,7 @@ function findLine(
  * Is the interface port reachable from this process? Measured on Deno 2.9.6:
  * yes, it is. Reported for information, never as a failure — the server
  * hands out the built interface and nothing else, and it refuses a request
- * carrying an Origin or a non-loopback Host (see native/server.ts).
+ * from a non-loopback Host or a foreign Origin (see native/server.ts).
  */
 async function probeInterfacePort(origin: string): Promise<string> {
   const match = /^http:\/\/([^:/]+):(\d+)/.exec(origin);
@@ -337,6 +337,95 @@ async function probeInterfacePort(origin: string): Promise<string> {
         error instanceof Error ? error.message : String(error)
       })`
     );
+  }
+}
+
+/**
+ * Ask the running application for its own interface, the way the webview
+ * asks for it — then ask for every script and stylesheet the document
+ * names, carrying the Origin a browser sends.
+ *
+ * This is the check that was missing. 2.1.0 shipped a server that refused
+ * any request carrying an Origin header, on the reasoning that the webview
+ * never sends one. Vite marks the entry bundle and the stylesheet
+ * `crossorigin`, and a crossorigin subresource is fetched in CORS mode,
+ * which does send one — so the application 403'd its own JavaScript and
+ * every window sat at the splash screen forever. Every check here passed,
+ * because not one of them asked for a subresource.
+ *
+ * Nothing about this needs a browser: the failure is in what the server
+ * answers, and that can simply be asked.
+ */
+async function checkBootResources(
+  origin: string,
+): Promise<{ ok: boolean; detail: string }> {
+  const request = async (path: string, headers: Record<string, string>) => {
+    const url = new URL(path, origin);
+    const response = await fetch(url, { headers });
+    const body = await response.text();
+    return { status: response.status, body };
+  };
+
+  try {
+    const document = await request("/", { origin });
+    if (document.status !== 200) {
+      return {
+        ok: false,
+        detail: `the document itself answered ${document.status}`,
+      };
+    }
+
+    // Every same-origin script and stylesheet the document pulls in.
+    const references = [
+      ...document.body.matchAll(/<script\b[^>]*\bsrc="([^"]+)"/g),
+      ...document.body.matchAll(
+        /<link\b[^>]*\brel="stylesheet"[^>]*\bhref="([^"]+)"/g,
+      ),
+      ...document.body.matchAll(
+        /<link\b[^>]*\bhref="([^"]+)"[^>]*\brel="stylesheet"/g,
+      ),
+    ]
+      .map((match) => match[1])
+      .filter((href) =>
+        !/^(https?:)?\/\//.test(href) && !href.startsWith("data:")
+      );
+
+    if (references.length === 0) {
+      return {
+        ok: false,
+        detail: "the document names no script or stylesheet at all",
+      };
+    }
+
+    const refused: string[] = [];
+    for (const reference of references) {
+      // The Origin a browser sends for a `crossorigin` subresource of a
+      // page served from this origin.
+      const response = await request(reference, { origin });
+      if (response.status !== 200) {
+        refused.push(`${reference} -> ${response.status}`);
+      }
+    }
+    if (refused.length > 0) {
+      return {
+        ok: false,
+        detail: `the interface cannot load its own ${
+          refused.length === 1 ? "resource" : "resources"
+        }: ${refused.join(", ")}`,
+      };
+    }
+    return {
+      ok: true,
+      detail: `the document and all ${references.length} of its scripts and ` +
+        `stylesheets are served to the page's own origin`,
+    };
+  } catch (error) {
+    return {
+      ok: false,
+      detail: `could not ask: ${
+        error instanceof Error ? error.message : String(error)
+      }`,
+    };
   }
 }
 
@@ -567,10 +656,26 @@ async function smokeTest(options: SmokeOptions): Promise<number> {
     );
   }
 
-  // ---- informational -------------------------------------------------------
   const origin = typeof serverLine?.context?.origin === "string"
     ? serverLine.context.origin
     : undefined;
+
+  if (origin) {
+    const boot = await checkBootResources(origin);
+    record(
+      "the interface can load itself",
+      boot.ok ? "pass" : "fail",
+      boot.detail,
+    );
+  } else {
+    record(
+      "the interface can load itself",
+      "fail",
+      "the server reported no origin, so the interface could not be asked for",
+    );
+  }
+
+  // ---- informational -------------------------------------------------------
   record(
     "interface port from outside",
     "skipped",
@@ -595,7 +700,8 @@ async function smokeTest(options: SmokeOptions): Promise<number> {
       `               serving this build's own ui/ directory; the encrypted\n` +
       `               SQLite library loaded from this build's own native/\n` +
       `               directory and the engine was verified to encrypt; the\n` +
-      `               application logged that it started; and the output\n` +
+      `               application logged that it started; the interface can\n` +
+      `               load its own scripts and stylesheets; and the output\n` +
       `               carries no start-up failure.\n` +
       `  not checked: anything inside the window. This cannot see whether the\n` +
       `               interface rendered, whether a note can be written, or\n` +

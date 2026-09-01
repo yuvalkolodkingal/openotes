@@ -18,7 +18,7 @@ You should have received a copy of the GNU General Public License
 along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
-import { assert, assertStringIncludes } from "@std/assert";
+import { assert, assertEquals, assertStringIncludes } from "@std/assert";
 import { injectBootTheme } from "../src/native/server.ts";
 
 const DOCUMENT = `<!DOCTYPE html>
@@ -60,4 +60,183 @@ Deno.test("an existing data-theme is replaced, not duplicated", () => {
 Deno.test("a document without a head still gets the boot theme", () => {
   const out = injectBootTheme("<html><body>hi</body></html>", "dark");
   assertStringIncludes(out, "boot-theme");
+});
+
+/**
+ * The request guard, against a real listener.
+ *
+ * These exist because the first version of the guard refused every request
+ * that carried an Origin header, on the reasoning that the webview never
+ * sends one. Vite marks the entry script and the stylesheet `crossorigin`,
+ * so the webview fetches its own bundle in CORS mode and does send one —
+ * and the application 403'd its own JavaScript. Every window stopped at the
+ * splash screen, and nothing in the suite noticed, because nothing here
+ * asked the server for a subresource the way a browser asks for it.
+ */
+
+import { startUiServer } from "../src/native/server.ts";
+import { join } from "@std/path";
+
+async function withServer(
+  body: (base: string) => Promise<void>,
+  files: Record<string, string> = {
+    "index.html": "<!DOCTYPE html><html><head></head><body></body></html>",
+    "assets/app.js": "export const ok = 1;",
+    "assets/app.css": ":root{}",
+  },
+) {
+  const root = await Deno.makeTempDir({ prefix: "openotes-ui-" });
+  for (const [name, content] of Object.entries(files)) {
+    const path = join(root, name);
+    await Deno.mkdir(join(path, ".."), { recursive: true });
+    await Deno.writeTextFile(path, content);
+  }
+  const server = await startUiServer({ root, instanceId: "test" });
+  try {
+    await body(server.origin);
+  } finally {
+    await server.shutdown();
+    await Deno.remove(root, { recursive: true });
+  }
+}
+
+/** What a browser sends for a `crossorigin` subresource of its own page. */
+function sameOrigin(base: string): HeadersInit {
+  return { origin: base };
+}
+
+Deno.test("the interface can load its own crossorigin bundle", async () => {
+  await withServer(async (base) => {
+    for (const path of ["/assets/app.js", "/assets/app.css"]) {
+      const response = await fetch(base + path, { headers: sameOrigin(base) });
+      await response.body?.cancel();
+      assert(
+        response.status === 200,
+        `${path} with its own Origin answered ${response.status}; the ` +
+          `window would never get past the splash`,
+      );
+    }
+  });
+});
+
+Deno.test("a subresource with no Origin is served too", async () => {
+  await withServer(async (base) => {
+    const response = await fetch(base + "/assets/app.js");
+    await response.body?.cancel();
+    assertEquals(response.status, 200);
+  });
+});
+
+Deno.test("a page on another origin is still refused", async () => {
+  await withServer(async (base) => {
+    for (
+      const origin of ["https://example.invalid", "http://127.0.0.1:1", "null"]
+    ) {
+      const response = await fetch(base + "/assets/app.js", {
+        headers: { origin },
+      });
+      await response.body?.cancel();
+      assertEquals(response.status, 403, origin);
+    }
+  });
+});
+
+/**
+ * Speak HTTP down a socket, because `fetch` refuses to set Host — and Host
+ * is exactly what a DNS-rebinding attack controls.
+ */
+async function rawStatus(
+  base: string,
+  path: string,
+  headers: Record<string, string>,
+): Promise<number> {
+  const { hostname, port } = new URL(base);
+  const connection = await Deno.connect({
+    hostname,
+    port: Number(port),
+  });
+  try {
+    const lines = Object.entries(headers).map(([k, v]) => `${k}: ${v}`);
+    await connection.write(
+      new TextEncoder().encode(
+        `GET ${path} HTTP/1.1\r\n${lines.join("\r\n")}\r\n` +
+          `Connection: close\r\n\r\n`,
+      ),
+    );
+    const buffer = new Uint8Array(4096);
+    const read = await connection.read(buffer);
+    const status = new TextDecoder().decode(buffer.subarray(0, read ?? 0))
+      .split(" ")[1];
+    return Number(status);
+  } finally {
+    try {
+      connection.close();
+    } catch {
+      // already closed
+    }
+  }
+}
+
+Deno.test("a request routed through a DNS name is refused", async () => {
+  // DNS rebinding: a name the attacker controls, resolved to 127.0.0.1.
+  await withServer(async (base) => {
+    const { host } = new URL(base);
+    assertEquals(
+      await rawStatus(base, "/assets/app.js", { Host: "attacker.example" }),
+      403,
+    );
+    assertEquals(await rawStatus(base, "/assets/app.js", { Host: host }), 200);
+  });
+});
+
+Deno.test("an Origin naming a different loopback port is refused", async () => {
+  // Another application on this machine, served on its own port, is not
+  // this one — and comparing against the Host is what tells them apart.
+  await withServer(async (base) => {
+    const { host, port } = new URL(base);
+    const other = `http://127.0.0.1:${
+      Number(port) === 1 ? 2 : Number(port) + 1
+    }`;
+    assertEquals(
+      await rawStatus(base, "/assets/app.js", { Host: host, Origin: other }),
+      403,
+    );
+    assertEquals(
+      await rawStatus(base, "/assets/app.js", {
+        Host: host,
+        Origin: `http://${host}`,
+      }),
+      200,
+    );
+  });
+});
+
+Deno.test("the document is served, and carries the boot theme", async () => {
+  await withServer(async (base) => {
+    const response = await fetch(base + "/", { headers: sameOrigin(base) });
+    const html = await response.text();
+    assertEquals(response.status, 200);
+    assertStringIncludes(html, 'data-theme="light"');
+    assertStringIncludes(html, 'id="boot-theme"');
+  });
+});
+
+Deno.test("a rewritten document's content-length matches its bytes", async () => {
+  // injectBootTheme makes the body longer than the file on disk. A stale
+  // content-length would truncate the document and boot would die exactly
+  // as it did for the Origin bug, with no error anywhere.
+  await withServer(async (base) => {
+    const response = await fetch(base + "/", { headers: sameOrigin(base) });
+    const declared = Number(response.headers.get("content-length"));
+    const body = new Uint8Array(await response.arrayBuffer());
+    assertEquals(declared, body.byteLength);
+  });
+});
+
+Deno.test("only GET and HEAD are answered", async () => {
+  await withServer(async (base) => {
+    const response = await fetch(base + "/assets/app.js", { method: "POST" });
+    await response.body?.cancel();
+    assertEquals(response.status, 405);
+  });
 });
