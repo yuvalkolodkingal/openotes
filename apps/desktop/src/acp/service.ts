@@ -68,10 +68,13 @@ export interface AcpServiceOptions {
   readNote(sessionId: string, path: string): Promise<string>;
   /** Apply Markdown back to a note. */
   writeNote(sessionId: string, path: string, content: string): Promise<void>;
-  /** Whether the user has consented to launching this agent before. */
+  /**
+   * Whether the user has consented to launching this agent before.
+   *
+   * Recording that consent is the RPC handler's job, not this service's: it
+   * owns the settings store. This asks the question and never answers it.
+   */
   isApproved(agentId: string, resolvedPath: string): boolean;
-  /** Record consent after the user grants it. */
-  approve(agentId: string, resolvedPath: string): void;
 }
 
 interface Connection {
@@ -291,11 +294,6 @@ export class AcpService {
     modeId: string,
   ): Promise<void> {
     await this.connectionFor(agentId).client.setMode(sessionId, modeId);
-  }
-
-  /** Grant the consent a connect() attempt asked for, then retry it. */
-  approveAgent(agentId: string, resolvedPath: string): void {
-    this.options.approve(agentId, resolvedPath);
   }
 
   /** The tail of what the agent printed, for diagnosing a failed launch. */

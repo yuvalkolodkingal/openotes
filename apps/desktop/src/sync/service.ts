@@ -36,7 +36,7 @@ import type { SerializedKey } from "@notesnook/crypto";
 import { join } from "@std/path";
 import { appDataDir, ensureDir } from "../native/paths.ts";
 import { logger } from "../native/logger.ts";
-import { USER_AGENT } from "../constants.ts";
+import { APP_VERSION, USER_AGENT } from "../constants.ts";
 import type { SettingsStore } from "../native/settings.ts";
 import type { CredentialStore } from "../security/credentials.ts";
 import type { AttachmentChunkStore } from "../native/attachment-store.ts";
@@ -194,7 +194,7 @@ export class SyncService {
       attachments: new DiskAttachments(this.options.files),
       syncAttachments: config.syncAttachments,
       deviceName: this.options.settings.get("sync").deviceName ?? hostName(),
-      appVersion: "1.0.0",
+      appVersion: APP_VERSION,
       platform: Deno.build.os,
       onStatus: (status) => this.setStatus(status),
       onConflict: (record) =>

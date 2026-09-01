@@ -111,7 +111,6 @@ export function createHandlers(): Record<string, Handler> {
     "acp.approve": async (input, context) => {
       const agentId = asString(input, "agentId", 64);
       const resolvedPath = asString(input, "resolvedPath", 4096);
-      context.acp.approveAgent(agentId, resolvedPath);
       await context.settings.patchAi({
         approvedAgents: [
           ...context.settings.get("ai").approvedAgents.filter(

@@ -47,6 +47,15 @@ import { fromFileUrl, join } from "@std/path";
 import { copy, emptyDir, exists } from "@std/fs";
 
 export const ROOT = fromFileUrl(new URL("../../../", import.meta.url));
+
+/**
+ * The repo's build scripts are TypeScript, which Node 22 runs directly. None
+ * of those packages declare "type": "module", so Node parses each file as
+ * CommonJS, fails, and re-parses as ESM -- printing a warning every time.
+ * Suppressing that one code keeps the build output readable and leaves every
+ * other warning intact.
+ */
+const WARNING_FLAG = "--disable-warning=MODULE_TYPELESS_PACKAGE_JSON";
 export const WEB_DIR = join(ROOT, "apps", "web");
 export const WEB_BUILD_DIR = join(WEB_DIR, "build");
 export const UI_DIR = join(ROOT, "apps", "desktop", "ui");
@@ -235,14 +244,17 @@ async function buildWorkspaceLibraries(force: boolean) {
   // the Deno-backed shims added to PATH.
   const shimDir = await ensureNodeToolchain();
   const env = withShim(shimDir);
-  const executor = join(ROOT, "scripts", "execute.mjs");
+  const executor = join(ROOT, "scripts", "execute.ts");
 
   for (const dependency of unbuilt) {
     // `scripts/execute.ts <package>:build` resolves that package's own
     // `file:` dependencies first, so the order here does not matter and
     // already-built packages are skipped through .taskcache.
     const shortName = dependency.name.replace(/^@[^/]+\//, "");
-    await run("node", [executor, `${shortName}:build`], { cwd: ROOT, env });
+    await run("node", [WARNING_FLAG, executor, `${shortName}:build`], {
+      cwd: ROOT,
+      env,
+    });
   }
 }
 
@@ -266,10 +278,14 @@ async function ensureNpmDependencies(shimDir: string | undefined) {
   if (!(await exists(join(ROOT, "node_modules", "listr2")))) {
     await run("npm", ["ci", "--no-audit", "--no-fund"], { cwd: ROOT, env });
   }
-  await run("node", [join(ROOT, "scripts", "bootstrap.mjs"), "--scope=web"], {
-    cwd: ROOT,
-    env,
-  });
+  await run(
+    "node",
+    [WARNING_FLAG, join(ROOT, "scripts", "bootstrap.ts"), "--scope=web"],
+    {
+      cwd: ROOT,
+      env,
+    },
+  );
 
   if (!(await exists(VITE_ENTRY))) {
     throw new Error(

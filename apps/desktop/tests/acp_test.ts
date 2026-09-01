@@ -127,7 +127,6 @@ Deno.test("connecting refuses anything that is not a catalog entry", async () =>
     writeNote: () => Promise.resolve(),
     // Approve everything, so a refusal can only come from the id itself.
     isApproved: () => true,
-    approve: () => {},
   });
 
   for (const id of ["custom", "sh", "definitely-not-an-agent", "../../bin/sh"]) {

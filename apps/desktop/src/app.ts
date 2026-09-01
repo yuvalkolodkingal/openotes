@@ -281,9 +281,6 @@ export async function createApp(
           approved.agentId === agentId &&
           approved.resolvedPath === resolvedPath,
       ),
-    approve: () => {
-      // Persisted by the acp.approve handler, which owns the settings write.
-    },
   });
 
   const sync = new SyncService({
