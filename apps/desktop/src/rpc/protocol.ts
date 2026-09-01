@@ -189,6 +189,7 @@ export const PROCEDURE_NAMES = [
   "acp.listAgents",
   "acp.connect",
   "acp.approve",
+  "acp.forgetApprovals",
   "acp.disconnect",
   "acp.authenticate",
   "acp.newSession",

@@ -123,6 +123,15 @@ export function createHandlers(): Record<string, Handler> {
       return { approved: true };
     },
 
+    "acp.forgetApprovals": async (_input, context) => {
+      // All-or-nothing on purpose: a per-agent list would imply the approvals
+      // are fine-grained, when what each one actually pins is a single binary
+      // at a single path.
+      await context.acp.stop();
+      await context.settings.patchAi({ approvedAgents: [] });
+      return { forgotten: true };
+    },
+
     "acp.disconnect": (input, context) =>
       context.acp.disconnect(asString(input, "agentId", 64)),
 

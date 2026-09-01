@@ -231,7 +231,8 @@ import {
   mdiConsoleLine,
   mdiSpellcheck,
   mdiDeleteSweepOutline,
-  mdiCloseCircle
+  mdiCloseCircle,
+  mdiRobotOutline
 } from "@mdi/js";
 import { useTheme } from "@emotion/react";
 import { Theme } from "@notesnook/theme";
@@ -325,6 +326,7 @@ export function createIcon(path: string, rotate = false) {
   return NNIcon;
 }
 
+export const AiAssistant = createIcon(mdiRobotOutline);
 export const Plus = createIcon(mdiPlus);
 export const NoteAdd = createIcon(mdiNoteEditOutline);
 export const Note = createIcon(mdiNoteOutline);

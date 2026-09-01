@@ -24,3 +24,15 @@ export const desktop: typeof bridge | undefined = undefined;
 export function createWritableStream(filename: string) {
   return createWriteStream(filename);
 }
+
+/**
+ * No runtime asks the web build anything, so registering a handler is a no-op
+ * that returns an unregister function -- matching the desktop signature so
+ * call sites do not need a platform check.
+ */
+export function handleDesktopRequest(
+  _name: string,
+  _handler: (payload: unknown) => Promise<unknown>
+): () => void {
+  return () => {};
+}

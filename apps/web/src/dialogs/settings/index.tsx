@@ -34,7 +34,8 @@ import {
   Notification,
   Privacy,
   ShieldLock,
-  Sync
+  Sync,
+  AiAssistant as AiAssistantIcon
 } from "../../components/icons";
 import NavigationItem from "../../components/navigation-menu/navigation-item";
 import { FlexScrollContainer } from "../../components/scroll-container";
@@ -48,6 +49,7 @@ import {
   SettingsGroup
 } from "./types";
 import { SyncSettings } from "./sync-settings";
+import { AiSettings } from "./ai-settings";
 import { BehaviourSettings } from "./behaviour-settings";
 import { DesktopIntegrationSettings } from "./desktop-integration-settings";
 import { NotificationsSettings } from "./notifications-settings";
@@ -84,6 +86,20 @@ const sectionGroups: SectionGroup[] = [
     key: "sync",
     title: strings.sync(),
     sections: [{ key: "sync", title: strings.sync(), icon: Sync }]
+  },
+  {
+    key: "ai",
+    title: "AI",
+    sections: [
+      {
+        key: "ai",
+        title: "AI assistant",
+        icon: AiAssistantIcon,
+        // Running an agent means starting a separate program, which only the
+        // desktop application can do.
+        isHidden: () => !IS_DESKTOP_APP
+      }
+    ]
   },
   {
     key: "customization",
@@ -135,6 +151,7 @@ const sectionGroups: SectionGroup[] = [
 
 const SettingsGroups = [
   ...SyncSettings,
+  ...AiSettings,
   ...AppearanceSettings,
   ...BehaviourSettings,
   ...DesktopIntegrationSettings,

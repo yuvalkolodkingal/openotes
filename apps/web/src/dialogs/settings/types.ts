@@ -22,6 +22,7 @@ import { Icon } from "../../components/icons";
 
 const SectionKeys = [
   "sync",
+  "ai",
   "appearance",
   "behaviour",
   "desktop",

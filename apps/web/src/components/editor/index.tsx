@@ -69,6 +69,7 @@ import { Freeze } from "react-freeze";
 import { UnlockView } from "../unlock";
 import DiffViewer from "../diff-viewer";
 import TableOfContents from "./table-of-contents";
+import AiAssistant from "../ai-assistant";
 import { scrollIntoViewById } from "@notesnook/editor";
 import { IEditor } from "./types";
 import { EditorActionBar } from "./action-bar";
@@ -130,6 +131,7 @@ export default function TabsView() {
     (store) => store.arePropertiesVisible
   );
   const isTOCVisible = useEditorStore((store) => store.isTOCVisible);
+  const isAiVisible = useEditorStore((store) => store.isAiVisible);
   const [dropRef, overlayRef] = useDragOverlay();
 
   return (
@@ -224,6 +226,11 @@ export default function TabsView() {
           {isTOCVisible && activeSession ? (
             <Pane id="table-of-contents-pane" initialSize={300} minSize={300}>
               <TableOfContents sessionId={activeSession.id} />
+            </Pane>
+          ) : null}
+          {isAiVisible ? (
+            <Pane id="ai-panel" initialSize={360} minSize={300}>
+              <AiAssistant />
             </Pane>
           ) : null}
           {arePropertiesVisible &&
