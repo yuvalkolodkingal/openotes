@@ -179,6 +179,15 @@ export const PROCEDURE_NAMES = [
   "backup.selectLocalDirectory",
   "backup.importFile",
 
+  // --- the built-in MCP endpoint for AI assistants (new in 2.1) ---
+  // The other direction from acp.*: those launch an agent, these let an
+  // assistant the user already runs connect to Openotes.
+  "mcp.getSettings",
+  "mcp.setSettings",
+  "mcp.status",
+  "mcp.clientConfig",
+  "mcp.regenerateToken",
+
   // --- capabilities ---
   "capabilities.get",
 
@@ -234,6 +243,10 @@ export const EVENT_NAMES = [
   "acp.status",
   // A request from the runtime that the interface must answer.
   "bridge.request",
+  // An assistant changed a note through the MCP endpoint; the interface
+  // holds its own cache of the vault and has to reload.
+  "mcp.notesChanged",
+  "mcp.status",
 ] as const;
 
 export type EventName = (typeof EVENT_NAMES)[number];

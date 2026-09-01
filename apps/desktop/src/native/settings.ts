@@ -96,6 +96,27 @@ export interface DesktopSettings {
  * is asked again — an agent that was swapped out is not the agent they
  * approved.
  */
+/**
+ * The built-in MCP endpoint (Settings -> AI assistant). Device-local like
+ * everything else here: which machine an assistant may reach is not a
+ * preference that should roam to another machine.
+ *
+ * Separate from AiSettings below, which is about the ACP agents Openotes
+ * launches. This is the other direction — an assistant the user already runs
+ * connecting *to* Openotes.
+ */
+export interface McpSettings {
+  /** Nothing listens until this is on. */
+  enabled: boolean;
+  /**
+   * 0 asks the OS for any free port, which is fine for a trial but changes
+   * the URL every launch. A fixed port keeps a written client config valid.
+   */
+  port: number;
+  /** Read-only until the user allows editing; write tools are not even listed. */
+  allowWrites: boolean;
+}
+
 export interface AiSettings {
   approvedAgents: {
     agentId: string;
@@ -113,6 +134,7 @@ export interface AppSettings {
   webdav: WebDavSettings;
   backup: BackupSettings;
   ai: AiSettings;
+  mcp: McpSettings;
   zoomFactor: number;
   theme: "light" | "dark" | "system";
   privacyMode: boolean;
@@ -169,6 +191,11 @@ export function defaultSettings(): AppSettings {
       backupBeforeMaintenance: true,
     },
     ai: { approvedAgents: [] },
+    mcp: {
+      enabled: false,
+      port: 4747,
+      allowWrites: false,
+    },
     zoomFactor: 1,
     theme: "system",
     privacyMode: false,
@@ -244,6 +271,11 @@ export class SettingsStore {
       ...this.state,
       backup: { ...this.state.backup, ...partial },
     };
+    await this.persist();
+  }
+
+  async patchMcp(partial: Partial<McpSettings>): Promise<void> {
+    this.state = { ...this.state, mcp: { ...this.state.mcp, ...partial } };
     await this.persist();
   }
 

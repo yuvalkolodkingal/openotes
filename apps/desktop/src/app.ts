@@ -24,6 +24,7 @@ import {
   appDataDir,
   attachmentsDir,
   cacheDir,
+  configDir,
   documentsDir,
   ensureDir,
 } from "./native/paths.ts";
@@ -46,6 +47,8 @@ import { DatabaseSyncStore } from "./sync/store-adapter.ts";
 import { SyncService } from "./sync/service.ts";
 import { BackupService } from "./backup/service.ts";
 import { UpdateService } from "./updates/updater.ts";
+import { NoteRepository } from "./mcp/notes.ts";
+import { McpServer, readOrCreateToken, rotateToken } from "./mcp/server.ts";
 import { AcpService } from "./acp/service.ts";
 import type { EventName } from "./rpc/protocol.ts";
 
@@ -85,6 +88,8 @@ export interface AppContext {
   sync: SyncService;
   backups: BackupService;
   acp: AcpService;
+  notes: NoteRepository;
+  mcp: McpServer;
   updater: UpdateService;
   shell: Shell;
   dialogs: Dialogs;
@@ -102,6 +107,10 @@ export interface AppContext {
   allowedRoots(): string[];
   refreshAllowedRoots(): void;
   hasStoredWebDavPassword(): boolean;
+  /** Apply the current mcp settings: start, stop or restart the endpoint. */
+  applyMcpSettings(): Promise<void>;
+  /** Replace the assistant token; every existing client config stops working. */
+  regenerateMcpToken(): Promise<string>;
   tailLogs(lines: number): Promise<string[]>;
   restart(): void;
   shutdown(): Promise<void>;
@@ -189,6 +198,8 @@ export async function createApp(
     backups: undefined as unknown as BackupService,
     updater: undefined as unknown as UpdateService,
     acp: undefined as unknown as AcpService,
+    notes: undefined as unknown as NoteRepository,
+    mcp: undefined as unknown as McpServer,
 
     emit,
 
@@ -231,6 +242,28 @@ export async function createApp(
     // store may be locked when the settings form asks (see settings.ts).
     hasStoredWebDavPassword: () => settings.get("webdav").passwordSaved,
 
+    async applyMcpSettings() {
+      const config = settings.get("mcp");
+      if (!config.enabled) {
+        await context.mcp.stop();
+        emit("mcp.status", context.mcp.status());
+        return;
+      }
+      const token = await readOrCreateToken(configDir());
+      await context.mcp.start({
+        port: config.port,
+        allowWrites: config.allowWrites,
+        token,
+      });
+      emit("mcp.status", context.mcp.status());
+    },
+
+    async regenerateMcpToken() {
+      const token = await rotateToken(configDir());
+      if (settings.get("mcp").enabled) await context.applyMcpSettings();
+      return token;
+    },
+
     tailLogs: (lines) => logger.tail(lines),
 
     restart() {
@@ -250,6 +283,7 @@ export async function createApp(
         });
       }
       context.sync?.stop();
+      await context.mcp?.stop();
       await context.acp?.stop();
       exports.closeAll();
       await storage.flush();
@@ -336,6 +370,25 @@ export async function createApp(
     openExternal: (url) => shell.openExternal(url),
   });
 
+  const notes = new NoteRepository({
+    sqlite,
+    databaseHandle: () => databaseHandle,
+  });
+
+  const mcp = new McpServer({
+    repository: notes,
+    configDirectory: configDir(),
+    onChanged: (change) => {
+      // An assistant just wrote to the vault behind the interface's back.
+      // Sync has to ship it, and the interface has to reload — it caches
+      // every list it renders and holds open notes in memory.
+      context.notifyLocalChange();
+      emit("mcp.notesChanged", change);
+    },
+  });
+
+  context.notes = notes;
+  context.mcp = mcp;
   context.sync = sync;
   context.backups = backups;
   context.updater = updater;
@@ -384,6 +437,19 @@ export async function createApp(
       }
     } catch (error) {
       log.warn("Could not unlock stored credentials at startup", {
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
+  }
+
+  // The assistant endpoint starts with the app rather than with the vault:
+  // a client that connects before the vault is unlocked should get a tool
+  // call that says so, not a refused connection it has to guess about.
+  if (settings.get("mcp").enabled) {
+    try {
+      await context.applyMcpSettings();
+    } catch (error) {
+      log.warn("Could not start the assistant endpoint", {
         error: error instanceof Error ? error.message : String(error),
       });
     }

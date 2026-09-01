@@ -34,7 +34,9 @@ audited software — and changes what sits underneath:
   API keys. It speaks the Agent Client Protocol, so it hosts an agent you
   already have — Claude Code, Gemini, OpenCode, Codex, Antigravity — signing
   in with your own subscription. Notes in your vault stay invisible to it.
-  See [AI.md](AI.md).
+  See [AI.md](AI.md). Openotes also answers the **Model Context Protocol**,
+  so an assistant you already run can connect to it the other way round —
+  off by default, read-only when you turn it on. See [MCP.md](MCP.md).
 - **No subscription tiers.** Every local feature is available. There is no
   paywall to remove because there is no hosted business model behind it.
 - **No Electron.** It runs on Deno Desktop using the webview your operating
@@ -223,6 +225,9 @@ Full instructions, including packaging, are in [BUILDING.md](BUILDING.md).
 | [BUILDING.md](BUILDING.md) | Development and builds, entirely in Deno |
 | [ARCHITECTURE.md](ARCHITECTURE.md) | How it is put together, and why |
 | [WEBDAV.md](WEBDAV.md) | The sync protocol, in reimplementable detail |
+| [DRIVES.md](DRIVES.md) | Syncing to Google Drive, Dropbox or OneDrive |
+| [AI.md](AI.md) | Hosting an ACP agent |
+| [MCP.md](MCP.md) | Letting an MCP client connect to Openotes |
 | [SECURITY.md](SECURITY.md) | Threat model — including what is *not* protected |
 | [PACKAGING.md](PACKAGING.md) | Every release artifact and how it is produced |
 | [UPSTREAM.md](UPSTREAM.md) | Relationship to Notesnook, and merging from it |
