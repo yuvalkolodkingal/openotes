@@ -1,6 +1,6 @@
 # Openotes design system
 
-Version 1.0
+Version 1.1
 
 ## The idea
 
@@ -53,7 +53,9 @@ Sync status has a fixed vocabulary, matching the README's indicator table. These
 
 Offline is gray, not red: working offline is a normal, supported state of the product, and the palette must say so.
 
-Dark mode swaps warm-black surfaces for paper and brightens teal to `#2dd4bf` for contrast. Full token set in `tokens.css`. All text/background pairs above meet WCAG AA at their intended sizes.
+Dark mode swaps warm-black surfaces for paper and brightens teal to `#2dd4bf` for contrast. Full token set in `tokens.css`.
+
+Dark mode is not the light palette inverted, and it is not optional detail: it has the same four surface steps (`--bg` → `--bg-raised` → `--bg-sidebar` → `--bg-panel`), the same selected-row tint, and every scope the light theme defines. A surface that is styled in one mode and left to fall back in the other is a bug — `packages/theme/tests/theme_test.ts` fails the build for it, and for any text/background pair below WCAG AA (4.5:1 for text, 3:1 for icons and the accent, disabled controls exempt). Contrast is computed, not eyeballed.
 
 ## Typography
 

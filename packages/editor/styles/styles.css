@@ -429,11 +429,13 @@ img.ProseMirror-separator {
   49% {
     border-color: unset;
   }
+  /* Was #fff, which is invisible on a light page and only ever showed up in
+     dark mode. The caret has to follow the text colour in both. */
   50% {
-    border-color: #fff;
+    border-color: currentColor;
   }
   99% {
-    border-color: #fff;
+    border-color: currentColor;
   }
 }
 .no-cursor {
@@ -667,7 +669,17 @@ p > *::selection {
   right: 0;
   bottom: 0;
   z-index: 1;
-  background-image: linear-gradient(135deg, #ffffffaa 0%, #ffffff88 5%, transparent 12%, transparent 91%, #ffffff88 97%, #ffffffaa 100%);
+  /* Was a white sheen, which flares on a dark page. currentColor follows
+     the text colour, so the highlight is light on light and dark on dark. */
+  background-image: linear-gradient(
+    135deg,
+    color-mix(in srgb, currentColor 25%, transparent) 0%,
+    color-mix(in srgb, currentColor 15%, transparent) 5%,
+    transparent 12%,
+    transparent 91%,
+    color-mix(in srgb, currentColor 15%, transparent) 97%,
+    color-mix(in srgb, currentColor 25%, transparent) 100%
+  );
   pointer-events: none;
 }
 

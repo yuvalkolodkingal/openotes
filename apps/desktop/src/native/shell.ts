@@ -353,26 +353,109 @@ export class Clipboard {
 
 export class ThemeWatcher {
   private mode: "light" | "dark" | "system" = "system";
+  private detected?: "light" | "dark";
 
   current(): "light" | "dark" {
     if (this.mode !== "system") return this.mode;
-    return detectSystemTheme();
+    // Probing the desktop environment costs a subprocess, and "system" is
+    // the default mode, so the answer is cached for the session. A user who
+    // flips their desktop to dark mid-session picks it up on the next
+    // launch; polling for it is not worth a subprocess per repaint.
+    return this.detected ??= detectSystemTheme();
   }
 
   apply(mode: "light" | "dark" | "system"): void {
     this.mode = mode;
   }
+
+  /** Forget the cached probe, so the next `current()` asks the desktop again. */
+  refresh(): void {
+    this.detected = undefined;
+  }
 }
 
-function detectSystemTheme(): "light" | "dark" {
-  // Deno Desktop does not expose a system-theme API yet, so this reads the
-  // desktop environment's own setting where one is discoverable and
-  // otherwise reports light.
-  if (Deno.build.os === "linux") {
-    const gtkTheme = Deno.env.get("GTK_THEME");
-    if (gtkTheme?.toLowerCase().includes("dark")) return "dark";
+/** Run a command and return its trimmed stdout, or undefined if it fails. */
+function probe(command: string, args: string[]): string | undefined {
+  try {
+    const result = new Deno.Command(command, {
+      args,
+      stdout: "piped",
+      stderr: "null",
+    }).outputSync();
+    if (!result.success) return undefined;
+    return new TextDecoder().decode(result.stdout).trim();
+  } catch {
+    return undefined;
   }
-  return "light";
+}
+
+/**
+ * What colour scheme the desktop is set to.
+ *
+ * "system" is the default theme mode, so getting this wrong means a user
+ * whose desktop is dark opens a white window — which is exactly what 1.0
+ * did: it only looked at GTK_THEME, an override almost nobody sets. Each
+ * platform is asked the way that platform actually answers, and anything
+ * unreadable falls back to light rather than guessing.
+ */
+function detectSystemTheme(): "light" | "dark" {
+  switch (Deno.build.os) {
+    case "linux": {
+      // freedesktop's cross-desktop setting, honoured by GNOME 42+, KDE and
+      // anything using the portal. "prefer-dark" is the only dark value.
+      const scheme = probe("gsettings", [
+        "get",
+        "org.gnome.desktop.interface",
+        "color-scheme",
+      ]);
+      if (scheme?.includes("prefer-dark")) return "dark";
+      if (scheme?.includes("prefer-light")) return "light";
+
+      // GNOME before 42 and the GTK-only desktops only have a theme name.
+      const gtkTheme = probe("gsettings", [
+        "get",
+        "org.gnome.desktop.interface",
+        "gtk-theme",
+      ]);
+      if (gtkTheme?.toLowerCase().includes("dark")) return "dark";
+
+      // KDE keeps its own switch; a dark Plasma colour scheme is named for it.
+      const kde = probe("kreadconfig5", [
+        "--file",
+        "kdeglobals",
+        "--group",
+        "General",
+        "--key",
+        "ColorScheme",
+      ]);
+      if (kde?.toLowerCase().includes("dark")) return "dark";
+
+      // Last resort: the environment override, which is what 1.0 read.
+      const env = Deno.env.get("GTK_THEME");
+      if (env?.toLowerCase().includes("dark")) return "dark";
+      return "light";
+    }
+    case "darwin": {
+      // The key is absent entirely in light mode, so `defaults read` failing
+      // is itself the answer.
+      const style = probe("defaults", ["read", "-g", "AppleInterfaceStyle"]);
+      return style?.toLowerCase().includes("dark") ? "dark" : "light";
+    }
+    case "windows": {
+      const value = probe("reg", [
+        "query",
+        "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Themes\\Personalize",
+        "/v",
+        "AppsUseLightTheme",
+      ]);
+      // "    AppsUseLightTheme    REG_DWORD    0x0" — 0 means dark.
+      const match = value ? /REG_DWORD\s+0x([0-9a-fA-F]+)/.exec(value) : null;
+      if (match) return parseInt(match[1], 16) === 0 ? "dark" : "light";
+      return "light";
+    }
+    default:
+      return "light";
+  }
 }
 
 function firstPath(result: string[] | string | null): string | undefined {

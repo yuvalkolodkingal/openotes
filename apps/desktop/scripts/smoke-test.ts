@@ -25,11 +25,11 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
  *
  * The obvious smoke test is to fetch the interface server's health route.
  * It cannot be relied on. Under `deno desktop` the runtime owns the
- * listening address: the port handed to `Deno.serve` is ignored, the
- * runtime substitutes its own and publishes it as DENO_SERVE_ADDRESS, and
- * apps/desktop/src/native/server.ts documents the socket as wired to the
- * embedded webview rather than to the machine. So there is no port this
- * script can predict, and no guarantee the one it discovers is reachable.
+ * listening address: the port handed to `Deno.serve` is ignored and the
+ * runtime substitutes its own, publishing it as DENO_SERVE_ADDRESS. So
+ * there is no port this script can predict, and the server refuses a
+ * request whose Host is not loopback, so a probe has to use the address the
+ * application itself reported.
  *
  * Every assertion below therefore comes from the one thing the application
  * definitely publishes — its structured start-up log on stdout — and the
@@ -302,8 +302,10 @@ function findLine(
 }
 
 /**
- * Is the interface port reachable from this process? Expected to be "no";
- * reported for information, never as a failure. See the file header.
+ * Is the interface port reachable from this process? Measured on Deno 2.9.6:
+ * yes, it is. Reported for information, never as a failure — the server
+ * hands out the built interface and nothing else, and it refuses a request
+ * carrying an Origin or a non-loopback Host (see native/server.ts).
  */
 async function probeInterfacePort(origin: string): Promise<string> {
   const match = /^http:\/\/([^:/]+):(\d+)/.exec(origin);
@@ -333,7 +335,7 @@ async function probeInterfacePort(origin: string): Promise<string> {
     return (
       `not reachable from outside the process (${
         error instanceof Error ? error.message : String(error)
-      }) — the documented behaviour of deno desktop's serve socket, not a fault`
+      })`
     );
   }
 }
@@ -597,9 +599,7 @@ async function smokeTest(options: SmokeOptions): Promise<number> {
       `               carries no start-up failure.\n` +
       `  not checked: anything inside the window. This cannot see whether the\n` +
       `               interface rendered, whether a note can be written, or\n` +
-      `               whether sync works. It also cannot reach the interface\n` +
-      `               server over the network: deno desktop wires that socket\n` +
-      `               to the webview, not to the machine.`,
+      `               whether sync works.`,
   );
 
   if (failed.length === 0) {

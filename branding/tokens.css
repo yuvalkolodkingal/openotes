@@ -1,4 +1,4 @@
-/* Openotes design tokens — v1.0 */
+/* Openotes design tokens — v1.1 */
 
 :root {
   /* Brand */
@@ -25,6 +25,8 @@
   --on-conflict: #b45309;   /* ⚠ conflict */
 
   /* Semantic (light) */
+  color-scheme: light;
+
   --bg:           var(--on-white);
   --bg-raised:    #ffffff;
   --bg-sidebar:   var(--on-gray-100);
@@ -59,17 +61,33 @@
 }
 
 [data-theme="dark"] {
-  --bg:           #171412;
-  --bg-raised:    #211d1a;
-  --bg-sidebar:   #1c1917;
-  --text:         #e7e5e4;
-  --text-muted:   #a8a29e;
-  --border:       #3f3a36;
-  --accent:       #2dd4bf;
-  --accent-hover: #5eead4;
-  --selection:    #134e4a;
-  --on-synced:    #2dd4bf;
-  --on-syncing:   #38bdf8;
-  --on-error:     #f87171;
-  --on-conflict:  #fbbf24;
+  color-scheme: dark;
+
+  /* Surfaces, from the page up. Depth is a background step, never a shadow,
+     so these four are the whole elevation scale. */
+  --bg:            #171412;   /* page, note list, editor */
+  --bg-raised:     #211d1a;   /* cards, dialogs, context menus */
+  --bg-sidebar:    #1c1917;   /* nav menu, title bar, status bar */
+  --bg-panel:      #262220;   /* hover, nested panels */
+
+  --text:          #e7e5e4;
+  --text-strong:   #f5f5f4;   /* headings */
+  --text-muted:    #a8a29e;
+  --text-faint:    #9a938d;   /* placeholders — still AA on --bg-panel */
+  --border:        #3f3a36;
+  --border-strong: #4a4440;
+
+  --accent:        #2dd4bf;
+  --accent-hover:  #5eead4;
+  --on-accent:     #07211e;   /* label on a filled teal control */
+  --selection:     #134e4a;   /* text selection, strong selection */
+  --selection-soft:#1b3733;   /* selected row in a list */
+
+  /* Sync status keeps its vocabulary; only the values brighten. */
+  --on-synced:     #2dd4bf;
+  --on-syncing:    #38bdf8;
+  --on-offline:    #a8a29e;
+  --on-pending:    #a8a29e;
+  --on-error:      #f87171;
+  --on-conflict:   #fbbf24;
 }

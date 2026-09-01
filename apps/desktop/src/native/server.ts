@@ -27,17 +27,22 @@ const log = logger.scope("server");
  *
  * HOW THE ADDRESS WORKS, AND WHY IT MATTERS
  *
- * Under `deno desktop` the runtime owns the listening address. A port
- * passed to `Deno.serve` is ignored: the runtime substitutes its own and
- * publishes it as DENO_SERVE_ADDRESS, and the socket is wired to the
- * embedded webview rather than published on the machine — a fetch to that
- * port from another process fails.
+ * Under `deno desktop` the runtime owns the listening address when the port
+ * is left to it: it substitutes its own and publishes it as
+ * DENO_SERVE_ADDRESS.
  *
- * Two consequences, both measured rather than assumed:
+ * Two consequences, both measured on Deno 2.9.6 rather than assumed:
  *
- *  1. Nothing outside the application can reach this server. That is good
- *     for security, and it is why the smoke test inspects the window
- *     instead of curling a health endpoint.
+ *  1. The socket IS reachable from other processes on the machine. An
+ *     earlier version of this comment claimed otherwise; a `curl` to the
+ *     assigned port answers 200. Nothing here is confidential — it serves
+ *     the built interface, which is public source, and the privileged
+ *     surface is reached through window bindings rather than over HTTP — so
+ *     the exposure is that a local process can read files it could read off
+ *     disk anyway. Requests carrying an Origin, and requests for a Host
+ *     that is not loopback, are refused all the same: those are what a page
+ *     in the user's browser would send, and there is no reason to answer
+ *     one.
  *
  *  2. The port differs on every launch, so the page's origin does too
  *     (observed: http://127.0.0.1:34265, then http://127.0.0.1:42857 on
@@ -79,12 +84,27 @@ export interface UiServerOptions {
   root: string;
   /** Identifies this instance; returned by the health route. */
   instanceId: string;
+  /**
+   * The colour scheme the window should paint before the interface has
+   * booted. See BOOT_THEME below for why the server, not the page, decides.
+   */
+  colorScheme?: () => "light" | "dark";
 }
 
 export interface RunningUiServer {
   /** The origin the runtime actually assigned. */
   origin: string;
   shutdown(): Promise<void>;
+}
+
+/** Refuses a DNS name pointed at 127.0.0.1, which is how rebinding works. */
+export function isLoopbackHost(host: string): boolean {
+  return (
+    host === "localhost" ||
+    host === "::1" ||
+    host === "0:0:0:0:0:0:0:1" ||
+    /^127\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(host)
+  );
 }
 
 /** Health route, used by the interface handshake and by the smoke test. */
@@ -105,6 +125,54 @@ export function assignedOrigin(fallbackPort?: number): string {
     if (/^\d+$/.test(port)) return `http://${host}:${port}`;
   }
   return `http://127.0.0.1:${fallbackPort ?? 0}`;
+}
+
+/**
+ * The first paint, before any JavaScript has run.
+ *
+ * The interface cannot colour its own first frame. `--background` is defined
+ * by a stylesheet the page fills in from settings, and on desktop those
+ * settings arrive over an RPC round trip, so for the first few frames the
+ * document has no background at all and the webview paints its default
+ * white. In dark mode that is a white flash on every single launch.
+ *
+ * The runtime already knows the answer, so it stamps it into the document as
+ * it serves it: `data-theme` for anything keyed off it, a `color-scheme` so
+ * the platform paints scrollbars and form controls to match, and a literal
+ * background colour that matches the theme's `base.primary.background`. The
+ * interface overwrites all of it a moment later; this only has to be right
+ * for the frames before that.
+ */
+const BOOT_BACKGROUND: Record<"light" | "dark", string> = {
+  light: "#fafaf9",
+  dark: "#171412",
+};
+
+function bootThemeMarkup(scheme: "light" | "dark"): string {
+  return `<style id="boot-theme">:root{color-scheme:${scheme}}` +
+    `html,body{background-color:${BOOT_BACKGROUND[scheme]}}</style>`;
+}
+
+/** Stamp the boot theme into the served index.html. */
+export function injectBootTheme(
+  html: string,
+  scheme: "light" | "dark",
+): string {
+  let out = html;
+  // Anything already keyed off data-theme (the skeleton loader, for one)
+  // then matches from the very first frame instead of after hydration.
+  if (/<html\b[^>]*\bdata-theme=/.test(out)) {
+    out = out.replace(
+      /(<html\b[^>]*\bdata-theme=)(["'])[^"']*\2/,
+      `$1$2${scheme}$2`,
+    );
+  } else {
+    out = out.replace(/<html\b/, `<html data-theme="${scheme}"`);
+  }
+  const markup = bootThemeMarkup(scheme);
+  return out.includes("</head>")
+    ? out.replace("</head>", `  ${markup}\n  </head>`)
+    : markup + out;
 }
 
 export async function startUiServer(
@@ -142,7 +210,24 @@ export async function startUiServer(
         return new Response("Method Not Allowed", { status: 405 });
       }
 
-      return await serveStatic(root, url.pathname, request.method === "HEAD");
+      // The webview's own requests are same-origin navigations and
+      // subresource loads, neither of which carries an Origin. A page in
+      // the user's browser trying to load the interface does.
+      if (request.headers.get("origin")) {
+        return new Response("Forbidden", { status: 403 });
+      }
+      const host = (request.headers.get("host") ?? "").replace(/:\d+$/, "")
+        .replace(/^\[|\]$/g, "");
+      if (host && !isLoopbackHost(host)) {
+        return new Response("Forbidden", { status: 403 });
+      }
+
+      return await serveStatic(
+        root,
+        url.pathname,
+        request.method === "HEAD",
+        options.colorScheme?.() ?? "light",
+      );
     },
   );
 
@@ -160,6 +245,7 @@ async function serveStatic(
   root: string,
   pathname: string,
   headOnly: boolean,
+  colorScheme: "light" | "dark",
 ): Promise<Response> {
   let requested: string;
   try {
@@ -204,17 +290,29 @@ async function serveStatic(
     return new Response("Forbidden", { status: 403 });
   }
 
+  const isDocument = filePath.endsWith("index.html");
   const headers = new Headers({
     "content-type": MIME_TYPES[extname(filePath).toLowerCase()] ??
       "application/octet-stream",
-    "content-length": String(stat.size),
     "cross-origin-opener-policy": "same-origin",
     "x-content-type-options": "nosniff",
-    "cache-control": filePath.endsWith("index.html")
+    "cache-control": isDocument
       ? "no-cache"
       : "public, max-age=31536000, immutable",
   });
 
+  if (isDocument) {
+    // Rewritten per request, so content-length comes from the rewrite and
+    // the document is never cached with last launch's colour scheme.
+    const body = new TextEncoder().encode(
+      injectBootTheme(await Deno.readTextFile(filePath), colorScheme),
+    );
+    headers.set("content-length", String(body.byteLength));
+    if (headOnly) return new Response(null, { status: 200, headers });
+    return new Response(body, { status: 200, headers });
+  }
+
+  headers.set("content-length", String(stat.size));
   if (headOnly) return new Response(null, { status: 200, headers });
 
   const file = await Deno.open(filePath, { read: true });

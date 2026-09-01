@@ -23,7 +23,8 @@ import { AppEventManager, AppEvents } from "./common/app-events";
 import { register } from "./service-worker-registration";
 import { getServiceWorkerVersion } from "./utils/version";
 import { register as registerStreamSaver } from "./utils/stream-saver/mitm";
-import { ThemeDark, ThemeLight, themeToCSS } from "@notesnook/theme";
+import { themeToCSS } from "@notesnook/theme";
+import { storedTheme } from "./common/default-theme";
 import Config from "./utils/config";
 import { hydrateDesktopConfig } from "./utils/config-persistence";
 import { setI18nGlobal, Messages } from "@notesnook/intl";
@@ -45,10 +46,9 @@ hydrateDesktopConfig()
     const root = document.querySelector("html");
     if (root) root.setAttribute("data-theme", colorScheme);
 
-    const theme =
-      colorScheme === "dark"
-        ? Config.get("theme:dark", ThemeDark)
-        : Config.get("theme:light", ThemeLight);
+    // storedTheme, not a raw Config.get: a stored copy of a shipped theme is
+    // ignored once the shipped one has moved on. See common/default-theme.ts.
+    const theme = storedTheme(colorScheme === "dark" ? "dark" : "light");
     const stylesheet = document.getElementById("theme-colors");
     if (theme) {
       const css = themeToCSS(theme);
