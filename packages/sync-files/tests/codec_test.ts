@@ -271,3 +271,24 @@ Deno.test("each mode ignores the other's files", async () => {
   // The encrypted engine sees no notes at all, rather than choking on one.
   assertEquals(seen.pulled, 0);
 });
+
+Deno.test("a fresh device finds an encrypted note by its digest, not its title", async () => {
+  // The file lives at notes/<digest>.bin, but a device with no manifest only
+  // knows the note's logical path. Looking up by the logical path misses it,
+  // and the engine would then treat an existing note as new -- recording the
+  // local content as the merge base without ever reading what was there.
+  const storage = new FolderStorage();
+  const crypto = fakeCrypto();
+
+  const a = engineWith(storage, new EncryptedCodec(crypto, "k"), "device-a");
+  await a.engine.sync([note("n1", "Plan.md", "written by A")]);
+
+  // Device B has the same note id with different content and no manifest.
+  const b = engineWith(storage, new EncryptedCodec(crypto, "k"), "device-b");
+  const result = await b.engine.sync([note("n1", "Plan.md", "written by B")]);
+
+  // Neither version may be lost: this is a genuine collision.
+  assertEquals(result.conflicts, 1);
+  const conflicts = storage.paths().filter((p) => p.includes("conflict"));
+  assertEquals(conflicts.length, 1);
+});

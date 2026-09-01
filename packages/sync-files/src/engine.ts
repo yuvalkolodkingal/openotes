@@ -147,9 +147,19 @@ export class FileSyncEngine {
       const path = localNote?.path ?? base?.remotePath;
       if (!path) continue;
 
-      let remoteEntry = base?.remotePath
-        ? remote.get(base.remotePath) ?? remote.get(path)
-        : remote.get(path);
+      // Where this note's bytes belong under the current codec. Readable mode
+      // makes that the note's own path; encrypted mode makes it a digest of
+      // the note id, which is the only way a device with no manifest can find
+      // an existing note -- searching by title would miss it entirely and the
+      // engine would treat a note that already exists as brand new.
+      const wantedPath = localNote
+        ? await this.targetPath(noteId, localNote.path)
+        : undefined;
+
+      let remoteEntry =
+        (base?.remotePath ? remote.get(base.remotePath) : undefined) ??
+          (wantedPath ? remote.get(wantedPath) : undefined) ??
+          remote.get(path);
 
       // A retitle or a move between notebooks changes the path without
       // changing a byte of content. Rename the remote file *first*, so the
@@ -157,11 +167,11 @@ export class FileSyncEngine {
       // conditioned on the action -- meant a pure rename compared equal,
       // decided "none", and then deleted the old file without ever writing
       // the new one.
+      //
       // Only the readable codec derives a path from the title, so only it can
-      // need a rename. Encrypted names are keyed on the note id and never move.
-      const wantedPath = localNote
-        ? await this.targetPath(noteId, localNote.path)
-        : undefined;
+      // need a rename. Encrypted names are keyed on the note id and never move,
+      // which is why the guard compares against wantedPath rather than the
+      // note's own path.
       if (
         base && localNote && remoteEntry && wantedPath &&
         base.remotePath !== wantedPath
