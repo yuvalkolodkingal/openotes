@@ -20,7 +20,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 import "isomorphic-fetch";
 import path from "path";
 import fs, { mkdir } from "fs/promises";
-import { langen } from "../../editor/scripts/langen.mjs";
+import { langen } from "../../editor/scripts/langen.ts";
 import { fileURLToPath } from "url";
 
 const __filename = fileURLToPath(import.meta.url);

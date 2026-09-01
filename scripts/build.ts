@@ -35,7 +35,7 @@ const TSCGO =
     ? path.join(__dirname, "..", "node_modules", ".bin", "tsgo.cmd")
     : path.join(__dirname, "..", "node_modules", ".bin", "tsgo");
 
-const esmPackageJson = {
+const esmPackageJson: { type: "module" } = {
   type: "module"
 };
 
@@ -83,17 +83,17 @@ await Promise.all([
     )
 ]);
 
-async function cmd(...command) {
+async function cmd(...command: string[]): Promise<void> {
   let p = spawn(command[0], command.slice(1), { shell: true });
   console.time(command.join(" "));
-  await new Promise((resolveFunc) => {
-    p.stdout.on("data", (x) => {
+  await new Promise<number | null>((resolveFunc) => {
+    p.stdout.on("data", (x: Buffer) => {
       process.stdout.write(x.toString());
     });
-    p.stderr.on("data", (x) => {
+    p.stderr.on("data", (x: Buffer) => {
       process.stderr.write(x.toString());
     });
-    p.on("exit", (code) => {
+    p.on("exit", (code: number | null) => {
       // console.log(command.join(" "), "exited with code", code);
       resolveFunc(code);
     });

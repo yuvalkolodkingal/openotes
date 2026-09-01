@@ -20,6 +20,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 import { writeFile } from "fs/promises";
 import path from "path";
 import tsj from "ts-json-schema-generator";
+import type { Definition } from "ts-json-schema-generator";
 import { fileURLToPath } from "url";
 
 const __filename = fileURLToPath(import.meta.url);
@@ -50,21 +51,36 @@ makePropertyOptional("Colors", "textSelection");
 makePropertyOptional("PartialOrFullColors<false>", "textSelection");
 await writeFile(`v1.schema.json`, JSON.stringify(schema, undefined, 2));
 
-function removeProperty(definition, propertyName) {
-  delete schema.definitions[definition].properties[propertyName];
+// `Schema["definitions"]` is an optional `{ [key: string]: Definition | boolean }`,
+// so every lookup below is asserted rather than guarded: the original script
+// indexed straight through and threw on a missing definition or property, and
+// that behaviour is preserved deliberately.
+
+function removeProperty(definition: string, propertyName: string) {
+  delete (schema.definitions![definition] as Definition).properties![
+    propertyName
+  ];
   makePropertyOptional(definition, propertyName);
 }
 
-function makePropertyOptional(definition, propertyName) {
-  const required = schema.definitions[definition].required;
+function makePropertyOptional(definition: string, propertyName: string) {
+  const required = (schema.definitions![definition] as Definition).required;
   if (required && required.includes(propertyName)) {
     required.splice(required.indexOf(propertyName), 1);
   }
 }
 
-function addProperty(definition, propertyName, value, required) {
-  schema.definitions[definition].properties[propertyName] = value;
+function addProperty(
+  definition: string,
+  propertyName: string,
+  value: Definition,
+  required: boolean
+) {
+  (schema.definitions![definition] as Definition).properties![propertyName] =
+    value;
   if (required) {
-    schema.definitions[definition].required.push(propertyName);
+    (schema.definitions![definition] as Definition).required!.push(
+      propertyName
+    );
   }
 }

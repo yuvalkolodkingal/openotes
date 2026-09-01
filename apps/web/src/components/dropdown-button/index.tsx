@@ -18,10 +18,27 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
 import { Button, Flex } from "@theme-ui/components";
+import { ThemeUICSSObject } from "@theme-ui/core";
+import { ThemeUIStyleObject } from "@theme-ui/css";
+import type { ReactNode } from "react";
+import type { MenuItem } from "@notesnook/ui";
 import { useMenuTrigger } from "../../hooks/use-menu";
 import { ChevronDown } from "../icons";
 
-export default function DropdownButton(props) {
+type DropdownButtonOption = {
+  title: () => ReactNode;
+  onClick?: () => void;
+};
+
+type DropdownButtonProps = {
+  options?: DropdownButtonOption[];
+  title?: string;
+  sx?: ThemeUIStyleObject;
+  buttonStyle?: ThemeUICSSObject;
+  chevronStyle?: ThemeUICSSObject;
+};
+
+export default function DropdownButton(props: DropdownButtonProps) {
   const { openMenu } = useMenuTrigger();
   const { options, title, sx, buttonStyle, chevronStyle } = props;
 
@@ -46,7 +63,14 @@ export default function DropdownButton(props) {
             borderTopLeftRadius: 0,
             ...chevronStyle
           }}
-          onClick={() => openMenu(options.slice(1), { title })}
+          onClick={() =>
+            // These options carry a callable `title`, which predates the
+            // current `MenuItem` shape (where `title` is a plain string). The
+            // component has no call sites left in the repo to infer the real
+            // shape from, so the mismatch is cast away at this one boundary
+            // instead of redesigning either this component or `MenuItem`.
+            openMenu(options.slice(1) as unknown as MenuItem[], { title })
+          }
         >
           <ChevronDown color="white" size={18} />
         </Button>

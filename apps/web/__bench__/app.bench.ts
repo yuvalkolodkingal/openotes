@@ -19,8 +19,16 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 import { chromium } from "playwright";
 import { spawn } from "child_process";
+import type { ChildProcessWithoutNullStreams } from "child_process";
 
-const TESTS = [
+type BenchmarkTest = {
+  name: string;
+  start: string;
+  end: string;
+  route?: string;
+};
+
+const TESTS: BenchmarkTest[] = [
   {
     name: "root import",
     start: "import:root",
@@ -55,24 +63,24 @@ const TESTS = [
 ];
 
 const serverKillSignal = new AbortController();
-async function startServer() {
+async function startServer(): Promise<ChildProcessWithoutNullStreams> {
   return new Promise((resolve, reject) => {
     const server = spawn("npx", ["serve", "-s", "build"], {
       signal: serverKillSignal.signal
     });
 
-    server.stdout.on("data", (data) => {
+    server.stdout.on("data", (data: Buffer) => {
       if (data.toString().includes("Accepting connections")) {
         console.log(data.toString());
         resolve(server);
       }
     });
 
-    server.stderr.on("data", (data) => {
+    server.stderr.on("data", (data: Buffer) => {
       reject(data.toString());
     });
 
-    server.on("error", (error) => {
+    server.on("error", (error: Error) => {
       reject(error);
     });
   });
@@ -84,7 +92,7 @@ const browser = await chromium.launch();
 const ITERATIONS = 10;
 for (const testCase of TESTS) {
   console.log(`Running ${testCase.name}`);
-  const durations = [];
+  const durations: number[] = [];
   for (let i = 0; i < ITERATIONS; i++) {
     const context = await browser.newContext({
       baseURL: "http://localhost:3000"

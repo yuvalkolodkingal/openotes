@@ -53,9 +53,9 @@
     "zustand": ">=4"
   },
   "scripts": {
-    "prebuild": "node ./scripts/prebuild.mjs",
-    "generate": "node ./scripts/schema-generator.mjs",
-    "build": "node ../../scripts/build.mjs",
+    "prebuild": "node ./scripts/prebuild.ts",
+    "generate": "node ./scripts/schema-generator.ts",
+    "build": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON ../../scripts/build.ts",
     "prepublishOnly": "npm run build",
     "watch": "npm run build -- --watch"
   }

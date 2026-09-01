@@ -17,8 +17,9 @@ You should have received a copy of the GNU General Public License
 along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
-/** @type {import('@lingui/conf').LinguiConfig} */
-module.exports = {
+import type { LinguiConfig } from "@lingui/conf";
+
+const config: LinguiConfig = {
   locales: ["en", "pseudo-LOCALE"],
   sourceLocale: "en",
   pseudoLocale: "pseudo-LOCALE",
@@ -35,3 +36,5 @@ module.exports = {
   catalogsMergePath: "<rootDir>/locales/${locale}",
   compileNamespace: "json"
 };
+
+export default config;

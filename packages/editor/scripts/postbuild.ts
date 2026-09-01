@@ -61,7 +61,10 @@ for (const bundle of [
       ? ICON_FILE.matchAll(/: .+\.(mdi.+),/g)
       : ICON_FILE.matchAll(/: (mdi.+),/g);
   for (const icon of icons) {
-    const iconPath = Mjs[icon[1]];
+    // @mdi/js exports one `string` const per icon name; the name being looked
+    // up here comes out of a regex over the bundle, so the namespace has to be
+    // indexed dynamically.
+    const iconPath = (Mjs as Record<string, string>)[icon[1]];
     if (!iconPath) throw new Error(`Could not find path for icon: ${icon[1]}.`);
     ICON_FILE = ICON_FILE.replace(icon[0], `: "${iconPath}",`);
   }

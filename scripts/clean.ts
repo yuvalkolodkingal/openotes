@@ -22,7 +22,7 @@ import { existsSync } from "fs";
 import path from "path";
 import { Listr } from "listr2";
 
-const allPackages = await glob(["packages/**", "apps/**"], {
+const allPackages: string[] = await glob(["packages/**", "apps/**"], {
   deep: 1,
   onlyDirectories: true
 });
@@ -30,7 +30,7 @@ const allPackages = await glob(["packages/**", "apps/**"], {
 const tasks = new Listr([], { concurrent: 8, exitOnError: false });
 for (const pkg of allPackages) {
   for (const dirname of ["node_modules", "dist", "build", "out"]) {
-    const dir = path.join(pkg, dirname);
+    const dir: string = path.join(pkg, dirname);
     if (existsSync(dir))
       tasks.add({
         title: "Cleaning " + dir,

@@ -7,6 +7,16 @@ client, auditing the encryption, or debugging a sync problem.
 
 Implementation: [`packages/sync-webdav`](packages/sync-webdav).
 
+> **Scope.** This is one of two sync engines. It is the append-only journal
+> used for WebDAV: encrypted, immutable batches under keyed-digest names,
+> which is right for a repository nobody reads by hand.
+>
+> Cloud drives use the other one — one readable Markdown file per note, so the
+> folder opens on a phone — which is documented in [DRIVES.md](DRIVES.md).
+> Both sit on the `RemoteStorage` seam in `packages/sync-core`, so a WebDAV
+> server can also serve the file engine and vice versa; the default pairing is
+> what each was designed for.
+
 ---
 
 ## 1. Design constraints

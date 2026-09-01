@@ -26,14 +26,38 @@ import fs from "fs";
 import { readFile } from "fs/promises";
 import path from "path";
 
-export async function langen(rootDirectory) {
+type PrismComponentLanguage = {
+  title: string;
+  alias?: string | string[];
+};
+
+/**
+ * The subset of prismjs' components.json this script reads. The real file also
+ * carries a "meta" entry that is not a language; it is skipped below.
+ */
+type PrismComponents = {
+  languages: Record<string, PrismComponentLanguage>;
+};
+
+export type Language = {
+  filename: string;
+  title: string;
+  alias: string[] | undefined;
+};
+
+export type LanguageIndex = {
+  languages: Language[];
+  languageIndex: string;
+};
+
+export async function langen(rootDirectory: string): Promise<LanguageIndex> {
   const json = JSON.parse(
     await readFile(
       path.join(rootDirectory, "node_modules", "prismjs", "components.json"),
       "utf-8"
     )
-  );
-  let languages = [];
+  ) as PrismComponents;
+  let languages: Language[] = [];
   for (const key in json.languages) {
     if (key === "meta") continue;
     const language = json.languages[key];

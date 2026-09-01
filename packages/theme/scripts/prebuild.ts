@@ -33,13 +33,13 @@ import { existsSync } from "fs";
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-const DEFAULT_THEMES = ["default-light", "default-dark"];
+const DEFAULT_THEMES: string[] = ["default-light", "default-dark"];
 
 const THEMES_DIRECTORY = path.resolve(
   path.join(__dirname, "..", "src", "theme-engine", "themes")
 );
 
-function main() {
+function main(): void {
   const missing = DEFAULT_THEMES.filter(
     (themeId) => !existsSync(path.join(THEMES_DIRECTORY, `${themeId}.json`))
   );

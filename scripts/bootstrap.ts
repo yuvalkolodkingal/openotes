@@ -27,9 +27,15 @@ import { Listr } from "listr2";
 import { createInterface } from "readline/promises";
 
 const args = parser(process.argv, { alias: { scope: ["s"], offline: ["o"] } });
+/**
+ * Which packages depend on which, keyed by package directory. The value is
+ * the list of workspace packages that must be bootstrapped first.
+ */
+type DependencyMap = Record<string, string[]>;
+
 const IS_CI = process.env.CI;
 const THREADS = Math.max(4, process.env.THREADS || os.cpus().length / 2);
-const scopes = {
+const scopes: Record<string, string> = {
   web: "apps/web",
   desktop: "apps/desktop",
   core: "packages/core",
@@ -37,7 +43,7 @@ const scopes = {
   help: "docs/help"
 };
 // packages that we should run npm rebuild for
-const POSTINSTALL_WHITELIST = [
+const POSTINSTALL_WHITELIST: string[] = [
   "esbuild",
   "@swc/core",
   "better-sqlite3-multiple-ciphers",
@@ -81,7 +87,9 @@ if (IS_BOOTSTRAP_ALL) {
   await bootstrapPackages(dependencies);
 }
 
-async function bootstrapPackages(dependencies) {
+async function bootstrapPackages(
+  dependencies: DependencyMap
+): Promise<void> {
   console.log("> Found", dependencies.length, "dependencies to bootstrap.");
   console.log("> Using", THREADS, "threads.");
 
@@ -106,7 +114,11 @@ async function bootstrapPackages(dependencies) {
   console.timeEnd("Took");
 }
 
-function execute(cmd, cwd, outputs) {
+function execute(
+  cmd: string,
+  cwd: string,
+  outputs: string[]
+): Promise<void> {
   return new Promise((resolve, reject) =>
     exec(
       cmd,
@@ -127,7 +139,7 @@ function execute(cmd, cwd, outputs) {
   );
 }
 
-async function bootstrapPackage(cwd, outputs) {
+async function bootstrapPackage(cwd: string, outputs: string[]): Promise<void> {
   const cmd = `npm ${
     IS_CI ? "ci" : "i"
   } --legacy-peer-deps --no-audit --no-fund ${
@@ -164,7 +176,10 @@ async function bootstrapPackage(cwd, outputs) {
   }
 }
 
-async function findDependencies(scope, dependencyMap = {}) {
+async function findDependencies(
+  scope: string,
+  dependencyMap: DependencyMap = {}
+): Promise<DependencyMap> {
   try {
     const packageJsonPath = path.join(scope, "package.json");
     const packageJson = JSON.parse(await readFile(packageJsonPath, "utf-8"));
@@ -200,7 +215,10 @@ async function findDependencies(scope, dependencyMap = {}) {
   }
 }
 
-function filterDependencies(basePath, dependencies) {
+function filterDependencies(
+  basePath: string,
+  dependencies: Record<string, string> | undefined
+): string[] {
   if (!dependencies) return [];
   return Object.entries(dependencies)
     .filter(([key, value]) => value.startsWith("file:"))
@@ -209,7 +227,7 @@ function filterDependencies(basePath, dependencies) {
     );
 }
 
-async function needsRebuild(cwd) {
+async function needsRebuild(cwd: string): Promise<boolean> {
   const scripts = ["preinstall", "install", "postinstall"];
   const packages = await new fdir()
     .glob("**/package.json")
@@ -238,14 +256,14 @@ async function needsRebuild(cwd) {
   ).filter(Boolean);
 }
 
-async function hasScript(cwd, scriptName) {
+async function hasScript(cwd: string, scriptName: string): Promise<boolean> {
   const pkg = await readFile(path.join(cwd, "package.json"), "utf-8")
     .then(JSON.parse)
     .catch(Object);
   return pkg && pkg.scripts && pkg.scripts[scriptName];
 }
 
-async function prompt(question) {
+async function prompt(question: string): Promise<string> {
   const rl = createInterface({
     input: process.stdin,
     output: process.stdout
@@ -256,7 +274,7 @@ async function prompt(question) {
   return answer.trim();
 }
 
-async function analyzeDependencyMap(map) {
+async function analyzeDependencyMap(map: DependencyMap): Promise<string[][]> {
   for (const dep in map) {
     const versions = Object.values(map[dep]);
     if (versions.length <= 1) continue;

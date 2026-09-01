@@ -19,7 +19,31 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 import { mkdirSync, writeFileSync } from "fs";
 
-const DO_ACTIONS = [
+type DataType =
+  | "note"
+  | "notebook"
+  | "tag"
+  | "reminder"
+  | "color"
+  | "attachment"
+  | "item"
+  | "shortcut"
+  | "version";
+
+type ActionDefinition = {
+  action: string;
+  label: string;
+  dataTypes: DataType[];
+};
+
+type DataTypeStrings = {
+  singular: string;
+  singularCamelCase: string;
+  plural: string;
+  pluralCamelCase: string;
+};
+
+const DO_ACTIONS: ActionDefinition[] = [
   {
     action: "delete",
     label: "Delete",
@@ -70,7 +94,7 @@ const DO_ACTIONS = [
   }
 ];
 
-const ACTIONS = [
+const ACTIONS: ActionDefinition[] = [
   {
     action: "deleted",
     label: "deleted",
@@ -110,7 +134,7 @@ const ACTIONS = [
   }
 ];
 
-const ACTION_CONFIRMATIONS = [
+const ACTION_CONFIRMATIONS: ActionDefinition[] = [
   {
     action: "delete",
     label: "delete",
@@ -131,7 +155,7 @@ const ACTION_CONFIRMATIONS = [
   }
 ];
 
-const ACTION_ERRORS = [
+const ACTION_ERRORS: ActionDefinition[] = [
   {
     action: "unpublished",
     label: "unpublished",
@@ -144,7 +168,7 @@ const ACTION_ERRORS = [
   }
 ];
 
-const IN_PROGRESS_ACTIONS = [
+const IN_PROGRESS_ACTIONS: ActionDefinition[] = [
   {
     action: "deleting",
     label: "Deleting",
@@ -162,7 +186,7 @@ const IN_PROGRESS_ACTIONS = [
   }
 ];
 
-const DATA_TYPES = {
+const DATA_TYPES: Record<DataType, DataTypeStrings> = {
   note: {
     singular: `note`,
     singularCamelCase: `Note`,
@@ -219,16 +243,16 @@ const DATA_TYPES = {
   }
 };
 
-const DO_ACTIONS_TEMPLATE = (action, dataTypes) => `${action}: {
+const DO_ACTIONS_TEMPLATE = (action: string, dataTypes: string) => `${action}: {
     ${dataTypes}
 }`;
 
 const UNKNOWN_DATA_TYPE_TEMPLATE = (
-  exportName,
-  action,
-  types,
-  fallbackSingularTemplate,
-  fallbackPluralTemplate
+  exportName: string,
+  action: string,
+  types: DataType[],
+  fallbackSingularTemplate: string,
+  fallbackPluralTemplate: string
 ) => `unknown: (type: string, count: number) => {
   switch (type) {
     ${types
@@ -246,15 +270,15 @@ const UNKNOWN_DATA_TYPE_TEMPLATE = (
 }`;
 
 const DATA_TYPES_TEMPLATE = (
-  type,
-  singularTemplate,
-  pluralTemplate
+  type: DataType,
+  singularTemplate: string,
+  pluralTemplate: string
 ) => `${type}: (count: number) => plural(count, {
   one: \`${singularTemplate}\`,
   other: \`${pluralTemplate}\`
 })`;
 
-const MODULE_TEMPLATE = (exportName, strings) =>
+const MODULE_TEMPLATE = (exportName: string, strings: string) =>
   `/* eslint-disable header/header */
 // THIS FILE IS GENERATED. DO NOT EDIT MANUALLY.
 
@@ -265,7 +289,7 @@ export const ${exportName} = {
 };
 `;
 
-function generateDoActionsStrings() {
+function generateDoActionsStrings(): string {
   const exportName = "doActions";
 
   return MODULE_TEMPLATE(
@@ -279,7 +303,7 @@ function generateDoActionsStrings() {
   );
 }
 
-function generateActionsStrings() {
+function generateActionsStrings(): string {
   const exportName = "actions";
   return MODULE_TEMPLATE(
     exportName,
@@ -292,7 +316,7 @@ function generateActionsStrings() {
   );
 }
 
-function generateActionConfirmationStrings() {
+function generateActionConfirmationStrings(): string {
   const exportName = "actionConfirmations";
   return MODULE_TEMPLATE(
     exportName,
@@ -307,7 +331,7 @@ function generateActionConfirmationStrings() {
   );
 }
 
-function generateActionErrorStrings() {
+function generateActionErrorStrings(): string {
   const exportName = "actionErrors";
   return MODULE_TEMPLATE(
     exportName,
@@ -321,7 +345,7 @@ function generateActionErrorStrings() {
   );
 }
 
-function generateInProgressActionsStrings() {
+function generateInProgressActionsStrings(): string {
   const exportName = "inProgressActions";
   return MODULE_TEMPLATE(
     exportName,
@@ -334,10 +358,15 @@ function generateInProgressActionsStrings() {
   );
 }
 
-function generateStrings(exportName, actions, singular, plural) {
-  let result = [];
+function generateStrings(
+  exportName: string,
+  actions: ActionDefinition[],
+  singular: (action: string, type: DataType) => string,
+  plural: (action: string, type: DataType) => string
+): string {
+  let result: string[] = [];
   for (const action of actions) {
-    const subResults = [];
+    const subResults: string[] = [];
     const actionName = action.label;
     for (const type of action.dataTypes) {
       subResults.push(

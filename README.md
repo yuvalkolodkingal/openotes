@@ -4,8 +4,9 @@
 
 **A desktop notes application that keeps your notes yours.**
 
-Offline-first · end-to-end encrypted · syncs over your own WebDAV server ·
-no account, no subscription, no cloud
+Offline-first · syncs to your own WebDAV server or to Google Drive, Dropbox
+and OneDrive · hosts the AI agent you already have · no account, no
+subscription
 
 A fork of [Notesnook](https://github.com/streetwriters/notesnook) · GPL-3.0-or-later
 
@@ -20,13 +21,20 @@ audited software — and changes what sits underneath:
 
 - **No Notesnook account.** Nothing to sign up for. The application opens
   straight into a local vault.
-- **Your server, or none at all.** Synchronization goes to a WebDAV server
-  you control — Nextcloud, ownCloud, Apache, nginx, a Raspberry Pi. Or skip
-  it entirely and stay on one machine.
-- **Encrypted before it leaves.** Notes, attachments and backups are
-  encrypted on your machine. The server stores ciphertext and never receives
-  a key. Even the filenames are keyed digests, so a directory listing gives
-  nothing away.
+- **Your server, your drive, or neither.** Synchronization goes to a WebDAV
+  server you control — Nextcloud, ownCloud, Apache, a Raspberry Pi — or to
+  Google Drive, Dropbox or OneDrive. Or skip it entirely and stay on one
+  machine. See [DRIVES.md](DRIVES.md).
+- **A readable folder, or an unreadable one — your choice.** A cloud drive
+  gets one Markdown file per note by default, so the folder opens on your
+  phone and survives Openotes itself. Turn on encryption and the same folder
+  becomes opaque: content, titles and notebook structure all hidden behind
+  keyed digests. WebDAV is always encrypted.
+- **An AI assistant, without an AI company.** Openotes ships no model and no
+  API keys. It speaks the Agent Client Protocol, so it hosts an agent you
+  already have — Claude Code, Gemini, OpenCode, Codex, Antigravity — signing
+  in with your own subscription. Notes in your vault stay invisible to it.
+  See [AI.md](AI.md).
 - **No subscription tiers.** Every local feature is available. There is no
   paywall to remove because there is no hosted business model behind it.
 - **No Electron.** It runs on Deno Desktop using the webview your operating
@@ -112,7 +120,7 @@ Welcome
    ↓
 Create a local vault, set an encryption password
    ↓
-Connect a WebDAV server            ← optional, skip for local-only
+Connect a drive or WebDAV server   ← optional, skip for local-only
    ↓
 Import an existing backup          ← optional
    ↓
@@ -121,6 +129,16 @@ Start writing
 
 Everything after the first step is optional. Openotes is fully usable
 without a server and without a network connection.
+
+### Connecting a cloud drive
+
+`Settings → Sync`, pick Google Drive, Dropbox or OneDrive, and sign in through
+your browser. Access tokens never reach the note-editing half of the
+application; they live in the encrypted credential store. Drive uses the
+`drive.file` scope, so Openotes can only see files it created.
+
+[DRIVES.md](DRIVES.md) covers what each provider can actually guarantee, and
+why Google Drive is the weakest of the three.
 
 ### Connecting WebDAV
 

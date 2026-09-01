@@ -18,8 +18,18 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
 import { Text } from "@theme-ui/components";
+import { ThemeUICSSObject } from "@theme-ui/core";
+import type { ReactNode } from "react";
+import type { SchemeColors } from "@notesnook/theme";
 
-function TextWithTip({ text, tip, sx, color }) {
+type TextWithTipProps = {
+  text?: ReactNode;
+  tip?: ReactNode;
+  sx?: ThemeUICSSObject;
+  color?: SchemeColors;
+};
+
+function TextWithTip({ text, tip, sx, color }: TextWithTipProps) {
   return (
     <Text sx={{ ...sx, fontSize: "body", color: color || "paragraph" }}>
       {text}

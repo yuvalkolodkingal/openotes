@@ -25,8 +25,51 @@ import { fileURLToPath } from "url";
 import { performance } from "perf_hooks";
 import { createHash } from "crypto";
 
-const args = { _: [], exclude: [], force: false, verbose: false, all: false };
-const shortFlags = { f: "force", v: "verbose", a: "all", e: "exclude" };
+/** A package.json, as far as this script cares about one. */
+interface PackageJson {
+  name?: string;
+  scripts?: Record<string, string>;
+  dependencies?: Record<string, string>;
+  devDependencies?: Record<string, string>;
+  peerDependencies?: Record<string, string>;
+  taskRunner?: TaskRunnerConfig;
+  [key: string]: unknown;
+}
+
+interface TaskDefinition {
+  commands?: string[];
+  dependencies: string[];
+  inputs?: string[];
+  outputs?: string[];
+}
+
+interface TaskRunnerConfig {
+  projects: string[];
+  tasks: TaskDefinition[];
+}
+
+interface Args {
+  _: string[];
+  exclude: string[];
+  force: boolean;
+  verbose: boolean;
+  all: boolean;
+  [flag: string]: string[] | boolean;
+}
+
+const args: Args = {
+  _: [],
+  exclude: [],
+  force: false,
+  verbose: false,
+  all: false
+};
+const shortFlags: Record<string, string> = {
+  f: "force",
+  v: "verbose",
+  a: "all",
+  e: "exclude"
+};
 for (let i = 2; i < process.argv.length; i++) {
   const arg = process.argv[i];
   if (!arg.startsWith("-")) args._.push(arg);
@@ -51,18 +94,21 @@ if (!args._.length) {
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const root = path.join(__dirname, "..");
 const isVerbose = !!(process.env.CI || args.verbose);
-const rootPkg = readJson(path.join(root, "package.json"));
-const config = rootPkg.taskRunner || { projects: ["packages/*"], tasks: [] };
+const rootPkg: PackageJson = readJson(path.join(root, "package.json"));
+const config: TaskRunnerConfig = rootPkg.taskRunner ||
+  { projects: ["packages/*"], tasks: [] };
 const cachePath = path.join(root, ".taskcache");
 const [project, ...taskParts] = args.all
   ? [null, ...args._[0].split(":")]
   : args._[0].split(":");
 const cmd = taskParts.join(":");
-const pkgCache = new Map();
-const depMemo = new Map();
+const pkgCache = new Map<string, PackageJson>();
+const depMemo = new Map<string, string[]>();
 
 const allPkgs = await findPkgs();
-const task = config.tasks?.find((t) => t.commands?.includes(cmd));
+const task = config.tasks?.find((t: TaskDefinition) =>
+  t.commands?.includes(cmd)
+);
 if (!task) {
   console.error(`Task "${cmd}" not found in taskRunner config.`);
   process.exit(1);
@@ -70,20 +116,20 @@ if (!task) {
 
 const resolvedPkgs = (
   await Promise.all(
-    task.dependencies.flatMap((dep) =>
-      allPkgs.map((pkg) => resolvePkg(dep, pkg))
+    task.dependencies.flatMap((dep: string) =>
+      allPkgs.map((pkg: string) => resolvePkg(dep, pkg))
     )
   )
 ).filter(Boolean);
 
-let cache = {};
+let cache: Record<string, string> = {};
 try {
   cache = existsSync(cachePath) ? readJson(cachePath) : {};
 } catch {
   if (isVerbose) console.warn("Failed to parse .taskcache");
 }
 
-function readPkg(pkgPath) {
+function readPkg(pkgPath: string): PackageJson {
   const key = path.resolve(pkgPath);
   if (pkgCache.has(key)) return pkgCache.get(key);
   try {
@@ -95,20 +141,26 @@ function readPkg(pkgPath) {
   }
 }
 
-function readJson(jsonPath) {
+/**
+ * `any` rather than `unknown`: this reads arbitrary JSON whose shape differs
+ * per call site (a package.json here, the task cache there), and every caller
+ * immediately narrows it. Returning `unknown` would push a cast to each of
+ * them without making any of it safer.
+ */
+function readJson(jsonPath: string): any {
   return JSON.parse(readFileSync(jsonPath, "utf-8"));
 }
 
-function getPkgName(pkgPath) {
+function getPkgName(pkgPath: string): string | undefined {
   return readPkg(pkgPath)?.name || path.basename(pkgPath);
 }
 
-function isPkg(path, name) {
+function isPkg(path: string, name: string): boolean {
   const pkgName = getPkgName(path);
   return pkgName === name || pkgName.endsWith(`/${name}`);
 }
 
-async function findPkgs() {
+async function findPkgs(): Promise<string[]> {
   const pkgs = [];
   for await (const entry of glob(config.projects)) {
     const pkgPath = path.join(root, entry);
@@ -118,7 +170,7 @@ async function findPkgs() {
   return pkgs;
 }
 
-function filterDeps(base, deps) {
+function filterDeps(base: string, deps: string[]): string[] {
   if (!deps) return [];
   let filteredDeps = [];
   for (const [key, value] of Object.entries(deps))
@@ -127,7 +179,7 @@ function filterDeps(base, deps) {
   return filteredDeps;
 }
 
-async function findDeps(scope) {
+async function findDeps(scope: string): Promise<string[]> {
   const key = path.resolve(scope);
   if (depMemo.has(key)) return depMemo.get(key);
   const pkg = readPkg(scope);
@@ -145,7 +197,10 @@ async function findDeps(scope) {
   return result;
 }
 
-async function resolvePkg(command, pkgPath) {
+async function resolvePkg(
+  command: string,
+  pkgPath: string
+): Promise<string | undefined> {
   const json = readPkg(pkgPath);
   if (!json?.scripts?.[command]) return null;
   const deps = await findDeps(pkgPath);
@@ -159,7 +214,11 @@ async function resolvePkg(command, pkgPath) {
   return { path: pkgPath, cmd: command, taskDependencies: taskDeps };
 }
 
-async function runScript(command, pkg, opts) {
+async function runScript(
+  command: string,
+  pkg: string,
+  opts?: { silent?: boolean }
+): Promise<void> {
   opts = opts || {};
   const start = performance.now();
   const name = getPkgName(pkg);
@@ -192,11 +251,11 @@ async function runScript(command, pkg, opts) {
   }
 }
 
-function normalizePath(pathStr) {
+function normalizePath(pathStr: string): string {
   return path.resolve(pathStr).replace(/\/$/, "");
 }
 
-async function toBatches(pkgs, cmd) {
+async function toBatches(pkgs: string[], cmd: string): Promise<string[][]> {
   const batches = [pkgs.filter((pkg) => !pkg.taskDependencies[cmd]?.length)];
   const remaining = pkgs
     .filter((pkg) => !!pkg.taskDependencies[cmd]?.length)
@@ -224,7 +283,11 @@ async function toBatches(pkgs, cmd) {
   return batches;
 }
 
-async function resolveRecursive(cmd, pkg, visited) {
+async function resolveRecursive(
+  cmd: string,
+  pkg: string,
+  visited: Set<string>
+): Promise<void> {
   visited = visited || new Set();
   const result = [];
   const resolved = await resolvePkg(cmd, pkg);
@@ -259,7 +322,7 @@ const exclusions = new Set([
   "output"
 ]);
 
-async function computeChecksumFast(dir) {
+async function computeChecksumFast(dir: string): Promise<string> {
   const hash = createHash("sha256");
   for await (const entry of glob(`${dir}/**/**`, {
     withFileTypes: true,
@@ -277,7 +340,7 @@ async function computeChecksumFast(dir) {
   return hash.digest("hex");
 }
 
-async function computeChecksumSlow(dir) {
+async function computeChecksumSlow(dir: string): Promise<string> {
   const hash = createHash("sha256");
   const files = [];
   for await (const entry of glob(`${dir}/**/**`, {
@@ -294,7 +357,7 @@ async function computeChecksumSlow(dir) {
   return hash.digest("hex");
 }
 
-function findKeyInObject(obj, key) {
+function findKeyInObject(obj: unknown, key: string): unknown {
   if (!obj || typeof obj !== "object" || Array.isArray(obj)) return;
   if (key in obj) return obj[key];
   for (const value of Object.values(obj)) {
@@ -303,7 +366,7 @@ function findKeyInObject(obj, key) {
   }
 }
 
-function getBuildFolder(pkgPath) {
+function getBuildFolder(pkgPath: string): string | undefined {
   const pkg = readPkg(pkgPath);
   if (!pkg) return null;
   let artifact =

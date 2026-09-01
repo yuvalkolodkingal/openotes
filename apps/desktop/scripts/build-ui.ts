@@ -29,7 +29,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
  * The one part that still belongs to the npm toolchain is the monorepo
  * prebuild: `apps/web` depends on nine sibling packages through `file:`
  * specifiers, and those are compiled by the repository's own task runner
- * (`scripts/execute.mjs`, which shells out to `npm run <task>` per package).
+ * (`scripts/execute.ts`, which shells out to `npm run <task>` per package).
  * That is a build-time-only dependency, exactly as recorded in
  * PORTING_NOTES.md §11.1. When neither `node` nor `npm` is on PATH this
  * script installs Deno-backed shims for both so the prebuild still runs
@@ -103,7 +103,7 @@ async function readJson(path: string): Promise<Record<string, unknown>> {
 /**
  * `node` and `npm`, backed by Deno when the machine has neither.
  *
- * `scripts/execute.mjs` spawns `npm run <task>` for each package, and npm in
+ * `scripts/execute.ts` spawns `npm run <task>` for each package, and npm in
  * turn spawns `node`, so both names have to resolve. Deno can execute either:
  * a Node program is `deno run -A <file>`, and npm itself is an npm package.
  */
@@ -238,7 +238,7 @@ async function buildWorkspaceLibraries(force: boolean) {
   const executor = join(ROOT, "scripts", "execute.mjs");
 
   for (const dependency of unbuilt) {
-    // `scripts/execute.mjs <package>:build` resolves that package's own
+    // `scripts/execute.ts <package>:build` resolves that package's own
     // `file:` dependencies first, so the order here does not matter and
     // already-built packages are skipped through .taskcache.
     const shortName = dependency.name.replace(/^@[^/]+\//, "");
@@ -253,7 +253,7 @@ const VITE_ENTRY = join(WEB_DIR, "node_modules", "vite", "bin", "vite.js");
  *
  * CONTRIBUTING.md promises that Deno and a C compiler are all a contributor
  * needs, so this has to be able to bootstrap the npm side itself rather than
- * telling the reader to go and run something. `scripts/bootstrap.mjs` is the
+ * telling the reader to go and run something. `scripts/bootstrap.ts` is the
  * repository's own installer — it understands the `file:` package layout and
  * the postinstall whitelist — and the root `npm ci` provides the packages
  * that script itself imports.

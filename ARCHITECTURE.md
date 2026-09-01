@@ -230,21 +230,47 @@ application will not quietly fall back to an unencrypted database.
 
 ## 5. Synchronization
 
-Fully specified in [WEBDAV.md](WEBDAV.md). The shape:
+There are **two** engines, because a WebDAV repository nobody reads by hand
+and a Drive folder you open on your phone want opposite things. Both sit on
+one storage seam.
 
-- `packages/sync-webdav` is transport- and database-agnostic: a WebDAV
-  client, the protocol, the crypto, conflict policy, a durable queue and a
-  scheduler. It has no knowledge of SQLite or of Notesnook's schema.
-- `apps/desktop/src/sync/store-adapter.ts` is the only place that does. It
-  reuses the dirty/tombstone bookkeeping `@notesnook/core` already
-  maintains, so "what changed locally" is a query rather than a second
-  change log that could disagree with the first.
-- `apps/desktop/src/sync/service.ts` owns the lifecycle: configuration,
-  scheduling, and the rule that a WebDAV failure surfaces as a status
-  indicator and never as an exception reaching the editor.
+**The seam.** `packages/sync-core` defines `RemoteStorage`: an object store,
+not WebDAV verbs, because PROPFIND and MKCOL do not exist on Drive or Dropbox.
+Two of its methods carry the correctness argument — `putNew` is
+create-if-absent and `putUpdate` is compare-and-swap — and `capabilities()`
+reports how well a backend can honour them rather than letting callers assume.
+Dropbox and Graph have both natively; WebDAV emulates create with a probe plus
+`If-None-Match`; Google Drive has neither and says so.
 
-The application is fully usable with no server configured. Sync is a
-feature, not a prerequisite.
+**The journal engine** (`packages/sync-webdav`, specified in
+[WEBDAV.md](WEBDAV.md)) appends encrypted, immutable batches to per-device
+journals. Nothing is ever rewritten, so "what changed" is a cursor into an
+append-only log and conflicts are decided by revision. This is what WebDAV
+users have and it is unchanged.
+
+**The file engine** (`packages/sync-files`) writes one Markdown file per note.
+Files are mutable and anyone can edit them — including a person typing into
+Drive's web UI — so "what changed" is a three-way comparison against a
+remembered merge base, never a timestamp comparison: clocks drift across
+devices and Drive reports server time, so "newest wins" silently destroys
+work. A `NoteCodec` decides whether the folder is readable Markdown (the
+default) or opaque ciphertext under keyed-digest names.
+
+The manifest holding each merge base is **local and never uploaded**: a base
+is a statement about what one device last saw, so a shared one would need
+locking and would itself conflict. Nothing is lost by that, because note
+identity travels in each file's front-matter `id`.
+
+**Shared by both.** `apps/desktop/src/sync/store-adapter.ts` is the only place
+that knows Notesnook's schema; it reuses the dirty/tombstone bookkeeping
+`@notesnook/core` already maintains, so "what changed locally" is a query
+rather than a second change log that could disagree with the first.
+`apps/desktop/src/sync/service.ts` owns the lifecycle and the rule that a
+remote failure surfaces as a status indicator and never as an exception
+reaching the editor.
+
+The application is fully usable with nothing configured. Sync is a feature,
+not a prerequisite. See [DRIVES.md](DRIVES.md) for the cloud backends.
 
 ---
 

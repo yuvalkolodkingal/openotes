@@ -33,7 +33,7 @@
   "scripts": {
     "test": "vitest run",
     "bench": "ts-node benches/bench.ts",
-    "postbuild": "node scripts/postbuild.mjs",
+    "postbuild": "node scripts/postbuild.ts",
     "prepublishOnly": "npm run build && npm run test",
     "postinstall": "patch-package",
     "build": "tsdown src/browser.ts src/node.ts",
