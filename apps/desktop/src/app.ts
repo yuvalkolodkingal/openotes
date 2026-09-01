@@ -345,12 +345,12 @@ export async function createApp(
   const mcp = new McpServer({
     repository: notes,
     configDirectory: configDir(),
-    onChanged: () => {
+    onChanged: (change) => {
       // An assistant just wrote to the vault behind the interface's back.
       // Sync has to ship it, and the interface has to reload — it caches
-      // every list it renders.
+      // every list it renders and holds open notes in memory.
       context.notifyLocalChange();
-      emit("mcp.notesChanged", {});
+      emit("mcp.notesChanged", change);
     },
   });
 
@@ -385,14 +385,6 @@ export async function createApp(
           error: error instanceof Error ? error.message : String(error),
         });
       }
-      // The assistant endpoint answers questions about the vault, so it
-      // only makes sense once the vault is open — and it stays off unless
-      // the user turned it on.
-      void context.applyMcpSettings().catch((error) => {
-        log.warn("Could not start the assistant endpoint", {
-          error: error instanceof Error ? error.message : String(error),
-        });
-      });
       void backups.runIfDue();
     }
     return handle;
@@ -411,6 +403,19 @@ export async function createApp(
       }
     } catch (error) {
       log.warn("Could not unlock stored credentials at startup", {
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
+  }
+
+  // The assistant endpoint starts with the app rather than with the vault:
+  // a client that connects before the vault is unlocked should get a tool
+  // call that says so, not a refused connection it has to guess about.
+  if (settings.get("mcp").enabled) {
+    try {
+      await context.applyMcpSettings();
+    } catch (error) {
+      log.warn("Could not start the assistant endpoint", {
         error: error instanceof Error ? error.message : String(error),
       });
     }

@@ -50,6 +50,7 @@ import {
   decodeJson,
 } from "../http/authorized-fetch.ts";
 import type { TokenManager } from "../oauth/token-manager.ts";
+import { endpointsFor } from "../oauth/endpoints.ts";
 import {
   DEFAULT_MAX_RETRIES,
   parseRetryAfter,
@@ -57,8 +58,12 @@ import {
   withRetry,
 } from "../http/retry.ts";
 
-/** Shown in every message this adapter produces. */
-export const GOOGLE_DRIVE_LABEL = "Google Drive";
+/**
+ * Shown in every message this adapter produces, and taken from the one
+ * table that already names the provider, so the settings screen and a
+ * failure the user reads five minutes later call it the same thing.
+ */
+export const GOOGLE_DRIVE_LABEL = endpointsFor("googledrive").label;
 
 /**
  * The reasons that mean "come back in a moment". Deliberately just these

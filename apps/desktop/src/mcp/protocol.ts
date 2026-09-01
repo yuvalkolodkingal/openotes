@@ -351,8 +351,11 @@ export interface HandlerOptions {
   allowWrites: boolean;
   serverName: string;
   serverVersion: string;
-  /** Called after a tool changed anything, so sync and the UI find out. */
-  onChanged?: () => void;
+  /**
+   * Called after a tool changed anything, with the notes it touched, so
+   * sync ships them and the interface reloads what it is showing.
+   */
+  onChanged?: (change: { noteIds: string[] }) => void;
 }
 
 const INSTRUCTIONS =
@@ -498,7 +501,7 @@ function callTool(params: Json, options: HandlerOptions) {
   const input = (params.arguments ?? {}) as Json;
   try {
     const result = tool.run(options.repository, input);
-    if (tool.mutates) options.onChanged?.();
+    if (tool.mutates) options.onChanged?.({ noteIds: noteIdsIn(result) });
     return {
       // Both shapes: `content` for clients that only read text, and
       // `structuredContent` for those that can use the real object.
@@ -517,6 +520,25 @@ function callTool(params: Json, options: HandlerOptions) {
       isError: true,
     };
   }
+}
+
+/**
+ * The notes a tool result refers to. The interface caches every list it
+ * renders and keeps open notes in memory, so it needs to know which ones
+ * moved underneath it — a bare "something changed" would mean reloading the
+ * editor on every tag change.
+ */
+function noteIdsIn(result: unknown): string[] {
+  if (!result || typeof result !== "object") return [];
+  const ids: string[] = [];
+  const items = Array.isArray(result) ? result : [result];
+  for (const item of items) {
+    if (!item || typeof item !== "object") continue;
+    const id = (item as Json).id;
+    // Only note-shaped results: a notebook's id would reload nothing.
+    if (typeof id === "string" && "title" in (item as Json)) ids.push(id);
+  }
+  return ids;
 }
 
 function wrapStructured(result: unknown): Json {

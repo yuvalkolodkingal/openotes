@@ -67,8 +67,11 @@ export interface McpServerOptions {
   repository: NoteRepository;
   /** Directory for the handshake file. */
   configDirectory: string;
-  /** Notifies sync and the interface that notes changed underneath them. */
-  onChanged: () => void;
+  /**
+   * Notifies sync and the interface that notes changed underneath them,
+   * naming the notes so the interface can reload just those.
+   */
+  onChanged: (change: { noteIds: string[] }) => void;
 }
 
 export interface McpStatus {
@@ -236,40 +239,38 @@ export class McpServer {
   /** Guards have passed; read the body and answer it. */
   private async answer(request: Request): Promise<Response> {
     const text = await request.text();
-    {
-      let message: unknown;
-      try {
-        message = JSON.parse(text);
-      } catch {
-        return json(400, {
-          jsonrpc: "2.0",
-          id: null,
-          error: { code: -32700, message: "Body is not valid JSON" },
-        });
-      }
-
-      const options = {
-        repository: this.options.repository,
-        allowWrites: this.allowWrites,
-        serverName: "openotes",
-        serverVersion: APP_VERSION,
-        onChanged: this.options.onChanged,
-      };
-
-      // A batch is an array; each element answers independently and
-      // notifications drop out of the reply entirely.
-      if (Array.isArray(message)) {
-        const answers = message
-          .map((one) => handleMessage(one, options))
-          .filter((one) => one !== undefined);
-        if (!answers.length) return new Response(null, { status: 202 });
-        return json(200, answers);
-      }
-
-      const answer = handleMessage(message, options);
-      if (!answer) return new Response(null, { status: 202 });
-      return json(200, answer);
+    let message: unknown;
+    try {
+      message = JSON.parse(text);
+    } catch {
+      return json(400, {
+        jsonrpc: "2.0",
+        id: null,
+        error: { code: -32700, message: "Body is not valid JSON" },
+      });
     }
+
+    const options = {
+      repository: this.options.repository,
+      allowWrites: this.allowWrites,
+      serverName: "openotes",
+      serverVersion: APP_VERSION,
+      onChanged: this.options.onChanged,
+    };
+
+    // A batch is an array; each element answers independently and
+    // notifications drop out of the reply entirely.
+    if (Array.isArray(message)) {
+      const answers = message
+        .map((one) => handleMessage(one, options))
+        .filter((one) => one !== undefined);
+      if (!answers.length) return new Response(null, { status: 202 });
+      return json(200, answers);
+    }
+
+    const answer = handleMessage(message, options);
+    if (!answer) return new Response(null, { status: 202 });
+    return json(200, answer);
   }
 
   private authorized(request: Request): boolean {
