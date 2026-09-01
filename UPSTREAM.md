@@ -16,7 +16,7 @@ merge will not be mechanical.
 | Upstream repository | `streetwriters/notesnook` |
 | Base revision | `09a0c30` (merge of release/3.4.7) |
 | Base version | 3.4.7 |
-| Fork version | 1.0.0 |
+| Fork version | 2.1.0 |
 | Fork repository | `yuvalkolodkingal/notesnook` |
 | Last merge from upstream | Initial fork point |
 
@@ -196,6 +196,33 @@ the diff smaller.** A smaller diff is not worth a worse application.
 ---
 
 ## Fork changelog
+
+### 2.1.0
+
+- **A built-in MCP server.** Openotes answers the Model Context Protocol on a
+  loopback endpoint, so an assistant on the same machine can search, read and
+  — if allowed — edit notes. Off by default, read-only when enabled, editing
+  a second switch; notes in a vault are never readable through it, and
+  nothing it can do deletes a note permanently.
+- **Sync to a folder.** The same encrypted protocol now runs over a plain
+  directory, which is how Google Drive, OneDrive, Dropbox and iCloud Drive
+  are reached in practice: point at the folder their desktop client keeps in
+  step and it does the uploading. A NAS mount, a USB stick or Syncthing works
+  the same way.
+- **Sync to Google Drive, OneDrive and Dropbox directly**, for machines with
+  no desktop client, through the user's own OAuth registration and a
+  loopback authorization-code flow with PKCE.
+- The sync engine no longer speaks WebDAV: it drives an eleven-verb
+  `RemoteStore`, of which WebDAV is one implementation. Two latent bugs fell
+  out of writing that interface down — `rebuildRemote` moved directories
+  through a file-only path, and `initialize` adopted a remote repository
+  after *any* failed write rather than only a lost race.
+- **Dark mode rebuilt.** The dark theme defined four of the eleven scopes the
+  app renders and carried light-mode values in its disabled variant; both
+  themes now define the same scopes and are held to WCAG AA by a test. System
+  theme detection actually asks the desktop, the first frame is painted by
+  the runtime rather than flashing white, and the sync-status colours are no
+  longer light-mode literals drawn on a dark status bar.
 
 ### 1.0.0 — initial fork from 3.4.7
 

@@ -197,15 +197,24 @@ application will not quietly fall back to an unencrypted database.
 
 Fully specified in [WEBDAV.md](WEBDAV.md). The shape:
 
-- `packages/sync-remote` is transport- and database-agnostic: a WebDAV
-  client, the protocol, the crypto, conflict policy, a durable queue and a
-  scheduler. It has no knowledge of SQLite or of Notesnook's schema.
+- `packages/sync-remote` is transport- and database-agnostic: the protocol,
+  the crypto, conflict policy, a durable queue, a scheduler — and a
+  `RemoteStore` interface of eleven verbs that is the whole of what the
+  engine needs from a place to keep encrypted blobs. It has no knowledge of
+  SQLite or of Notesnook's schema, and since 2.1 no knowledge of WebDAV
+  either: a WebDAV client is one implementation, a local directory another.
+- `packages/sync-drive` adds three more — Google Drive, OneDrive and
+  Dropbox — over the user's own OAuth registration. They are the
+  second-choice route: if the provider's desktop client is installed, the
+  folder store reaches the same account with no sign-in at all.
 - `apps/desktop/src/sync/store-adapter.ts` is the only place that does. It
   reuses the dirty/tombstone bookkeeping `@notesnook/core` already
   maintains, so "what changed locally" is a query rather than a second
   change log that could disagree with the first.
+- `apps/desktop/src/sync/provider.ts` turns the settings into a store, so a
+  provider added there is a provider the backup engine gained too.
 - `apps/desktop/src/sync/service.ts` owns the lifecycle: configuration,
-  scheduling, and the rule that a WebDAV failure surfaces as a status
+  scheduling, and the rule that a sync failure surfaces as a status
   indicator and never as an exception reaching the editor.
 
 The application is fully usable with no server configured. Sync is a
@@ -251,8 +260,10 @@ apps/
       native/         paths, logger, settings, sqlite, filesystem,
                       server, shell/dialogs/notifications/clipboard
       security/       encrypted credential store
-      sync/           WebDAV sync service + database adapter
+      sync/           sync service, provider registry, database adapter
       backup/         snapshot, restore, retention
+      mcp/            the Model Context Protocol endpoint for assistants
+      oauth/          loopback authorization-code flow for the drive providers
       updates/        release checking
     scripts/          build-native, build-ui, build, checksums, smoke test
     types/            ambient declarations for the deno desktop API
@@ -263,7 +274,8 @@ packages/
   common/             shared helpers and the capability module
   crypto/  sodium/    libsodium wrappers (upstream, audited)
   editor/             TipTap editor
-  sync-webdav/        the WebDAV sync + backup engine
+  sync-remote/        the sync protocol, backup engine, WebDAV and folder stores
+  sync-drive/         Google Drive, OneDrive and Dropbox stores + OAuth
   theme/  ui/  intl/  logger/  streamable-fs/
 
 packaging/            flatpak manifest, PKGBUILD, .desktop, man page
