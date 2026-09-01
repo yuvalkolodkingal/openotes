@@ -56,6 +56,16 @@ export interface ProviderEndpoints {
    * account disconnected at the next refresh.
    */
   rotatesRefreshToken: boolean;
+  /**
+   * The host to build the loopback redirect URI from.
+   *
+   * Every provider makes an exception to exact redirect-URI matching for
+   * loopback so an installed app can use an ephemeral port, but they do not
+   * agree on the spelling: Google documents 127.0.0.1, Microsoft and Dropbox
+   * document localhost. Registering one and sending the other is rejected
+   * with an error that names neither.
+   */
+  loopbackHost: "127.0.0.1" | "localhost";
   /** What the user has to do in the provider's console, for the UI. */
   registrationNotes: readonly string[];
 }
@@ -90,6 +100,7 @@ export const OAUTH_ENDPOINTS: Readonly<
     // Google keeps the same refresh token until it is revoked or unused for
     // six months, so a refresh response usually omits it.
     rotatesRefreshToken: false,
+    loopbackHost: "127.0.0.1",
     registrationNotes: [
       "Create a project at console.cloud.google.com and enable the Google " +
       "Drive API for it.",
@@ -117,6 +128,7 @@ export const OAUTH_ENDPOINTS: Readonly<
     // refresh token and the one that was used stops working. Persisting it
     // every time is mandatory, not an optimization.
     rotatesRefreshToken: true,
+    loopbackHost: "localhost",
     registrationNotes: [
       "Register an application at portal.azure.com → App registrations → " +
       "New registration, with supported account types set to include " +
@@ -143,6 +155,7 @@ export const OAUTH_ENDPOINTS: Readonly<
     // client id.
     requiresClientSecret: false,
     rotatesRefreshToken: false,
+    loopbackHost: "localhost",
     registrationNotes: [
       "Create an app at dropbox.com/developers/apps with Scoped access and " +
       "the App folder access type, so Openotes can only see its own folder.",
