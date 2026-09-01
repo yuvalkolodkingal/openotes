@@ -33,7 +33,7 @@
 pkgname=openotes
 # Default matches APP_VERSION in apps/desktop/src/constants.ts. The CI release
 # job rewrites this line from the release tag before running makepkg.
-pkgver=1.0.0
+pkgver=2.1.0
 pkgrel=1
 pkgdesc="Offline-first, end-to-end-encrypted notes with WebDAV sync (a fork of Notesnook)"
 arch=('x86_64')

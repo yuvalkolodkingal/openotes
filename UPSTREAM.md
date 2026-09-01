@@ -224,7 +224,7 @@ the diff smaller.** A smaller diff is not worth a worse application.
   the runtime rather than flashing white, and the sync-status colours are no
   longer light-mode literals drawn on a dark status bar.
 
-### 1.0.0 — initial fork from 3.4.7
+### 2.1.0 — initial fork from 3.4.7
 
 - Ported the desktop application from Electron to Deno Desktop on the OS
   webview.

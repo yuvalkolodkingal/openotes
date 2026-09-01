@@ -10,7 +10,7 @@ built on someone's laptop is not a release.
 
 ## Release artifacts
 
-A tagged release (`v1.0.0`) publishes:
+A tagged release (`v2.1.0`) publishes:
 
 ### Windows (x86_64)
 
@@ -158,7 +158,7 @@ Flatpak and Arch use their own tooling:
 ```bash
 flatpak-builder --force-clean --repo=repo build-dir \
     packaging/flatpak/org.openotes.Openotes.yml
-flatpak build-bundle repo Openotes-1.0.0-linux-x86_64.flatpak org.openotes.Openotes
+flatpak build-bundle repo Openotes-2.1.0-linux-x86_64.flatpak org.openotes.Openotes
 
 cd packaging/arch && makepkg
 ```
@@ -226,19 +226,19 @@ expected for an unsigned application and not a defect in the build.
 
 ```bash
 # Debian
-dpkg-deb --info Openotes-1.0.0-linux-x86_64.deb
-dpkg-deb --contents Openotes-1.0.0-linux-x86_64.deb
+dpkg-deb --info Openotes-2.1.0-linux-x86_64.deb
+dpkg-deb --contents Openotes-2.1.0-linux-x86_64.deb
 
 # RPM
-rpm -qip Openotes-1.0.0-linux-x86_64.rpm
-rpm -qlp Openotes-1.0.0-linux-x86_64.rpm
+rpm -qip Openotes-2.1.0-linux-x86_64.rpm
+rpm -qlp Openotes-2.1.0-linux-x86_64.rpm
 
 # Arch
-bsdtar -tf openotes-1.0.0-1-x86_64.pkg.tar.zst
+bsdtar -tf openotes-2.1.0-1-x86_64.pkg.tar.zst
 
 # AppImage
-chmod +x Openotes-1.0.0-linux-x86_64.AppImage
-./Openotes-1.0.0-linux-x86_64.AppImage --version
+chmod +x Openotes-2.1.0-linux-x86_64.AppImage
+./Openotes-2.1.0-linux-x86_64.AppImage --version
 
 # Desktop entry and AppStream metadata
 desktop-file-validate packaging/linux/openotes.desktop
