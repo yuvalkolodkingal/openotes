@@ -74,6 +74,23 @@ const converter = new showdown.Converter();
 converter.setFlavor("original");
 
 const splitter = /\W+/gm;
+
+/**
+ * Markdown back to the HTML the editor stores.
+ *
+ * The inverse of Tiptap.toMD(), and it lives here because the showdown
+ * converter and its dummy document are already configured above — the setup is
+ * order-dependent and duplicating it invites a subtly different converter.
+ *
+ * Round-tripping is not lossless in general: Markdown has no way to express a
+ * callout, a maths block, or a table cell with attributes. Showdown passes raw
+ * HTML through, so those constructs survive when the Markdown was produced by
+ * toMD(); Markdown written by hand elsewhere simply becomes an ordinary note.
+ */
+export function markdownToHTML(markdown: string): string {
+  return converter.makeHtml(markdown);
+}
+
 export class Tiptap {
   constructor(private data: string) {}
 

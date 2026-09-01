@@ -38,7 +38,8 @@ export const FORMAT_TO_EXT = {
   md: "md",
   txt: "txt",
   html: "html",
-  "md-frontmatter": "md"
+  "md-frontmatter": "md",
+  "md-sync": "md"
 } as const;
 
 type BaseExportableItem = {
@@ -306,7 +307,8 @@ export async function exportContent(
     rawContent:
       format === "html" || format === "pdf"
         ? content.toHTML()
-        : format === "md" || format === "md-frontmatter"
+        : format === "md" || format === "md-frontmatter" ||
+          format === "md-sync"
         ? content.toMD()
         : content.toTXT()
   });
