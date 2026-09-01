@@ -246,6 +246,12 @@ jobs:
       - name: Smoke test
         run: deno run -A apps/desktop/scripts/smoke-test.ts
 
+      # The unit tests prove the MCP module speaks the protocol; this proves
+      # the built application actually starts a listener, publishes a
+      # handshake a client can find, and refuses everything it should.
+      - name: MCP endpoint check
+        run: deno run -A apps/desktop/scripts/mcp-check.ts --port 47470
+
       - name: Upload the smoke-tested build
         if: failure()
         uses: actions/upload-artifact@v4
