@@ -17,8 +17,18 @@ You should have received a copy of the GNU General Public License
 along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
+/**
+ * These exercise Notesnook Cloud: sign-in, account management, monograph
+ * publishing and hosted sync. Openotes removed all of it (see ARCHITECTURE.md
+ * §9), so nothing here can pass in this fork — the suite is kept, and kept
+ * compiling, so that the divergence stays visible rather than being quietly
+ * deleted.
+ *
+ * They run only under IS_E2E=true, which no job in this repository sets.
+ */
+
 import { databaseTest } from "../__tests__/utils/index.ts";
-import { login } from "./utils.js";
+import { login } from "./utils.ts";
 import { test, expect } from "vitest";
 
 test(

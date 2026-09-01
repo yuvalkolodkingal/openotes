@@ -18,15 +18,30 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
 import { authenticator } from "otplib";
+import type Database from "../src/api/index.ts";
 
-export const USER = {
+/**
+ * Credentials for the hosted account these tests need.
+ *
+ * Every field is optional because they come from the environment and are
+ * absent unless a CI job supplies them — which no job in this fork does. See
+ * the note in each suite about why these tests cannot pass here.
+ */
+export interface E2EUser {
+  email?: string;
+  password?: string;
+  hashed?: string;
+  totpSecret?: string;
+}
+
+export const USER: E2EUser = {
   email: process.env.USER_EMAIL,
   password: process.env.USER_PASSWORD,
   hashed: process.env.USER_HASHED_PASSWORD,
   totpSecret: process.env.USER_TOTP_SECRET
 };
 
-export async function login(db, user = USER) {
+export async function login(db: Database, user: E2EUser = USER): Promise<void> {
   await db.user.authenticateEmail(user.email);
 
   const token = authenticator.generate(user.totpSecret);
@@ -35,6 +50,6 @@ export async function login(db, user = USER) {
   await db.user.authenticatePassword(user.email, user.password, user.hashed);
 }
 
-export async function logout(db) {
+export async function logout(db: Database): Promise<void> {
   await db.user.logout(true);
 }

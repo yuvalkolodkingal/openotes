@@ -1,5 +1,5 @@
 .vitepress/dist
 .vitepress/cache
 contents/v*/
-.vitepress/sidebars/generated.mjs
+.vitepress/sidebars/generated.ts
 .wrangler

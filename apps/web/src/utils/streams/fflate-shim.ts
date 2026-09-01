@@ -19,7 +19,40 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 import { Deflate as FflateDeflate, Inflate as FflateInflate } from "fflate";
 
-function initShimAsyncCodec(library, options = {}, registerDataHandler) {
+/**
+ * Adapts fflate to the synchronous codec interface zip.js expects.
+ *
+ * fflate pushes output through an `ondata` callback; zip.js wants `append`
+ * and `flush` to return bytes. The adapter buffers between the two.
+ */
+
+/** Either fflate codec: both take options and expose push/ondata. */
+type FflateCodec = FflateDeflate | FflateInflate;
+type FflateCodecClass = new (options?: Record<string, unknown>) => FflateCodec;
+
+interface CodecAdapter {
+  codec: FflateCodec;
+  /** Bytes fflate has emitted since the last append/flush. */
+  pendingData: Uint8Array | null;
+  append(data: Uint8Array): Uint8Array;
+  flush(): Uint8Array;
+}
+
+type CodecAdapterClass = new (
+  options: Record<string, unknown>
+) => CodecAdapter;
+
+function initShimAsyncCodec(
+  library: { Deflate: FflateCodecClass; Inflate: FflateCodecClass },
+  options: {
+    deflate?: Record<string, unknown>;
+    inflate?: Record<string, unknown>;
+  } = {},
+  registerDataHandler: (
+    codec: FflateCodec,
+    onData: (data: Uint8Array) => void
+  ) => void
+): { Deflate: CodecAdapterClass; Inflate: CodecAdapterClass } {
   return {
     Deflate: createCodecClass(
       library.Deflate,
@@ -34,7 +67,7 @@ function initShimAsyncCodec(library, options = {}, registerDataHandler) {
   };
 }
 
-function objectHasOwn(object, propertyName) {
+function objectHasOwn(object: object, propertyName: string): boolean {
   // eslint-disable-next-line no-prototype-builtins
   return typeof Object.hasOwn === "function"
     ? Object.hasOwn(object, propertyName)
@@ -43,15 +76,21 @@ function objectHasOwn(object, propertyName) {
 }
 
 function createCodecClass(
-  constructor,
-  constructorOptions,
-  registerDataHandler
-) {
-  return class {
-    constructor(options) {
+  constructor: FflateCodecClass,
+  constructorOptions: Record<string, unknown> | undefined,
+  registerDataHandler: (
+    codec: FflateCodec,
+    onData: (data: Uint8Array) => void
+  ) => void
+): CodecAdapterClass {
+  return class implements CodecAdapter {
+    codec!: FflateCodec;
+    pendingData: Uint8Array | null = null;
+
+    constructor(options: Record<string, unknown>) {
       // eslint-disable-next-line @typescript-eslint/no-this-alias
       const codecAdapter = this;
-      const onData = (data) => {
+      const onData = (data: Uint8Array) => {
         if (codecAdapter.pendingData) {
           const previousPendingData = codecAdapter.pendingData;
           codecAdapter.pendingData = new Uint8Array(
@@ -72,17 +111,17 @@ function createCodecClass(
       );
       registerDataHandler(codecAdapter.codec, onData);
     }
-    append(data) {
+    append(data: Uint8Array): Uint8Array {
       this.codec.push(data);
       return getResponse(this);
     }
-    flush() {
+    flush(): Uint8Array {
       this.codec.push(new Uint8Array(), true);
       return getResponse(this);
     }
   };
 
-  function getResponse(codec) {
+  function getResponse(codec: CodecAdapter): Uint8Array {
     if (codec.pendingData) {
       const output = codec.pendingData;
       codec.pendingData = null;

@@ -2,16 +2,16 @@
   "name": "@notesnook/help",
   "version": "1.0.0",
   "scripts": {
-    "document-keyboard-shortcuts": "node scripts/document-keyboard-shortcuts.mjs",
-    "versions": "node scripts/check-strings-fresh.mjs && node scripts/build-versions.mjs",
+    "document-keyboard-shortcuts": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON scripts/document-keyboard-shortcuts.ts",
+    "versions": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON scripts/check-strings-fresh.ts && node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON scripts/build-versions.ts",
     "predev": "npm run versions",
     "dev": "vitepress dev",
     "prebuild": "npm run versions",
     "build": "vitepress build",
     "preview": "vitepress preview",
-    "version": "node scripts/new-version.mjs",
-    "fork": "node scripts/fork-page.mjs",
-    "strings": "node --experimental-strip-types scripts/check-strings.mjs"
+    "version": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON scripts/new-version.ts",
+    "fork": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON scripts/fork-page.ts",
+    "strings": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON scripts/check-strings.ts"
   },
   "repository": {
     "type": "git",

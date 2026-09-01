@@ -12,7 +12,7 @@ import { dirname, join } from "path";
 import { fileURLToPath, pathToFileURL } from "url";
 
 const HELP = dirname(dirname(fileURLToPath(import.meta.url)));
-const versionsPath = join(HELP, ".vitepress", "versions.mjs");
+const versionsPath = join(HELP, ".vitepress", "versions.ts");
 
 const next = process.argv[2];
 if (!next || !/^\d+\.\d+$/.test(next)) {

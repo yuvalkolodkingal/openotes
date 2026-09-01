@@ -8,7 +8,7 @@
  * Older versions are stored as *differences*, not copies. `contents/_versions/`
  * holds only the pages whose content actually differs from the current docs;
  * every other page is shared, and the full `/v<version>/` tree is composed at
- * build time by `scripts/build-versions.mjs`.
+ * build time by `scripts/build-versions.ts`.
  *
  * Cutting a new version:      npm run version -- 3.5
  * Changing a page afterwards: npm run fork -- 3.4 <page>   (before editing)

@@ -29,7 +29,7 @@ if (!version || !rawPage) {
 }
 
 const { ARCHIVED } = await import(
-  pathToFileURL(join(HELP, ".vitepress", "versions.mjs")).href
+  pathToFileURL(join(HELP, ".vitepress", "versions.ts")).href
 );
 if (!ARCHIVED.includes(version)) {
   console.error(

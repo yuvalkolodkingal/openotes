@@ -121,8 +121,8 @@
   },
   "scripts": {
     "test": "vitest run",
-    "prebuild": "node ./scripts/build.ts",
-    "postbuild": "node ./scripts/postbuild.ts",
+    "prebuild": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON ./scripts/build.ts",
+    "postbuild": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON ./scripts/postbuild.ts",
     "start": "npm run watch",
     "prepublishOnly": "npm run build && npm run test",
     "postinstall": "patch-package",

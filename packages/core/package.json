@@ -55,9 +55,9 @@
   },
   "scripts": {
     "postinstall": "patch-package",
-    "prebuild": "node scripts/prebuild.ts",
-    "pretest": "node scripts/prebuild.ts",
-    "pretest:e2e": "node scripts/prebuild.ts",
+    "prebuild": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON scripts/prebuild.ts",
+    "pretest": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON scripts/prebuild.ts",
+    "pretest:e2e": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON scripts/prebuild.ts",
     "test:e2e": "cross-env IS_E2E=true vitest run",
     "test": "vitest run",
     "build": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON ../../scripts/build.ts",

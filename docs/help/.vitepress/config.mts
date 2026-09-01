@@ -1,19 +1,19 @@
 import { defineConfig } from "vitepress";
 import { tabsMarkdownPlugin } from "vitepress-plugin-tabs";
 import taskLists from "markdown-it-task-lists";
-import { sidebar } from "./sidebar.mjs";
+import { sidebar } from "./sidebar.ts";
 import {
   LATEST,
   isArchivedPath,
   versionOfPath,
   versionsNavItem
-} from "./versions.mjs";
+} from "./versions.ts";
 // Latest docs live at the root; the /v<version>/ trees and their sidebars are
-// composed from contents/_versions/ by scripts/build-versions.mjs, which runs
+// composed from contents/_versions/ by scripts/build-versions.ts, which runs
 // before dev and build.
-import { archivedSidebars } from "./sidebars/generated.mjs";
-import { seoHead, seoTitle } from "./seo.mjs";
-import { stringsMarkdownPlugin } from "./strings.mjs";
+import { archivedSidebars } from "./sidebars/generated.ts";
+import { seoHead, seoTitle } from "./seo.ts";
+import { stringsMarkdownPlugin } from "./strings.ts";
 
 export default defineConfig({
   title: "Notesnook Help",
@@ -23,7 +23,7 @@ export default defineConfig({
   srcDir: "./contents",
   base: "/help/",
   outDir: "./.vitepress/dist/help",
-  // Version overrides are source material for build-versions.mjs, not pages.
+  // Version overrides are source material for build-versions.ts, not pages.
   // The Standard Notes importer is unpublished for now — the page is kept in
   // the repo but is not built, linked or listed in the sitemap. Delete the
   // second entry (and restore the sidebar link) to publish it again.
