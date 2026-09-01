@@ -354,11 +354,12 @@ async function probeInterfacePort(origin: string): Promise<string> {
  * because not one of them asked for a subresource.
  *
  * Nothing about this needs a browser: the failure is in what the server
- * answers, and that can simply be asked.
+ * answers, and that can simply be asked — but only where the port can be
+ * reached from another process, which is not everywhere. See the caller.
  */
 async function checkBootResources(
   reportedOrigin: string,
-): Promise<{ ok: boolean; detail: string }> {
+): Promise<{ ok: boolean; unreachable?: boolean; detail: string }> {
   // What the runtime reports can carry a trailing slash; an Origin header
   // never does, and the server compares them literally — as it should, so
   // normalise here rather than loosening the guard.
@@ -426,9 +427,14 @@ async function checkBootResources(
         `stylesheets are served to the page's own origin`,
     };
   } catch (error) {
+    // Never reached the server at all. That is not evidence either way
+    // about what it would have answered — a refused connection and a 403
+    // are entirely different findings, and only the second is the bug this
+    // check exists for.
     return {
       ok: false,
-      detail: `could not ask: ${
+      unreachable: true,
+      detail: `could not reach the interface server: ${
         error instanceof Error ? error.message : String(error)
       }`,
     };
@@ -668,10 +674,20 @@ async function smokeTest(options: SmokeOptions): Promise<number> {
 
   if (origin) {
     const boot = await checkBootResources(origin);
+    // On Windows the interface port is not reachable from another process
+    // (measured: connection refused, os error 10061), so there is no way to
+    // ask from here and the check reports what it could not do rather than
+    // inventing a failure. Everywhere else, being unable to reach the
+    // server the application just said it started IS a failure.
+    const unaskable = boot.unreachable && Deno.build.os === "windows";
     record(
       "the interface can load itself",
-      boot.ok ? "pass" : "fail",
-      boot.detail,
+      boot.ok ? "pass" : unaskable ? "skipped" : "fail",
+      unaskable
+        ? `${boot.detail} — expected on Windows, where the runtime does not ` +
+          `publish the port outside the process; the guard itself is covered ` +
+          `by apps/desktop/tests/server_test.ts`
+        : boot.detail,
     );
   } else {
     record(
@@ -707,8 +723,9 @@ async function smokeTest(options: SmokeOptions): Promise<number> {
       `               SQLite library loaded from this build's own native/\n` +
       `               directory and the engine was verified to encrypt; the\n` +
       `               application logged that it started; the interface can\n` +
-      `               load its own scripts and stylesheets; and the output\n` +
-      `               carries no start-up failure.\n` +
+      `               load its own scripts and stylesheets (where the port\n` +
+      `               can be reached from here at all — not on Windows); and\n` +
+      `               the output carries no start-up failure.\n` +
       `  not checked: anything inside the window. This cannot see whether the\n` +
       `               interface rendered, whether a note can be written, or\n` +
       `               whether sync works.`,
