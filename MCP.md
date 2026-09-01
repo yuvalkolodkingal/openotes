@@ -4,8 +4,8 @@ Openotes speaks the [Model Context Protocol](https://modelcontextprotocol.io),
 so an assistant running on your machine can search, read and — if you let it —
 write your notes.
 
-This is the opposite direction from [AI.md](AI.md): there, Openotes launches
-an agent over the Agent Client Protocol. Here, an assistant you already run
+This is the opposite direction from [AI.md](AI.md): there, Openotes launches an
+agent over the Agent Client Protocol. Here, an assistant you already run
 connects to Openotes. Use whichever fits the assistant you have.
 
 Nothing about this is a service. There is no account, no key to buy and no
@@ -16,8 +16,8 @@ port on `127.0.0.1`, and only while Openotes is open with a vault unlocked.
 
 Settings → **AI assistant**.
 
-1. Turn on **Let an assistant work with your notes**. Openotes starts
-   listening on port 4747 (change it if something else has that port).
+1. Turn on **Let an assistant work with your notes**. Openotes starts listening
+   on port 4747 (change it if something else has that port).
 2. Copy the snippet under **Connect your assistant**.
 3. Optionally turn on **Let the assistant edit notes**. Leave it off and the
    assistant can search and read, and the tools that change anything are not
@@ -46,27 +46,27 @@ For a client that keeps its servers in a JSON file, the snippet is the entry:
 
 ## What the assistant can do
 
-| Tool | What it does |
-|---|---|
-| `search_notes` | Full-text search over titles and bodies |
-| `list_notes` | List notes, filtered by notebook, tag, favourite or pinned |
-| `read_note` | One note, as Markdown, HTML or plain text |
-| `list_notebooks`, `list_tags` | What exists, and how many notes are in each |
-| `create_note` | A new note, from Markdown |
-| `update_note` | Change a title or body; replace, append or prepend |
-| `trash_note` | Move a note to the trash |
-| `create_notebook` | A new notebook |
-| `set_note_tags` | Replace a note's tags |
-| `move_note_to_notebook` | File a note |
+| Tool                          | What it does                                               |
+| ----------------------------- | ---------------------------------------------------------- |
+| `search_notes`                | Full-text search over titles and bodies                    |
+| `list_notes`                  | List notes, filtered by notebook, tag, favourite or pinned |
+| `read_note`                   | One note, as Markdown, HTML or plain text                  |
+| `list_notebooks`, `list_tags` | What exists, and how many notes are in each                |
+| `create_note`                 | A new note, from Markdown                                  |
+| `update_note`                 | Change a title or body; replace, append or prepend         |
+| `trash_note`                  | Move a note to the trash                                   |
+| `create_notebook`             | A new notebook                                             |
+| `set_note_tags`               | Replace a note's tags                                      |
+| `move_note_to_notebook`       | File a note                                                |
 
 The last six only exist while **Let the assistant edit notes** is on. Notes are
 also exposed as resources at `openotes://note/<id>`.
 
 Markdown is converted to and from the editor's own format, so headings, lists,
 task lists, quotes, code fences, tables and links survive in both directions.
-Formatting Markdown cannot express — colours, highlights, mathematics —
-survives a read but is lost if the assistant *replaces* the body with Markdown.
-Ask it to read and write `format: "html"` when that matters.
+Formatting Markdown cannot express — colours, highlights, mathematics — survives
+a read but is lost if the assistant _replaces_ the body with Markdown. Ask it to
+read and write `format: "html"` when that matters.
 
 ## What it cannot do
 
@@ -93,16 +93,19 @@ Ask it to read and write `format: "html"` when that matters.
 - **Reading and writing are separate switches**, and turning writing on asks
   first.
 
-The honest limit: the token is the whole of the security. Any process running
-as you on this machine can read `mcp.token` — but such a process can also read
-the app's memory, so this does not widen what an attacker in that position can
+The honest limit: the token is the whole of the security. Any process running as
+you on this machine can read `mcp.token` — but such a process can also read the
+app's memory, so this does not widen what an attacker in that position can
 already do. It does mean the token is not a secret you should paste anywhere
 else.
 
 ## Troubleshooting
 
-**"Not listening yet."** Open a vault. The endpoint answers questions about
-notes, so it starts once there are notes to answer about.
+**"Not listening yet."** The switch is off, or the port was refused. The
+endpoint starts with the application, not with the vault — a client that
+connects before you have unlocked gets a tool call that says so, which is easier
+to act on than a refused connection. Check the switch first, then the port:
+something else may already have it.
 
 **"Port 4747 is already in use."** Pick another port in settings, then update
 your client's configuration — the port is part of the URL.
