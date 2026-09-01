@@ -38,6 +38,8 @@ import {
   hasDesktopRuntime,
   onDesktopEvent
 } from "../common/desktop-bridge/index.desktop";
+import { db } from "../common/db";
+import { EVENTS } from "@notesnook/core";
 import createStore from "../common/store";
 import Config from "../utils/config";
 import { showToast } from "../utils/toast";
@@ -451,6 +453,13 @@ function attachRuntimeListeners() {
     if (typeof info.target === "string" && typeof info.name === "string") {
       void store.refresh();
     }
+  });
+
+  // An assistant writing through the MCP endpoint changes the vault behind
+  // the interface's back — every list on screen is cached, so nothing would
+  // move until the next restart without this.
+  onDesktopEvent("mcp.notesChanged", () => {
+    db.eventManager.publish(EVENTS.appRefreshRequested);
   });
 
   void store.refresh().catch((error) => {

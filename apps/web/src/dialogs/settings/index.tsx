@@ -32,6 +32,7 @@ import {
   Legal,
   Loading,
   Notification,
+  Robot,
   Privacy,
   ShieldLock,
   Sync
@@ -48,6 +49,7 @@ import {
   SettingsGroup
 } from "./types";
 import { SyncSettings } from "./sync-settings";
+import { AiSettings } from "./ai-settings";
 import { BehaviourSettings } from "./behaviour-settings";
 import { DesktopIntegrationSettings } from "./desktop-integration-settings";
 import { NotificationsSettings } from "./notifications-settings";
@@ -102,6 +104,13 @@ const sectionGroups: SectionGroup[] = [
         key: "notifications",
         title: strings.notifications(),
         icon: Notification
+      },
+      {
+        // The MCP endpoint only exists in the desktop runtime.
+        key: "ai",
+        title: "AI assistant",
+        icon: Robot,
+        isHidden: () => !IS_DESKTOP_APP
       }
     ]
   },
@@ -139,6 +148,7 @@ const SettingsGroups = [
   ...BehaviourSettings,
   ...DesktopIntegrationSettings,
   ...NotificationsSettings,
+  ...AiSettings,
   // The encrypted snapshot engine comes first: it is the backup subsystem of
   // this fork. BackupExportSettings below it keeps the portable .nnbackupz
   // file export/import and the note exporter.

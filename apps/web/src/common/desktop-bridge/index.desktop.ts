@@ -153,7 +153,9 @@ const SUBSCRIPTION_EVENTS: Record<string, string> = {
   "window.onClose": "window.close",
   "webdav.onStatus": "webdav.status",
   "webdav.onConflict": "webdav.conflict",
-  "backup.onCompleted": "backup.completed"
+  "backup.onCompleted": "backup.completed",
+  "mcp.onStatus": "mcp.status",
+  "mcp.onNotesChanged": "mcp.notesChanged"
 };
 
 function makeProcedure(path: string): Procedure {
@@ -321,7 +323,43 @@ export interface DesktopBridge {
     onStatus: Procedure<void, unknown>;
     onConflict: Procedure<void, unknown>;
   };
+  mcp: {
+    getSettings: Procedure<void, McpSettings>;
+    setSettings: Procedure<Partial<McpSettings>, McpStatus>;
+    status: Procedure<void, McpStatus>;
+    clientConfig: Procedure<void, McpClientConfig>;
+    regenerateToken: Procedure<void, McpStatus>;
+    onStatus: Procedure<void, McpStatus>;
+    onNotesChanged: Procedure<void, unknown>;
+  };
 }
+
+/** Settings → AI assistant. Mirrors McpSettings in the runtime. */
+export type McpSettings = {
+  enabled: boolean;
+  port: number;
+  allowWrites: boolean;
+};
+
+export type McpStatus = {
+  listening: boolean;
+  port?: number;
+  url?: string;
+  allowWrites: boolean;
+  requests: number;
+  lastError?: string;
+  toolCount: number;
+};
+
+export type McpClientConfig =
+  | { listening: false }
+  | {
+      listening: true;
+      url: string;
+      token: string;
+      command: string;
+      json: string;
+    };
 
 export const desktop = new Proxy({} as DesktopBridge, {
   get(_target, property) {

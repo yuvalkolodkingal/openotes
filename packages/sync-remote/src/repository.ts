@@ -18,7 +18,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
 import { SerializedKey } from "@notesnook/crypto";
-import { WebDavClient } from "./client.ts";
+import type { RemoteStore } from "./store.ts";
 import { SyncCrypto } from "./crypto.ts";
 import {
   ChangeBatchEnvelope,
@@ -99,13 +99,13 @@ export function assertSafeId(id: string): void {
 
 export class SyncRepository {
   constructor(
-    private readonly client: WebDavClient,
+    private readonly store: RemoteStore,
     private readonly crypto: SyncCrypto,
   ) {}
 
   /** Read protocol.json. Returns undefined when the remote is empty. */
   async readProtocol(): Promise<ProtocolMetadata | undefined> {
-    const raw = await this.client.getIfExists(PATHS.protocol);
+    const raw = await this.store.getIfExists(PATHS.protocol);
     if (!raw) return undefined;
     let parsed: ProtocolMetadata;
     try {
@@ -141,18 +141,18 @@ export class SyncRepository {
   }
 
   /**
-   * Create the remote repository skeleton. Uses If-None-Match to avoid
-   * clobbering a repository another device created concurrently.
+   * Create the remote repository skeleton, or adopt the one another device
+   * created while we were doing it.
    */
   async initialize(
     masterKey: SerializedKey,
     deviceId: string,
     generation: string,
   ): Promise<ProtocolMetadata> {
-    await this.client.mkcolRecursive(PATHS.devices + "/");
-    await this.client.mkcolRecursive(PATHS.objects + "/");
-    await this.client.mkcolRecursive(PATHS.attachments + "/");
-    await this.client.mkcolRecursive(PATHS.backups + "/");
+    await this.store.makeDirectory(PATHS.devices + "/");
+    await this.store.makeDirectory(PATHS.objects + "/");
+    await this.store.makeDirectory(PATHS.attachments + "/");
+    await this.store.makeDirectory(PATHS.backups + "/");
 
     const syncKey = await this.crypto.deriveSubkey(masterKey, "sync");
     const metadata: ProtocolMetadata = {
@@ -165,24 +165,42 @@ export class SyncRepository {
       generation,
     };
 
+    // protocol.json is the ONE write in the whole protocol that two devices
+    // can genuinely race for, and it carries the salt every other device's
+    // key is derived from: overwriting it makes their data undecryptable.
+    //
+    // So: read first, then create exclusively, and on a lost race adopt the
+    // winner rather than retrying. The old code re-read and adopted after
+    // *any* failure, which meant a 403 or a full disk was silently treated
+    // as "someone else got there first".
+    const existing = await this.readProtocol();
+    if (existing) return existing;
+
     const body = new TextEncoder().encode(JSON.stringify(metadata, null, 2));
     try {
-      await this.client.put(PATHS.protocol, body, {
-        ifNoneMatch: true,
+      await this.store.create(PATHS.protocol, body, {
         contentType: "application/json",
       });
     } catch (e) {
       if (e instanceof SyncError && e.code === "precondition-failed") {
-        // Another device won the race; adopt its repository.
-        const existing = await this.readProtocol();
-        if (existing) return existing;
+        const winner = await this.readProtocol();
+        if (winner) return winner;
+        // The path was taken but holds nothing we can read. Refusing beats
+        // writing our salt over whatever is there.
+        throw new SyncError(
+          "Another device is initializing this repository, but its " +
+            "protocol.json could not be read. Try again in a moment.",
+          "conflict",
+        );
       }
-      // Servers that ignore If-None-Match: re-read and adopt if present.
-      const existing = await this.readProtocol();
-      if (existing) return existing;
       throw e;
     }
-    await this.client.verifyUpload(PATHS.protocol, body.length);
+
+    // Read back rather than trusting the write: a store whose exclusive
+    // create is emulated can still have lost a race it did not notice.
+    await this.store.verifyUpload(PATHS.protocol, body.length);
+    const written = await this.readProtocol();
+    if (written && written.createdBy !== deviceId) return written;
     return metadata;
   }
 
@@ -210,12 +228,11 @@ export class SyncRepository {
 
   /** List device ids present in the remote repository. */
   async listDevices(): Promise<string[]> {
-    const entries = await this.client.list(PATHS.devices + "/");
+    const entries = await this.store.list(PATHS.devices + "/");
     const ids: string[] = [];
     for (const entry of entries) {
-      if (!entry.isCollection) continue;
-      const relative = this.client.relativePath(entry);
-      const id = relative.split("/").filter(Boolean).pop();
+      if (!entry.isDirectory) continue;
+      const id = entry.path.split("/").filter(Boolean).pop();
       if (!id) continue;
       if (!/^[A-Za-z0-9_-]{1,128}$/.test(id)) continue;
       ids.push(id);
@@ -229,7 +246,7 @@ export class SyncRepository {
     info: { name: string; platform: string; appVersion: string },
   ): Promise<void> {
     const path = `${devicePath(deviceId)}/device.json`;
-    await this.client.mkcolRecursive(`${devicePath(deviceId)}/changes/`);
+    await this.store.makeDirectory(`${devicePath(deviceId)}/changes/`);
     const payload = JSON.stringify({
       id: deviceId,
       info: await this.crypto.encryptJson(syncKey, {
@@ -238,14 +255,14 @@ export class SyncRepository {
       }),
     });
     const body = new TextEncoder().encode(payload);
-    await this.client.put(path, body, { contentType: "application/json" });
+    await this.store.put(path, body, { contentType: "application/json" });
   }
 
   async readDeviceInfo(
     syncKey: SerializedKey,
     deviceId: string,
   ): Promise<{ name: string; platform: string } | undefined> {
-    const raw = await this.client.getIfExists(
+    const raw = await this.store.getIfExists(
       `${devicePath(deviceId)}/device.json`,
     );
     if (!raw) return undefined;
@@ -259,13 +276,13 @@ export class SyncRepository {
 
   /** Sequence numbers present in a device's journal, ascending. */
   async listSequences(deviceId: string): Promise<number[]> {
-    const entries = await this.client.list(
+    const entries = await this.store.list(
       `${devicePath(deviceId)}/changes/`,
     );
     const sequences: number[] = [];
     for (const entry of entries) {
-      if (entry.isCollection) continue;
-      const name = this.client.relativePath(entry).split("/").pop();
+      if (entry.isDirectory) continue;
+      const name = entry.path.split("/").pop();
       if (!name) continue;
       const sequence = parseSequenceFileName(name);
       if (sequence !== undefined) sequences.push(sequence);
@@ -296,7 +313,7 @@ export class SyncRepository {
   ): Promise<void> {
     const path = changePath(deviceId, sequence);
 
-    if (await this.client.exists(path)) {
+    if (await this.store.exists(path)) {
       throw new SyncError(
         `Journal entry ${deviceId}/${sequence} already exists on the server`,
         "precondition-failed",
@@ -311,9 +328,9 @@ export class SyncRepository {
       cipher: await this.crypto.encryptJson(syncKey, records),
     };
     const body = new TextEncoder().encode(JSON.stringify(envelope));
-    await this.client.put(path, body, { ifNoneMatch: true });
+    await this.store.create(path, body);
     // Verify the remote object before the caller marks anything synced.
-    await this.client.verifyUpload(path, body.length);
+    await this.store.verifyUpload(path, body.length);
   }
 
   async readBatch(
@@ -321,7 +338,7 @@ export class SyncRepository {
     deviceId: string,
     sequence: number,
   ): Promise<SyncRecord[]> {
-    const raw = await this.client.get(changePath(deviceId, sequence));
+    const raw = await this.store.get(changePath(deviceId, sequence));
     let envelope: ChangeBatchEnvelope;
     try {
       envelope = JSON.parse(new TextDecoder().decode(raw));
@@ -365,11 +382,11 @@ export class SyncRepository {
   ): Promise<string> {
     const hash = await this.crypto.contentAddress(syncKey, data);
     const path = objectPath(hash);
-    if (await this.client.exists(path)) return hash; // deduplicated
+    if (await this.store.exists(path)) return hash; // deduplicated
     const cipher = await this.crypto.encryptBytes(syncKey, data);
     const body = new TextEncoder().encode(JSON.stringify(cipher));
-    await this.client.put(path, body);
-    await this.client.verifyUpload(path, body.length);
+    await this.store.put(path, body);
+    await this.store.verifyUpload(path, body.length);
     return hash;
   }
 
@@ -377,7 +394,7 @@ export class SyncRepository {
     syncKey: SerializedKey,
     hash: string,
   ): Promise<Uint8Array> {
-    const raw = await this.client.get(objectPath(hash));
+    const raw = await this.store.get(objectPath(hash));
     const cipher = JSON.parse(new TextDecoder().decode(raw));
     const data = await this.crypto.decryptBytes(syncKey, cipher);
     const actual = await this.crypto.contentAddress(syncKey, data);

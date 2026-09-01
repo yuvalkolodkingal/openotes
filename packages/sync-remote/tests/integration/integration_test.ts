@@ -33,7 +33,8 @@ import { WebDavClient } from "../../src/client.ts";
 import { FetchTransport, toBasicAuth } from "../../src/http.ts";
 import { SyncError } from "../../src/types.ts";
 import { SyncCrypto } from "../../src/crypto.ts";
-import { BackupEngine, WebDavBackupTarget } from "../../src/backup.ts";
+import { BackupEngine, RemoteBackupTarget } from "../../src/backup.ts";
+import { webDavStore } from "../../src/webdav-store.ts";
 import {
   bytesEqual,
   createDevice,
@@ -338,7 +339,7 @@ Deno.test("real server: backup upload, download and restore", async () => {
       });
     }
 
-    const target = new WebDavBackupTarget(client, "backups");
+    const target = new RemoteBackupTarget(webDavStore(client), "backups");
     const { name, data } = await engine.create(key, {
       data: store.snapshot(),
       counts: { note: 10 },

@@ -27,6 +27,7 @@ const SectionKeys = [
   "desktop",
   "notifications",
   "editor",
+  "ai",
   "backup-export",
   "export",
   "importer",

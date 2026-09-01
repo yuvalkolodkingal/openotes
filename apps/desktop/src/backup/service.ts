@@ -26,10 +26,11 @@ import {
   FetchTransport,
   type FileSystemAdapter,
   LocalBackupTarget,
+  RemoteBackupTarget,
   SyncCrypto,
   toBasicAuth,
-  WebDavBackupTarget,
   WebDavClient,
+  webDavStore,
 } from "@notesnook/sync-remote";
 import type { SerializedKey } from "@notesnook/crypto";
 import { join } from "@std/path";
@@ -204,7 +205,7 @@ export class BackupService {
       maxRetries: webdav.maxRetries,
       allowInsecureHttp: webdav.allowInsecureHttp,
     });
-    return new WebDavBackupTarget(client, backup.webdavDirectory);
+    return new RemoteBackupTarget(webDavStore(client), backup.webdavDirectory);
   }
 
   /** Create a backup and write it to every enabled target. */

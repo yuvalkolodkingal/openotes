@@ -23,6 +23,8 @@ import { SyncCrypto } from "../src/crypto.ts";
 import { FetchTransport, toBasicAuth } from "../src/http.ts";
 import { MemoryQueueStorage, OutgoingQueue } from "../src/queue.ts";
 import { SyncEngine } from "../src/engine.ts";
+import { webDavStore } from "../src/webdav-store.ts";
+import type { RemoteStore } from "../src/store.ts";
 import { MemoryAttachments, MemorySyncStore } from "./memory-store.ts";
 
 /**
@@ -58,6 +60,7 @@ export interface TestDevice {
   queue: OutgoingQueue;
   engine: SyncEngine;
   client: WebDavClient;
+  remote: RemoteStore;
   attachments: MemoryAttachments;
   crypto: SyncCrypto;
 }
@@ -105,8 +108,9 @@ export async function createDevice(options: {
     options.queueStorage ?? new MemoryQueueStorage(),
   );
 
+  const remote = webDavStore(client);
   const engine = new SyncEngine({
-    client,
+    remote,
     crypto,
     store,
     queue,
@@ -119,7 +123,16 @@ export async function createDevice(options: {
     onConflict: (record) => options.onConflict?.(record.entityId),
   });
 
-  return { id: options.id, store, queue, engine, client, attachments, crypto };
+  return {
+    id: options.id,
+    store,
+    queue,
+    engine,
+    client,
+    remote,
+    attachments,
+    crypto,
+  };
 }
 
 /** Deterministic bytes for attachment tests. */

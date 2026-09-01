@@ -30,7 +30,7 @@ export interface WebDavClientOptions {
   delay?: (ms: number) => Promise<void>;
 }
 
-export interface PutOptions {
+export interface WebDavPutOptions {
   /** Only create; fail with precondition-failed if the resource exists. */
   ifNoneMatch?: boolean;
   /** Only overwrite when the current ETag matches. */
@@ -271,7 +271,7 @@ export class WebDavClient {
   async put(
     path: string,
     body: Uint8Array | string,
-    options: PutOptions = {},
+    options: WebDavPutOptions = {},
   ): Promise<{ etag?: string }> {
     const headers: Record<string, string> = {
       "Content-Type": options.contentType ?? "application/octet-stream",

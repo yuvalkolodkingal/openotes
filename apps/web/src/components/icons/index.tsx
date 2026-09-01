@@ -231,7 +231,8 @@ import {
   mdiConsoleLine,
   mdiSpellcheck,
   mdiDeleteSweepOutline,
-  mdiCloseCircle
+  mdiCloseCircle,
+  mdiRobotOutline
 } from "@mdi/js";
 import { useTheme } from "@emotion/react";
 import { Theme } from "@notesnook/theme";
@@ -562,6 +563,7 @@ export const Editor = createIcon(mdiFormTextarea);
 export const Documentation = createIcon(mdiFileDocumentOutline);
 export const Legal = createIcon(mdiGavel);
 export const Desktop = createIcon(mdiDesktopClassic);
+export const Robot = createIcon(mdiRobotOutline);
 export const Notification = createIcon(mdiBellBadgeOutline);
 export const Servers = createIcon(mdiServerSecurity);
 export const Calendar = createIcon(mdiCalendarBlank);

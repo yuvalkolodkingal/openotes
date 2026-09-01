@@ -40,10 +40,58 @@ export interface WindowState {
   maximized: boolean;
 }
 
+/**
+ * Where notes are synchronized to.
+ *
+ * "folder" is any directory on this machine, which is how Google Drive,
+ * OneDrive, Dropbox and iCloud Drive are usually reached: their desktop
+ * clients keep a local folder in step with the account, so pointing at one
+ * needs no OAuth and no third-party network access at all. The three named
+ * providers talk to the API directly, for machines with no desktop client.
+ */
+export type SyncProvider =
+  | "webdav"
+  | "folder"
+  | "googledrive"
+  | "onedrive"
+  | "dropbox";
+
+/**
+ * Sync configuration.
+ *
+ * The settings key is still "webdav" although this now covers five
+ * providers: renaming it would orphan every existing installation's
+ * configuration, and "sync" is already taken by the cursor bookkeeping
+ * below. mergeSettings fills in a missing field from the defaults, so an
+ * installation that predates `provider` reads back as WebDAV, which is what
+ * it was.
+ */
 export interface WebDavSettings {
   enabled: boolean;
+  provider: SyncProvider;
   serverUrl: string;
   username: string;
+  /**
+   * The folder provider's directory on this machine — the one a drive
+   * client keeps in step with the account.
+   */
+  folderPath: string;
+  /**
+   * Whether a write in that folder is visible to another device
+   * immediately. A local disk is; a folder a drive client uploads in the
+   * background is not, and a missing file there means "not here yet"
+   * rather than "lost".
+   */
+  folderConsistency: "immediate" | "eventual";
+  /**
+   * The OAuth client id for a drive provider. Openotes has no registered
+   * application of its own and cannot have one — every user brings their
+   * own, which is also why a drive provider can only ever see the files it
+   * created.
+   */
+  clientId: string;
+  /** Whether a refresh token for the current provider is stored. */
+  connected: boolean;
   directory: string;
   /** Minutes between automatic syncs; 0 disables periodic sync. */
   intervalMinutes: number;
@@ -142,8 +190,13 @@ export function defaultSettings(): AppSettings {
     },
     webdav: {
       enabled: false,
+      provider: "webdav",
       serverUrl: "",
       username: "",
+      folderPath: "",
+      folderConsistency: "eventual",
+      clientId: "",
+      connected: false,
       directory: "Openotes",
       intervalMinutes: 15,
       syncOnStartup: true,

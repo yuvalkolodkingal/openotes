@@ -18,9 +18,11 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
 export * from "./types.ts";
+export * from "./store.ts";
 export * from "./http.ts";
 export * from "./xml.ts";
 export * from "./client.ts";
+export * from "./webdav-store.ts";
 export * from "./crypto.ts";
 export * from "./conflicts.ts";
 export * from "./repository.ts";
