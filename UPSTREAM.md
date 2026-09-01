@@ -16,7 +16,7 @@ merge will not be mechanical.
 | Upstream repository | `streetwriters/notesnook` |
 | Base revision | `09a0c30` (merge of release/3.4.7) |
 | Base version | 3.4.7 |
-| Fork version | 2.0.0 |
+| Fork version | 2.1.0 |
 | Fork repository | `yuvalkolodkingal/openotes` |
 | Last merge from upstream | Initial fork point |
 
@@ -196,6 +196,30 @@ the diff smaller.** A smaller diff is not worth a worse application.
 ---
 
 ## Fork changelog
+
+### 2.1.0
+
+- **The Model Context Protocol**, so an assistant the user already runs can
+  connect to Openotes and search, read and edit notes. The opposite direction
+  from 2.0.0's ACP host, and the one people mean when they ask for MCP tools.
+  Off by default, read-only when enabled, editing a second switch; notes in a
+  vault are never readable through it and nothing it can do deletes a note
+  permanently.
+- **The drive providers are reachable.** 2.0.0 shipped Google Drive, Dropbox
+  and OneDrive as tested libraries that nothing in the application
+  constructed: the settings had no provider, the service always built a
+  WebDAV client, and deno.json's specifier for @notesnook/sync-files held two
+  paths so the package could not even be imported. All three are fixed, and
+  the settings screen now has a provider picker and a sign-in panel.
+- **Dark mode rebuilt.** The dark theme defined four of the eleven scopes the
+  app renders and carried light-mode values in its disabled variant; both
+  themes now define the same scopes and are held to WCAG AA by a test. System
+  theme detection actually asks the desktop, the first frame is painted by
+  the runtime rather than flashing white, the sync-status colours are no
+  longer light-mode literals on a dark status bar, the scrollbar is no longer
+  a black thumb on a black track — and a stored copy of a shipped theme is
+  refreshed when the shipped one moves, without which none of it would have
+  reached an existing installation.
 
 ### 2.0.0 — an assistant, cloud drives, and TypeScript throughout
 
