@@ -16,8 +16,8 @@ merge will not be mechanical.
 | Upstream repository | `streetwriters/notesnook` |
 | Base revision | `09a0c30` (merge of release/3.4.7) |
 | Base version | 3.4.7 |
-| Fork version | 1.0.0 |
-| Fork repository | `yuvalkolodkingal/notesnook` |
+| Fork version | 2.0.0 |
+| Fork repository | `yuvalkolodkingal/openotes` |
 | Last merge from upstream | Initial fork point |
 
 ### Remotes
@@ -196,6 +196,25 @@ the diff smaller.** A smaller diff is not worth a worse application.
 ---
 
 ## Fork changelog
+
+### 2.0.0 — an assistant, cloud drives, and TypeScript throughout
+
+- Added an Agent Client Protocol *client*, so the application can host an
+  agent the user already has (Claude Code, Gemini, OpenCode, Codex,
+  Antigravity) under that agent's own subscription. No model ships here and
+  no model credential is stored.
+- Widened the runtime's subprocess allowlist to include agent launchers,
+  bounded by a fixed catalog the renderer cannot influence and by per-binary
+  consent. This is the fork's first deliberate loosening of a security
+  boundary; `SECURITY.md` §10 describes it.
+- Added a second sync protocol beside the WebDAV journal: one readable
+  Markdown file per note in Google Drive, Dropbox or OneDrive, with
+  encryption available per remote and off by default.
+- Added a provider-agnostic `RemoteStorage` seam, so the sync engine no
+  longer assumes WebDAV.
+- Converted the remaining JavaScript to TypeScript, except what genuinely
+  cannot be: vendored wa-sqlite, the SQLite C amalgamation, PKGBUILD and
+  workflow YAML.
 
 ### 1.0.0 — initial fork from 3.4.7
 

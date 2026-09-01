@@ -91,20 +91,20 @@ that Openotes uses.
 
 ```bash
 # AppImage — works anywhere
-chmod +x Openotes-1.0.0-linux-x86_64.AppImage
-./Openotes-1.0.0-linux-x86_64.AppImage
+chmod +x Openotes-2.0.0-linux-x86_64.AppImage
+./Openotes-2.0.0-linux-x86_64.AppImage
 
 # Debian / Ubuntu
-sudo apt install ./Openotes-1.0.0-linux-x86_64.deb
+sudo apt install ./Openotes-2.0.0-linux-x86_64.deb
 
 # Fedora / RHEL
-sudo dnf install ./Openotes-1.0.0-linux-x86_64.rpm
+sudo dnf install ./Openotes-2.0.0-linux-x86_64.rpm
 
 # Arch / Manjaro
-sudo pacman -U openotes-1.0.0-1-x86_64.pkg.tar.zst
+sudo pacman -U openotes-2.0.0-1-x86_64.pkg.tar.zst
 
 # Flatpak
-flatpak install Openotes-1.0.0-linux-x86_64.flatpak
+flatpak install Openotes-2.0.0-linux-x86_64.flatpak
 ```
 
 Linux needs **WebKitGTK** (`libwebkit2gtk-4.1-0` on Debian and Ubuntu,
