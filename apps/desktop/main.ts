@@ -150,7 +150,15 @@ async function main() {
   const uiRoot = resolveUiRoot();
   const instanceId = crypto.randomUUID();
 
-  const server = await startUiServer({ root: uiRoot, instanceId });
+  // The window paints before settings are loaded, so the server needs a way
+  // to ask for the colour scheme later than it is constructed. See
+  // injectBootTheme in native/server.ts.
+  let colorScheme: () => "light" | "dark" = () => "light";
+  const server = await startUiServer({
+    root: uiRoot,
+    instanceId,
+    colorScheme: () => colorScheme(),
+  });
 
   const windowState = { maximized: false };
   const window = new Deno.BrowserWindow({
@@ -164,6 +172,7 @@ async function main() {
     window: controller,
     initialDeepLink: deepLink,
   });
+  colorScheme = () => app.theme.current();
 
   // Restore the saved geometry now that settings are loaded.
   const savedWindow = app.settings.get("window");

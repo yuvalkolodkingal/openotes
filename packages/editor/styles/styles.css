@@ -429,11 +429,13 @@ img.ProseMirror-separator {
   49% {
     border-color: unset;
   }
+  /* Was #fff, which is invisible on a light page and only ever showed up in
+     dark mode. The caret has to follow the text colour in both. */
   50% {
-    border-color: #fff;
+    border-color: currentColor;
   }
   99% {
-    border-color: #fff;
+    border-color: currentColor;
   }
 }
 .no-cursor {

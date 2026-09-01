@@ -28,7 +28,7 @@
     "fmt": "deno fmt",
     "lint": "deno lint",
     "check": "deno check apps/desktop/main.ts packages/sync-webdav/src/index.ts",
-    "test": "deno test -A packages/sync-webdav/tests/ apps/desktop/tests/ --ignore=packages/sync-webdav/tests/integration",
+    "test": "deno test -A packages/sync-webdav/tests/ apps/desktop/tests/ packages/theme/tests/ --ignore=packages/sync-webdav/tests/integration",
     "test:webdav": "deno run -A packages/sync-webdav/tests/run-integration.ts",
     "test:ui": "deno run -A --node-modules-dir=auto npm:vitest@3.2.4 run --root apps/web",
     "bench": "deno run -A apps/desktop/scripts/benchmark.ts",
@@ -58,9 +58,11 @@
       "apps/desktop/main.ts",
       "apps/desktop/src",
       "apps/desktop/scripts",
+      "apps/desktop/tests",
       "apps/desktop/types",
       "packages/sync-webdav/src",
-      "packages/sync-webdav/tests"
+      "packages/sync-webdav/tests",
+      "packages/theme/tests"
     ],
     "exclude": [
       "apps/web/src/common/sqlite/*.js",
@@ -76,8 +78,10 @@
       "apps/desktop/main.ts",
       "apps/desktop/src",
       "apps/desktop/scripts",
+      "apps/desktop/tests",
       "packages/sync-webdav/src",
-      "packages/sync-webdav/tests"
+      "packages/sync-webdav/tests",
+      "packages/theme/tests"
     ],
     "rules": {
       "tags": [

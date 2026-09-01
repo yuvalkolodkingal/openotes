@@ -25,6 +25,8 @@
       content="Your notes. Offline, end-to-end encrypted, synced to your own WebDAV server."
     />
     <meta name="theme-color" content="#0f766e" />
+    <!-- The runtime overwrites this per launch; see injectBootTheme. -->
+    <meta name="color-scheme" content="light dark" />
     <meta property="og:title" content="Openotes" />
     <meta
       property="og:description"
@@ -65,14 +67,15 @@
         overscroll-behavior: none;
       }
 
-      html[data-theme="light"] .react-loading-skeleton {
+      /*
+        The skeleton needs two *different* tones or it does not read as
+        loading at all. Both rules used to resolve to the same colour (the
+        light one through a stray "#" that made the value invalid), so the
+        placeholder sat there as a flat block in either theme.
+      */
+      .react-loading-skeleton {
         --base-color: var(--background-secondary);
-        --highlight-color: #var(--background-secondary);
-      }
-
-      html[data-theme="dark"] .react-loading-skeleton {
-        --base-color: var(--background-secondary);
-        --highlight-color: var(--background-secondary);
+        --highlight-color: var(--hover);
       }
 
       #splash {

@@ -79,6 +79,11 @@ export interface UiServerOptions {
   root: string;
   /** Identifies this instance; returned by the health route. */
   instanceId: string;
+  /**
+   * The colour scheme the window should paint before the interface has
+   * booted. See BOOT_THEME below for why the server, not the page, decides.
+   */
+  colorScheme?: () => "light" | "dark";
 }
 
 export interface RunningUiServer {
@@ -105,6 +110,54 @@ export function assignedOrigin(fallbackPort?: number): string {
     if (/^\d+$/.test(port)) return `http://${host}:${port}`;
   }
   return `http://127.0.0.1:${fallbackPort ?? 0}`;
+}
+
+/**
+ * The first paint, before any JavaScript has run.
+ *
+ * The interface cannot colour its own first frame. `--background` is defined
+ * by a stylesheet the page fills in from settings, and on desktop those
+ * settings arrive over an RPC round trip, so for the first few frames the
+ * document has no background at all and the webview paints its default
+ * white. In dark mode that is a white flash on every single launch.
+ *
+ * The runtime already knows the answer, so it stamps it into the document as
+ * it serves it: `data-theme` for anything keyed off it, a `color-scheme` so
+ * the platform paints scrollbars and form controls to match, and a literal
+ * background colour that matches the theme's `base.primary.background`. The
+ * interface overwrites all of it a moment later; this only has to be right
+ * for the frames before that.
+ */
+const BOOT_BACKGROUND: Record<"light" | "dark", string> = {
+  light: "#fafaf9",
+  dark: "#171412",
+};
+
+function bootThemeMarkup(scheme: "light" | "dark"): string {
+  return `<style id="boot-theme">:root{color-scheme:${scheme}}` +
+    `html,body{background-color:${BOOT_BACKGROUND[scheme]}}</style>`;
+}
+
+/** Stamp the boot theme into the served index.html. */
+export function injectBootTheme(
+  html: string,
+  scheme: "light" | "dark",
+): string {
+  let out = html;
+  // Anything already keyed off data-theme (the skeleton loader, for one)
+  // then matches from the very first frame instead of after hydration.
+  if (/<html\b[^>]*\bdata-theme=/.test(out)) {
+    out = out.replace(
+      /(<html\b[^>]*\bdata-theme=)(["'])[^"']*\2/,
+      `$1$2${scheme}$2`,
+    );
+  } else {
+    out = out.replace(/<html\b/, `<html data-theme="${scheme}"`);
+  }
+  const markup = bootThemeMarkup(scheme);
+  return out.includes("</head>")
+    ? out.replace("</head>", `  ${markup}\n  </head>`)
+    : markup + out;
 }
 
 export async function startUiServer(
@@ -142,7 +195,12 @@ export async function startUiServer(
         return new Response("Method Not Allowed", { status: 405 });
       }
 
-      return await serveStatic(root, url.pathname, request.method === "HEAD");
+      return await serveStatic(
+        root,
+        url.pathname,
+        request.method === "HEAD",
+        options.colorScheme?.() ?? "light",
+      );
     },
   );
 
@@ -160,6 +218,7 @@ async function serveStatic(
   root: string,
   pathname: string,
   headOnly: boolean,
+  colorScheme: "light" | "dark",
 ): Promise<Response> {
   let requested: string;
   try {
@@ -204,17 +263,29 @@ async function serveStatic(
     return new Response("Forbidden", { status: 403 });
   }
 
+  const isDocument = filePath.endsWith("index.html");
   const headers = new Headers({
     "content-type": MIME_TYPES[extname(filePath).toLowerCase()] ??
       "application/octet-stream",
-    "content-length": String(stat.size),
     "cross-origin-opener-policy": "same-origin",
     "x-content-type-options": "nosniff",
-    "cache-control": filePath.endsWith("index.html")
+    "cache-control": isDocument
       ? "no-cache"
       : "public, max-age=31536000, immutable",
   });
 
+  if (isDocument) {
+    // Rewritten per request, so content-length comes from the rewrite and
+    // the document is never cached with last launch's colour scheme.
+    const body = new TextEncoder().encode(
+      injectBootTheme(await Deno.readTextFile(filePath), colorScheme),
+    );
+    headers.set("content-length", String(body.byteLength));
+    if (headOnly) return new Response(null, { status: 200, headers });
+    return new Response(body, { status: 200, headers });
+  }
+
+  headers.set("content-length", String(stat.size));
   if (headOnly) return new Response(null, { status: 200, headers });
 
   const file = await Deno.open(filePath, { read: true });

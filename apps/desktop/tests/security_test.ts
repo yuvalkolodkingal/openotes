@@ -29,14 +29,14 @@ import { join } from "@std/path";
 import {
   assertInside,
   PathAccessError,
-  sanitizeSegment
+  sanitizeSegment,
 } from "../src/native/paths.ts";
 import { Logger, redactUrl, redactValue } from "../src/native/logger.ts";
 import { CredentialStore } from "../src/security/credentials.ts";
 import { isKnownProcedure, PROCEDURE_NAMES } from "../src/rpc/protocol.ts";
 import { isWriteStatement } from "../src/rpc/handlers.ts";
 
-async function withTempDir(fn: (dir: string) => Promise<void>) {
+async function withTempDir(fn: (dir: string) => void | Promise<void>) {
   const dir = await Deno.makeTempDir({ prefix: "openotes-test-" });
   try {
     await fn(await Deno.realPath(dir));
@@ -52,28 +52,36 @@ async function withTempDir(fn: (dir: string) => Promise<void>) {
 Deno.test("paths inside an allowed root are accepted", async () => {
   await withTempDir(async (root) => {
     await Deno.mkdir(join(root, "backups"), { recursive: true });
-    assertEquals(assertInside(join(root, "backups"), [root]), join(root, "backups"));
+    assertEquals(
+      assertInside(join(root, "backups"), [root]),
+      join(root, "backups"),
+    );
     assertEquals(
       assertInside(join(root, "backups", "new.enc"), [root]),
-      join(root, "backups", "new.enc")
+      join(root, "backups", "new.enc"),
     );
     // A relative path resolves against the first allowed root.
-    assertEquals(assertInside("backups/x.enc", [root]), join(root, "backups", "x.enc"));
+    assertEquals(
+      assertInside("backups/x.enc", [root]),
+      join(root, "backups", "x.enc"),
+    );
   });
 });
 
 Deno.test("paths outside every allowed root are refused", async () => {
-  await withTempDir(async (root) => {
-    for (const candidate of [
-      "/etc/passwd",
-      join(root, "..", "elsewhere"),
-      join(root, "..", "..", "etc", "shadow")
-    ]) {
+  await withTempDir((root) => {
+    for (
+      const candidate of [
+        "/etc/passwd",
+        join(root, "..", "elsewhere"),
+        join(root, "..", "..", "etc", "shadow"),
+      ]
+    ) {
       assertThrows(
         () => assertInside(candidate, [root]),
         PathAccessError,
         undefined,
-        `expected ${candidate} to be refused`
+        `expected ${candidate} to be refused`,
       );
     }
   });
@@ -94,21 +102,21 @@ Deno.test("a symlink cannot be used to escape an allowed root", async () => {
       assertThrows(() => assertInside(link, [allowed]), PathAccessError);
       assertThrows(
         () => assertInside(join(link, "secret.txt"), [allowed]),
-        PathAccessError
+        PathAccessError,
       );
     });
   });
 });
 
 Deno.test("a path with a null byte is refused", async () => {
-  await withTempDir(async (root) => {
+  await withTempDir((root) => {
     assertThrows(() => assertInside(`${root}/a\0b`, [root]), PathAccessError);
     assertThrows(() => assertInside("", [root]), PathAccessError);
   });
 });
 
 Deno.test("a not-yet-existing file inside an allowed root is accepted", async () => {
-  await withTempDir(async (root) => {
+  await withTempDir((root) => {
     const target = join(root, "does", "not", "exist", "yet.enc");
     assertEquals(assertInside(target, [root]), target);
   });
@@ -119,7 +127,10 @@ Deno.test("path segments are sanitized to something a filesystem accepts", () =>
   // not, which is what makes the result a single segment.
   assertEquals(sanitizeSegment("normal-name_1.txt"), "normal-name_1.txt");
   assertEquals(sanitizeSegment("../etc/passwd"), ".._etc_passwd");
-  assertEquals(sanitizeSegment("with spaces & symbols!"), "with_spaces___symbols_");
+  assertEquals(
+    sanitizeSegment("with spaces & symbols!"),
+    "with_spaces___symbols_",
+  );
 
   // The traversal tokens themselves are replaced outright.
   assertEquals(sanitizeSegment(".."), "_");
@@ -132,25 +143,30 @@ Deno.test("path segments are sanitized to something a filesystem accepts", () =>
 Deno.test("no input makes sanitizeSegment produce a traversing segment", () => {
   // The property that matters: whatever goes in, what comes out is one
   // path segment that cannot climb out of its directory.
-  for (const input of [
-    "../etc/passwd",
-    "..",
-    ".",
-    "....//....//etc",
-    "/absolute/path",
-    "C:\\Windows\\System32",
-    "a/b/c",
-    "a\\b\\c",
-    "\u0000null",
-    "~/.ssh/id_rsa",
-    "",
-    "   ",
-    "..%2f..%2fetc"
-  ]) {
+  for (
+    const input of [
+      "../etc/passwd",
+      "..",
+      ".",
+      "....//....//etc",
+      "/absolute/path",
+      "C:\\Windows\\System32",
+      "a/b/c",
+      "a\\b\\c",
+      "\u0000null",
+      "~/.ssh/id_rsa",
+      "",
+      "   ",
+      "..%2f..%2fetc",
+    ]
+  ) {
     const output = sanitizeSegment(input);
     assert(!output.includes("/"), `${JSON.stringify(input)} -> ${output}`);
     assert(!output.includes("\\"), `${JSON.stringify(input)} -> ${output}`);
-    assert(output !== "." && output !== "..", `${JSON.stringify(input)} -> ${output}`);
+    assert(
+      output !== "." && output !== "..",
+      `${JSON.stringify(input)} -> ${output}`,
+    );
     assert(output.length > 0 && output.length <= 128);
   }
 });
@@ -169,35 +185,49 @@ Deno.test("secrets are redacted by key name", () => {
     content: "the note body",
     title: "Bank details",
     cipher: "encrypted",
-    safe: "this is fine"
+    safe: "this is fine",
   }) as Record<string, unknown>;
 
-  for (const secret of [
-    "password", "passphrase", "token", "key", "masterKey",
-    "content", "title", "cipher"
-  ]) {
+  for (
+    const secret of [
+      "password",
+      "passphrase",
+      "token",
+      "key",
+      "masterKey",
+      "content",
+      "title",
+      "cipher",
+    ]
+  ) {
     assertEquals(redacted[secret], "[redacted]", `${secret} was not redacted`);
   }
   assertEquals(redacted.safe, "this is fine");
 });
 
 Deno.test("credentials embedded anywhere in a string are redacted", () => {
-  const redacted = redactValue("header", "Basic dXNlcjpwYXNzd29yZA==") as string;
+  const redacted = redactValue(
+    "header",
+    "Basic dXNlcjpwYXNzd29yZA==",
+  ) as string;
   assert(!redacted.includes("dXNlcjpwYXNzd29yZA=="), redacted);
   assert(redacted.includes("[redacted]"));
 
-  const bearer = redactValue("note", "the header was Bearer eyJhbGciOi.J9") as string;
+  const bearer = redactValue(
+    "note",
+    "the header was Bearer eyJhbGciOi.J9",
+  ) as string;
   assert(!bearer.includes("eyJhbGciOi.J9"), bearer);
 });
 
 Deno.test("URLs are stripped of credentials and query strings", () => {
   assertEquals(
     redactUrl("https://user:secret@dav.example.com/files/?token=abc"),
-    "https://dav.example.com/files/"
+    "https://dav.example.com/files/",
   );
   assertEquals(
     redactUrl("https://dav.example.com/files/Openotes/"),
-    "https://dav.example.com/files/Openotes/"
+    "https://dav.example.com/files/Openotes/",
   );
   // Not a parseable URL: the credential pattern is still removed.
   assert(!redactUrl("dav://user:pw@host/path").includes("user:pw"));
@@ -218,13 +248,16 @@ Deno.test("the logger writes redacted records and nothing else", async () => {
       url: "https://user:hunter2@dav.example.com/dav/?t=1",
       password: "hunter2",
       note: "Secret note body",
-      attempt: 3
+      attempt: 3,
     });
     logger.close();
 
     const written = await Deno.readTextFile(join(dir, "app.log"));
     assert(!written.includes("hunter2"), "the password reached the log file");
-    assert(!written.includes("Secret note body"), "note content reached the log");
+    assert(
+      !written.includes("Secret note body"),
+      "note content reached the log",
+    );
     assert(written.includes("Connected to the server"));
     assert(written.includes('"attempt":3'), "safe context was dropped");
 
@@ -263,12 +296,18 @@ Deno.test("credentials round-trip and are encrypted at rest", async () => {
     assertEquals(await store.get("webdav.password"), "server-password-1234");
     assertEquals((await store.keys()).sort(), [
       "webdav.passphrase",
-      "webdav.password"
+      "webdav.password",
     ]);
 
     const onDisk = await Deno.readTextFile(join(dir, "credentials.enc"));
-    assert(!onDisk.includes("server-password-1234"), "the password is in plaintext");
-    assert(!onDisk.includes("sync-passphrase-5678"), "the passphrase is in plaintext");
+    assert(
+      !onDisk.includes("server-password-1234"),
+      "the password is in plaintext",
+    );
+    assert(
+      !onDisk.includes("sync-passphrase-5678"),
+      "the passphrase is in plaintext",
+    );
 
     // A fresh store with the same passphrase can read them back.
     const reopened = new CredentialStore(dir);
@@ -289,7 +328,7 @@ Deno.test("the wrong passphrase cannot read stored credentials", async () => {
     assert(error instanceof Error);
     assert(
       error.message.includes("could not be decrypted"),
-      error.message
+      error.message,
     );
   });
 });
@@ -317,13 +356,17 @@ Deno.test("the machine-key mode works without a passphrase", async () => {
     await reopened.unlockWithMachineKey();
     assertEquals(
       await reopened.get("webdav.password"),
-      "background-sync-password"
+      "background-sync-password",
     );
 
     // The machine key file is not world-readable.
     if (Deno.build.os !== "windows") {
       const info = await Deno.stat(join(dir, "machine.key"));
-      assertEquals((info.mode ?? 0) & 0o077, 0, "machine.key is group/other readable");
+      assertEquals(
+        (info.mode ?? 0) & 0o077,
+        0,
+        "machine.key is group/other readable",
+      );
     }
   });
 });
@@ -339,7 +382,7 @@ Deno.test("a store written with one mode is not read with the other", async () =
     const error = await assertRejects(() => machine.get("k"), Error);
     assert(
       error.message.includes("locked with the vault key"),
-      error.message
+      error.message,
     );
   });
 });
@@ -382,21 +425,23 @@ Deno.test("only allowlisted procedures are recognized", () => {
   assert(isKnownProcedure("webdav.syncNow"));
   assert(isKnownProcedure("backup.restore"));
 
-  for (const forbidden of [
-    "shell.exec",
-    "fs.readAnyFile",
-    "eval",
-    "sqlite.run ",
-    "SQLITE.RUN",
-    "__proto__",
-    "constructor",
-    "toString",
-    ""
-  ]) {
+  for (
+    const forbidden of [
+      "shell.exec",
+      "fs.readAnyFile",
+      "eval",
+      "sqlite.run ",
+      "SQLITE.RUN",
+      "__proto__",
+      "constructor",
+      "toString",
+      "",
+    ]
+  ) {
     assertEquals(
       isKnownProcedure(forbidden),
       false,
-      `${JSON.stringify(forbidden)} should not be a known procedure`
+      `${JSON.stringify(forbidden)} should not be a known procedure`,
     );
   }
 });
@@ -408,14 +453,14 @@ Deno.test("the procedure list has no duplicates and no dangerous names", () => {
     seen.add(name);
     assert(
       /^[a-zA-Z]+\.[a-zA-Z]+$/.test(name),
-      `procedure name is not namespace.procedure: ${name}`
+      `procedure name is not namespace.procedure: ${name}`,
     );
   }
   for (const dangerous of ["exec", "shell", "eval", "spawn", "readAnyFile"]) {
     for (const name of PROCEDURE_NAMES) {
       assert(
         !name.toLowerCase().includes(dangerous),
-        `procedure ${name} looks like an arbitrary-execution binding`
+        `procedure ${name} looks like an arbitrary-execution binding`,
       );
     }
   }
@@ -431,26 +476,30 @@ Deno.test("the key pragma is treated as a write, not a query", () => {
 });
 
 Deno.test("write statements are recognized so sync is notified", () => {
-  for (const sql of [
-    "INSERT INTO notes VALUES (1)",
-    "  update notes set title = 'x'",
-    "DELETE FROM notes",
-    "replace into notes values (1)",
-    "CREATE TABLE t (id)",
-    "\n\tinsert into content values (1)"
-  ]) {
+  for (
+    const sql of [
+      "INSERT INTO notes VALUES (1)",
+      "  update notes set title = 'x'",
+      "DELETE FROM notes",
+      "replace into notes values (1)",
+      "CREATE TABLE t (id)",
+      "\n\tinsert into content values (1)",
+    ]
+  ) {
     assertEquals(isWriteStatement(sql), true, sql);
   }
-  for (const sql of [
-    "SELECT * FROM notes",
-    "  select 1",
-    "PRAGMA table_info(notes)",
-    "BEGIN",
-    "",
-    null,
-    undefined,
-    42
-  ]) {
+  for (
+    const sql of [
+      "SELECT * FROM notes",
+      "  select 1",
+      "PRAGMA table_info(notes)",
+      "BEGIN",
+      "",
+      null,
+      undefined,
+      42,
+    ]
+  ) {
     assertEquals(isWriteStatement(sql), false, String(sql));
   }
 });
