@@ -21,3 +21,6 @@ packaging/flatpak/*.tar.gz
 apps/desktop/.build/
 apps/desktop/ui/
 dist/
+
+# deno task dev builds here so a development build never looks like a release
+.dev/

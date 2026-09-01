@@ -53,6 +53,7 @@ import {
 import {
   type DriveProvider,
   type DriveStoreOptions,
+  dropboxStore,
   endpointsFor,
   googleDriveStore,
   graphStore,
@@ -87,14 +88,7 @@ const DRIVE_STORES: Record<
 > = {
   googledrive: googleDriveStore,
   onedrive: graphStore,
-  // Filled in with the Dropbox store below; see buildDriveStore.
-  dropbox: () => {
-    throw new SyncError(
-      "This build does not include the Dropbox provider. Point the folder " +
-        "provider at your Dropbox folder instead.",
-      "protocol-mismatch",
-    );
-  },
+  dropbox: dropboxStore,
 };
 
 /** A one-line description for the settings screen and the status bar. */

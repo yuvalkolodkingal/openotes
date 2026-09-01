@@ -43,3 +43,4 @@ export * from "./http/authorized-fetch.ts";
 // oauth/endpoints.ts are app-scoped by design.
 export * from "./google/drive-store.ts";
 export * from "./microsoft/graph-store.ts";
+export * from "./dropbox/dropbox-store.ts";
