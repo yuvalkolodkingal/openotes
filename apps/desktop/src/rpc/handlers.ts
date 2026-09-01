@@ -45,6 +45,14 @@ import {
   isSnap,
 } from "../native/paths.ts";
 import { PathAccessError } from "../native/paths.ts";
+import {
+  describeDrive,
+  driveClient,
+  isDriveProvider,
+} from "../sync/drive-providers.ts";
+import { driveSecretKey, driveTokenKey } from "../sync/service.ts";
+import { beginAuthorization } from "../security/oauth.ts";
+import type { SyncProvider } from "../native/settings.ts";
 
 const log = logger.scope("rpc");
 
@@ -561,11 +569,17 @@ export function createHandlers(): Record<string, Handler> {
 
     "webdav.setConfig": async (input, context) => {
       const current = context.settings.get("webdav");
+      const provider = asSyncProvider(input?.provider) ?? current.provider;
       const serverUrl = optionalString(input?.serverUrl) ?? current.serverUrl;
-      if (serverUrl && !/^https?:\/\//i.test(serverUrl)) {
+      // Only checked for the provider that uses it: switching to a drive
+      // must not be blocked by a server URL left over from before.
+      if (
+        provider === "webdav" && serverUrl && !/^https?:\/\//i.test(serverUrl)
+      ) {
         throw new Error("The server URL must start with https:// or http://");
       }
       if (
+        provider === "webdav" &&
         serverUrl.startsWith("http://") &&
         !(input?.allowInsecureHttp ?? current.allowInsecureHttp)
       ) {
@@ -576,6 +590,8 @@ export function createHandlers(): Record<string, Handler> {
       }
       await context.settings.patchWebDav({
         enabled: boolOr(input?.enabled, current.enabled),
+        provider,
+        clientId: optionalString(input?.clientId) ?? current.clientId,
         serverUrl,
         username: optionalString(input?.username) ?? current.username,
         directory: optionalString(input?.directory) ?? current.directory,
@@ -769,6 +785,77 @@ export function createHandlers(): Record<string, Handler> {
       );
     },
 
+    // ---------------- choosing and connecting a drive ----------------
+
+    /**
+     * What the user has to do in the provider's own console. Openotes
+     * registers no OAuth application, so every user brings their own —
+     * which is also why a drive can only ever see files Openotes created.
+     */
+    "webdav.driveSetup": (input) => {
+      if (!isDriveProvider(input?.provider)) {
+        throw new Error("Unknown drive provider.");
+      }
+      const description = describeDrive(input.provider);
+      return { provider: input.provider, ...description };
+    },
+
+    "webdav.connectDrive": async (input, context) => {
+      if (!isDriveProvider(input?.provider)) {
+        throw new Error("Unknown drive provider.");
+      }
+      const provider = input.provider;
+      const description = describeDrive(provider);
+      const clientId = asString(input, "clientId", 512).trim();
+      const clientSecret = optionalString(input?.clientSecret)?.trim();
+      if (description.requiresClientSecret && !clientSecret) {
+        throw new Error(
+          `${description.label} also needs the client secret from the same ` +
+            `registration. Its token endpoint rejects the exchange without ` +
+            `one, even though it is not treated as confidential for a ` +
+            `desktop app.`,
+        );
+      }
+
+      const request = await beginAuthorization(
+        driveClient(provider, { clientId, clientSecret }),
+      );
+      // The system browser, never the app's webview: a webview cannot be
+      // trusted by the user to be showing the real provider, and it would
+      // not carry an existing session either.
+      await context.shell.openExternal(request.url);
+      const tokens = await request.completion;
+
+      await context.credentials.set(
+        driveTokenKey(provider),
+        JSON.stringify(tokens),
+      );
+      if (clientSecret) {
+        await context.credentials.set(driveSecretKey(provider), clientSecret);
+      }
+      await context.settings.patchWebDav({
+        provider,
+        clientId,
+        connected: true,
+      });
+      context.reconfigureSync();
+      return { provider, label: description.label };
+    },
+
+    "webdav.disconnectDrive": async (input, context) => {
+      const provider = isDriveProvider(input?.provider)
+        ? input.provider
+        : context.settings.get("webdav").provider;
+      if (!isDriveProvider(provider)) {
+        throw new Error("That provider has no account to disconnect.");
+      }
+      await context.credentials.set(driveTokenKey(provider), undefined);
+      await context.credentials.set(driveSecretKey(provider), undefined);
+      await context.settings.patchWebDav({ connected: false, enabled: false });
+      context.reconfigureSync();
+      return { provider };
+    },
+
     // ---------------- the assistant endpoint (MCP) ----------------
 
     "mcp.getSettings": (_input, context) => context.settings.get("mcp"),
@@ -831,6 +918,16 @@ export function createHandlers(): Record<string, Handler> {
       return context.mcp.status();
     },
   };
+}
+
+function asSyncProvider(value: unknown): SyncProvider | undefined {
+  const providers: SyncProvider[] = [
+    "webdav",
+    "googledrive",
+    "dropbox",
+    "onedrive",
+  ];
+  return providers.find((provider) => provider === value);
 }
 
 /**

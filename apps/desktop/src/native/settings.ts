@@ -40,8 +40,28 @@ export interface WindowState {
   maximized: boolean;
 }
 
+/**
+ * Where notes sync to.
+ *
+ * The settings key below is still "webdav" although this now covers four
+ * providers: renaming it would orphan every existing installation's
+ * configuration, and "sync" is already taken by the cursor bookkeeping.
+ * mergeSettings fills a missing field from the defaults, so an installation
+ * that predates `provider` reads back as WebDAV — which is what it was.
+ */
+export type SyncProvider = "webdav" | "googledrive" | "dropbox" | "onedrive";
+
 export interface WebDavSettings {
   enabled: boolean;
+  provider: SyncProvider;
+  /**
+   * The OAuth client id for a drive provider. Openotes registers no
+   * application of its own, so each user brings their own — which is also
+   * why a drive provider can only ever see the files Openotes created.
+   */
+  clientId: string;
+  /** Whether tokens for the current provider are in the credential store. */
+  connected: boolean;
   serverUrl: string;
   username: string;
   directory: string;
@@ -165,6 +185,9 @@ export function defaultSettings(): AppSettings {
     },
     webdav: {
       enabled: false,
+      provider: "webdav",
+      clientId: "",
+      connected: false,
       serverUrl: "",
       username: "",
       directory: "Openotes",

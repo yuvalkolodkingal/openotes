@@ -36,6 +36,18 @@ import type { SerializedKey } from "@notesnook/crypto";
 import { join } from "@std/path";
 import { appDataDir, ensureDir } from "../native/paths.ts";
 import { logger } from "../native/logger.ts";
+import {
+  describeDrive,
+  driveClient,
+  type DriveProvider,
+  driveStorage,
+  driveTokenProvider,
+  isDriveProvider,
+  type StoredConnection,
+} from "./drive-providers.ts";
+import type { OAuthTokens } from "../security/oauth.ts";
+import type { WebDavSettings } from "../native/settings.ts";
+import type { RemoteStorage } from "@notesnook/sync-core";
 import { APP_VERSION, USER_AGENT } from "../constants.ts";
 import type { SettingsStore } from "../native/settings.ts";
 import type { CredentialStore } from "../security/credentials.ts";
@@ -46,6 +58,15 @@ const log = logger.scope("sync");
 
 const CREDENTIAL_KEY_PASSWORD = "webdav.password";
 const CREDENTIAL_KEY_PASSPHRASE = "webdav.passphrase";
+
+/** Where a drive's tokens and its client secret live, per provider. */
+export function driveTokenKey(provider: DriveProvider): string {
+  return `drive.${provider}.tokens`;
+}
+
+export function driveSecretKey(provider: DriveProvider): string {
+  return `drive.${provider}.clientSecret`;
+}
 
 /** Persists the outgoing queue to the app data directory. */
 class FileQueueStorage implements QueueStorage {
@@ -129,15 +150,21 @@ export class SyncService {
    */
   private async buildEngine(): Promise<SyncEngine | undefined> {
     const config = this.options.settings.get("webdav");
-    if (!config.enabled || !config.serverUrl || !config.username) {
+    const isWebDav = config.provider === "webdav";
+    const unconfigured = isWebDav
+      ? !config.serverUrl || !config.username
+      : !config.clientId || !config.connected;
+    if (!config.enabled || unconfigured) {
       this.setStatus({ type: "disabled" });
       return undefined;
     }
 
-    const password = await this.options.credentials
-      .get(CREDENTIAL_KEY_PASSWORD)
-      .catch(() => undefined);
-    if (!password) {
+    const password = isWebDav
+      ? await this.options.credentials
+        .get(CREDENTIAL_KEY_PASSWORD)
+        .catch(() => undefined)
+      : undefined;
+    if (isWebDav && !password) {
       throw new SyncError(
         "The WebDAV password is not available. Unlock the vault, or " +
           "re-enter the password in Settings → Synchronization.",
@@ -156,22 +183,9 @@ export class SyncService {
       );
     }
 
-    const transport = new FetchTransport({
-      getBasicAuth: () =>
-        Promise.resolve(toBasicAuth(config.username, password)),
-    }, (input, init) => {
-      const headers = new Headers(init?.headers);
-      headers.set("user-agent", USER_AGENT);
-      return fetch(input, { ...init, headers });
-    });
-
-    const baseUrl = joinUrl(config.serverUrl, config.directory);
-    const client = new WebDavClient(transport, {
-      baseUrl,
-      requestTimeout: config.timeoutSeconds * 1000,
-      maxRetries: config.maxRetries,
-      allowInsecureHttp: config.allowInsecureHttp,
-    });
+    const storage = isWebDav
+      ? this.webDavStorage(config, password!)
+      : await this.driveStorage(config);
 
     // The salt lives in the remote protocol.json so a second device with
     // the same passphrase derives the same keys. On a fresh repository we
@@ -186,7 +200,7 @@ export class SyncService {
     );
 
     const engine = new SyncEngine({
-      storage: new WebDavRemoteStorage(client),
+      storage,
       crypto: this.crypto,
       store: this.options.store,
       queue: this.queue,
@@ -212,6 +226,86 @@ export class SyncService {
 
     this.engine = engine;
     return engine;
+  }
+
+  /** The WebDAV path, unchanged: a client wrapped in a RemoteStorage. */
+  private webDavStorage(
+    config: WebDavSettings,
+    password: string,
+  ): RemoteStorage {
+    const transport = new FetchTransport({
+      getBasicAuth: () =>
+        Promise.resolve(toBasicAuth(config.username, password)),
+    }, (input, init) => {
+      const headers = new Headers(init?.headers);
+      headers.set("user-agent", USER_AGENT);
+      return fetch(input, { ...init, headers });
+    });
+    return new WebDavRemoteStorage(
+      new WebDavClient(transport, {
+        baseUrl: joinUrl(config.serverUrl, config.directory),
+        requestTimeout: config.timeoutSeconds * 1000,
+        maxRetries: config.maxRetries,
+        allowInsecureHttp: config.allowInsecureHttp,
+      }),
+    );
+  }
+
+  /**
+   * A drive, through the OAuth connection the user made in settings. The
+   * provider only ever sees what the WebDAV server would: the same encrypted
+   * journal under keyed-digest filenames.
+   */
+  private async driveStorage(config: WebDavSettings): Promise<RemoteStorage> {
+    if (!isDriveProvider(config.provider)) {
+      throw new SyncError(
+        `Unknown synchronization provider: ${config.provider}`,
+        "corrupt-data",
+      );
+    }
+    const description = describeDrive(config.provider);
+    const clientSecret = description.requiresClientSecret
+      ? await this.options.credentials
+        .get(driveSecretKey(config.provider))
+        .catch(() => undefined)
+      : undefined;
+    if (description.requiresClientSecret && !clientSecret) {
+      throw new SyncError(
+        `${description.label} needs the client secret from your own OAuth ` +
+          `registration, and it is not available. Unlock the vault, or sign ` +
+          `in again in Settings → Synchronization.`,
+        "unauthorized",
+      );
+    }
+
+    const client = driveClient(config.provider, {
+      clientId: config.clientId,
+      clientSecret,
+    });
+    const tokens = driveTokenProvider({
+      client,
+      connection: this.driveConnection(config.provider),
+    });
+    return driveStorage(config.provider, tokens, config.directory);
+  }
+
+  /** The saved tokens for one provider, in the encrypted credential store. */
+  private driveConnection(provider: DriveProvider): StoredConnection {
+    const key = driveTokenKey(provider);
+    const credentials = this.options.credentials;
+    return {
+      async read() {
+        const raw = await credentials.get(key).catch(() => undefined);
+        if (!raw) return undefined;
+        try {
+          return JSON.parse(raw) as OAuthTokens;
+        } catch {
+          return undefined;
+        }
+      },
+      write: (tokens) => credentials.set(key, JSON.stringify(tokens)),
+      clear: () => credentials.set(key, undefined),
+    };
   }
 
   /** Store the WebDAV password and sync passphrase, encrypted. */
