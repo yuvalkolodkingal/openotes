@@ -37,3 +37,9 @@ export * from "./oauth/endpoints.ts";
 export * from "./oauth/token-manager.ts";
 export * from "./http/retry.ts";
 export * from "./http/authorized-fetch.ts";
+
+// The three adapters. Each is a RemoteStore over one provider's API, and
+// each only ever sees files this application created — the scopes in
+// oauth/endpoints.ts are app-scoped by design.
+export * from "./google/drive-store.ts";
+export * from "./microsoft/graph-store.ts";

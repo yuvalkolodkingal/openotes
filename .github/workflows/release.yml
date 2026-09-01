@@ -339,8 +339,9 @@ jobs:
             echo
             echo "A desktop-only, Deno-based fork of Notesnook: no account, no"
             echo "subscription and no cloud service. Notes live in an encrypted"
-            echo "SQLite database on your machine and sync through any WebDAV"
-            echo "server you control."
+            echo "SQLite database on your machine and sync through a WebDAV"
+            echo "server you control, or through a folder your Google Drive,"
+            echo "OneDrive, Dropbox or iCloud client already keeps in step."
             echo
             echo "### Downloads"
             echo

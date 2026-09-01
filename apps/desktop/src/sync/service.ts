@@ -164,7 +164,11 @@ export class SyncService {
       );
     }
 
-    const remote = buildRemoteStore({ config, secret: password });
+    const remote = await buildRemoteStore({
+      config,
+      secret: password,
+      credentials: this.options.credentials,
+    });
 
     // The salt lives in the remote protocol.json so a second device with
     // the same passphrase derives the same keys. On a fresh repository we

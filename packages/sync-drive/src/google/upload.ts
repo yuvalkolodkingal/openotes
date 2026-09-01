@@ -45,7 +45,7 @@ import {
   type DriveFile,
   parseDriveFile,
 } from "./path-index.ts";
-import { DriveTransport, expectJson, expectOk } from "./errors.ts";
+import { type DriveTransport, expectJson, expectOk } from "./errors.ts";
 
 /** Where uploads go; the metadata API lives on a different path. */
 const DRIVE_UPLOAD_URL = "https://www.googleapis.com/upload/drive/v3/files";

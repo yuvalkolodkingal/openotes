@@ -52,6 +52,7 @@ import {
 import type { TokenManager } from "../oauth/token-manager.ts";
 import {
   DEFAULT_MAX_RETRIES,
+  parseRetryAfter,
   RetryAfterError,
   withRetry,
 } from "../http/retry.ts";
@@ -199,7 +200,10 @@ export function driveError(
     `${failure.message ? `: ${failure.message}` : ""})`;
 
   if (isThrottling(failure)) {
-    const retryAfter = parseRetryAfterHeader(response);
+    // Drive sends Retry-After on some throttling answers and not others.
+    // The shared client parses it only for the statuses it already knows to
+    // retry, and 403 is not one of them, so it is read here instead.
+    const retryAfter = parseRetryAfter(response.headers["retry-after"]);
     const message =
       `${GOOGLE_DRIVE_LABEL} is rate limiting this account, so it could ` +
       `not ${action} right now` + suffix;
@@ -304,26 +308,6 @@ export function expectJson(
 }
 
 /**
- * Drive sends Retry-After on some throttling answers and not others.
- * Re-parsed here rather than reusing the shared client's copy because that
- * one only runs for statuses it already considers retryable, and 403 is
- * not one of them.
- */
-function parseRetryAfterHeader(
-  response: AuthorizedResponse,
-): number | undefined {
-  const value = response.headers["retry-after"];
-  if (!value) return undefined;
-  const trimmed = value.trim();
-  if (trimmed.length === 0) return undefined;
-  const seconds = Number(trimmed);
-  if (Number.isFinite(seconds)) return Math.max(0, Math.round(seconds * 1000));
-  const at = Date.parse(trimmed);
-  if (Number.isNaN(at)) return undefined;
-  return Math.max(0, at - Date.now());
-}
-
-/**
  * The reason lives in `error.errors[].reason` in the classic envelope and
  * in `error.details[].reason` in the newer one. Both shapes are still in
  * circulation across Drive endpoints, and the throttling rules above are
@@ -338,10 +322,10 @@ function firstReason(error: Record<string, unknown>): string | undefined {
       if (typeof reason === "string" && reason.length > 0) return reason;
     }
   }
-  // The newer envelope's `status` ("PERMISSION_DENIED", "RESOURCE_
-  // EXHAUSTED") is not a reason and must not be treated as one: it does not
-  // distinguish throttling from a permission failure, which is the entire
-  // question this function exists to answer.
+  // The newer envelope's `status` field ("PERMISSION_DENIED" and friends)
+  // is not a reason and must not be read as one: it does not separate
+  // throttling from a permission failure, which is the entire question
+  // this function exists to answer.
   return undefined;
 }
 

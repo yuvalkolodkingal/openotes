@@ -58,7 +58,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 import { SyncError } from "@notesnook/sync-remote";
 import { splitPath } from "../path.ts";
-import { DriveTransport, expectJson, expectOk } from "./errors.ts";
+import { type DriveTransport, expectJson, expectOk } from "./errors.ts";
 
 /** The Drive v3 metadata endpoint. Uploads use a different host path. */
 export const DRIVE_FILES_URL = "https://www.googleapis.com/drive/v3/files";
@@ -334,18 +334,6 @@ export class DrivePathIndex {
       }
       pageToken = next;
     }
-  }
-
-  /** Fetch one file's current metadata by id, bypassing every cache. */
-  async fetchFile(id: string, action: string): Promise<DriveFile | undefined> {
-    const url = new URL(`${DRIVE_FILES_URL}/${encodeURIComponent(id)}`);
-    url.searchParams.set("fields", DRIVE_FILE_FIELDS);
-    const response = await this.transport.request(
-      { url: url.toString() },
-      action,
-    );
-    if (response.status === 404) return undefined;
-    return parseDriveFile(expectJson(response, action), action);
   }
 
   /**

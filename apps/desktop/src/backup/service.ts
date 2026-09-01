@@ -203,7 +203,11 @@ export class BackupService {
       );
     }
     return new RemoteBackupTarget(
-      buildRemoteStore({ config: webdav, secret: password }),
+      await buildRemoteStore({
+        config: webdav,
+        secret: password,
+        credentials: this.options.credentials,
+      }),
       backup.webdavDirectory,
     );
   }

@@ -46,7 +46,6 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
 import {
-  assertSafePath,
   joinPath,
   type PutOptions,
   type RemoteEntry,
@@ -336,7 +335,7 @@ export class GoogleDriveStore implements RemoteStore {
     const resolved = await this.index.resolve(path, { refresh: true });
     if (resolved === undefined) return;
     if (isFolder(resolved.file)) {
-      await this.assertEmptyFolder(resolved.file, action);
+      await this.assertEmptyFolder(resolved.file, this.locate(path), action);
     }
     await this.index.deleteFile(resolved.file.id, action);
     this.index.forget(path);
@@ -362,7 +361,7 @@ export class GoogleDriveStore implements RemoteStore {
     const occupant = await this.index.resolve(to, { refresh: true });
     if (occupant && occupant.file.id !== resolved.file.id) {
       if (isFolder(occupant.file)) {
-        await this.assertEmptyFolder(occupant.file, action);
+        await this.assertEmptyFolder(occupant.file, this.locate(to), action);
       }
       await this.index.deleteFile(occupant.file.id, action);
       this.index.forgetSubtree(to);
@@ -521,14 +520,15 @@ export class GoogleDriveStore implements RemoteStore {
    */
   private async assertEmptyFolder(
     folder: DriveFile,
+    what: string,
     action: string,
   ): Promise<void> {
     const children = await this.index.listChildren(folder.id, action);
     if (children.length === 0) return;
     throw new SyncError(
-      `Refusing to ${action}: it is a folder holding ${children.length} ` +
-        `items, and deleting a folder in ${GOOGLE_DRIVE_LABEL} deletes ` +
-        `everything inside it.`,
+      `Refusing to ${action}: ${what} is a folder holding ` +
+        `${children.length} items, and deleting a folder in ` +
+        `${GOOGLE_DRIVE_LABEL} deletes everything inside it.`,
       "conflict",
     );
   }
@@ -561,7 +561,7 @@ export class GoogleDriveStore implements RemoteStore {
 
   /** How a store path is spelled in the user's Drive, for messages. */
   private locate(path: string): string {
-    const clean = splitPath(assertSafePath(path)).join("/");
+    const clean = splitPath(path).join("/");
     if (this.directory === "") return clean === "" ? "the account root" : clean;
     return clean === "" ? this.directory : `${this.directory}/${clean}`;
   }
@@ -575,7 +575,9 @@ export function googleDriveStore(
 }
 
 function toRemoteEntry(path: string, file: DriveFile): RemoteEntry {
-  const modified = file.modifiedTime ? Date.parse(file.modifiedTime) : NaN;
+  const modified = file.modifiedTime
+    ? Date.parse(file.modifiedTime)
+    : Number.NaN;
   return {
     path,
     isDirectory: isFolder(file),

@@ -50,15 +50,52 @@ import {
   WebDavClient,
   webDavStore,
 } from "@notesnook/sync-remote";
+import {
+  type DriveProvider,
+  type DriveStoreOptions,
+  endpointsFor,
+  googleDriveStore,
+  graphStore,
+  TokenManager,
+} from "@notesnook/sync-drive";
+import { credentialTokenStorage } from "../oauth/browser-flow.ts";
+import type { CredentialStore } from "../security/credentials.ts";
 import { isAbsolute, join } from "@std/path";
 import { USER_AGENT } from "../constants.ts";
 import type { SyncProvider, WebDavSettings } from "../native/settings.ts";
 
 export interface ProviderContext {
   config: WebDavSettings;
-  /** The WebDAV password, or a drive provider's OAuth client secret. */
+  /** The WebDAV password. Drive providers read their own secrets below. */
   secret?: string;
+  /** Needed by the drive providers, which hold a refresh token. */
+  credentials?: CredentialStore;
 }
+
+/**
+ * The three API-backed providers, by name.
+ *
+ * They all take the same options, so adding one is a line here plus its
+ * store. Note what is *not* here: a client id of ours. Openotes has no
+ * registered OAuth application, so each user brings their own, and the
+ * consequence is a good one — the scopes are app-scoped, the app is theirs,
+ * and Openotes can only ever see the files it created.
+ */
+const DRIVE_STORES: Record<
+  DriveProvider,
+  (options: DriveStoreOptions) => RemoteStore
+> = {
+  googledrive: googleDriveStore,
+  onedrive: graphStore,
+  // Filled in with the Dropbox store below; see buildDriveStore.
+  dropbox: () => {
+    throw new SyncError(
+      "This build does not include the Dropbox provider. Point the folder " +
+        "provider at your Dropbox folder instead.",
+      "protocol-mismatch",
+    );
+  },
+};
 
 /** A one-line description for the settings screen and the status bar. */
 export function describeProvider(provider: SyncProvider): string {
@@ -76,7 +113,7 @@ export function describeProvider(provider: SyncProvider): string {
   }
 }
 
-/** Whether the provider needs a password or an OAuth secret to build. */
+/** Whether the provider needs a WebDAV password to build. */
 export function providerNeedsSecret(provider: SyncProvider): boolean {
   return provider === "webdav";
 }
@@ -109,7 +146,9 @@ export function missingConfiguration(
  * Build the store the current settings describe. Throws a SyncError the
  * settings screen can show verbatim when they do not describe one yet.
  */
-export function buildRemoteStore(context: ProviderContext): RemoteStore {
+export async function buildRemoteStore(
+  context: ProviderContext,
+): Promise<RemoteStore> {
   const { config } = context;
   const missing = missingConfiguration(config);
   if (missing) {
@@ -160,16 +199,49 @@ export function buildRemoteStore(context: ProviderContext): RemoteStore {
     case "googledrive":
     case "onedrive":
     case "dropbox":
-      throw new SyncError(
-        `${describeProvider(config.provider)} needs this build to include ` +
-          `the drive providers, which it does not. Point the "folder" ` +
-          `provider at the directory ${
-            describeProvider(config.provider)
-          }'s desktop client keeps in step instead — it reaches the same ` +
-          `account and needs no sign-in here.`,
-        "protocol-mismatch",
-      );
+      return await buildDriveStore(config.provider, context);
   }
+}
+
+async function buildDriveStore(
+  provider: DriveProvider,
+  context: ProviderContext,
+): Promise<RemoteStore> {
+  const { config, credentials } = context;
+  if (!credentials) {
+    throw new SyncError(
+      "The credential store is not available, so the saved sign-in for " +
+        `${describeProvider(provider)} cannot be read. Unlock the vault.`,
+      "unauthorized",
+    );
+  }
+
+  const endpoints = endpointsFor(provider);
+  const clientSecret = endpoints.requiresClientSecret
+    ? await credentials.get(`drive.${provider}.clientSecret`)
+    : undefined;
+  if (endpoints.requiresClientSecret && !clientSecret) {
+    throw new SyncError(
+      `${endpoints.label} needs the client secret from your own OAuth ` +
+        `registration; it is not stored yet. Sign in again in Settings.`,
+      "unauthorized",
+    );
+  }
+
+  const tokens = new TokenManager({
+    client: { provider, clientId: config.clientId, clientSecret },
+    storage: credentialTokenStorage(credentials),
+    requestTimeout: config.timeoutSeconds * 1000,
+    maxRetries: config.maxRetries,
+  });
+
+  return DRIVE_STORES[provider]({
+    client: { provider, clientId: config.clientId, clientSecret },
+    tokens,
+    directory: config.directory,
+    requestTimeout: config.timeoutSeconds * 1000,
+    maxRetries: config.maxRetries,
+  });
 }
 
 /**
