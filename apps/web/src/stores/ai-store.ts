@@ -30,7 +30,8 @@ import {
 import createStore from "../common/store";
 import BaseStore from "./index";
 import { db } from "../common/db";
-import { exportContent, parseNoteMarkdown } from "@notesnook/common";
+import { exportContent } from "@notesnook/common";
+import { parseNoteMarkdown } from "@notesnook/core";
 import { showToast } from "../utils/toast";
 
 /**
