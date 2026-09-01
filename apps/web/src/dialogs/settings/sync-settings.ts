@@ -37,6 +37,7 @@ import { showToast } from "../../utils/toast";
 import { strings } from "@notesnook/intl";
 import { WebDavConnectionPanel } from "./components/webdav-connection";
 import { FolderConnectionPanel } from "./components/folder-connection";
+import { DriveConnectionPanel } from "./components/drive-connection";
 import type { SyncProvider } from "../../stores/webdav-store";
 
 /** Re-renders a setting whenever the WebDAV config or status changes. */
@@ -91,7 +92,14 @@ export const SyncSettings: SettingsGroup[] = [
             type: "dropdown",
             options: [
               { value: "webdav", title: "A WebDAV server you control" },
-              { value: "folder", title: "A folder on this machine" }
+              {
+                value: "folder",
+                title: "A folder on this machine (Google Drive, OneDrive, " +
+                  "Dropbox, iCloud, Syncthing, a NAS)"
+              },
+              { value: "googledrive", title: "Google Drive, signed in" },
+              { value: "onedrive", title: "OneDrive, signed in" },
+              { value: "dropbox", title: "Dropbox, signed in" }
             ],
             selectedOption: () =>
               webDavStore.get().config?.provider ?? "webdav",
@@ -146,6 +154,32 @@ export const SyncSettings: SettingsGroup[] = [
         isHidden: () => webDavStore.get().config?.provider !== "folder",
         onStateChange: onWebDavChange,
         components: [{ type: "custom", component: FolderConnectionPanel }]
+      },
+      {
+        key: "sync-drive",
+        title: "Sign in to your drive",
+        description:
+          "For a machine with no desktop client for the service. You " +
+          "register the application yourself, so Openotes can only ever see " +
+          "the files it created.",
+        keywords: [
+          "google drive",
+          "onedrive",
+          "dropbox",
+          "oauth",
+          "sign in",
+          "client id"
+        ],
+        isHidden: () => {
+          const provider = webDavStore.get().config?.provider;
+          return (
+            provider !== "googledrive" &&
+            provider !== "onedrive" &&
+            provider !== "dropbox"
+          );
+        },
+        onStateChange: onWebDavChange,
+        components: [{ type: "custom", component: DriveConnectionPanel }]
       },
       {
         key: "sync-now",
