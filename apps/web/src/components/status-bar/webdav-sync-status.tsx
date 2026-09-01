@@ -41,7 +41,10 @@ import {
   openConflictsDialog
 } from "../../stores/webdav-store";
 // Aliased: the component below is also called WebDavSyncStatus.
-import type { WebDavSyncStatus as SyncStatusValue } from "../../stores/webdav-store";
+import type {
+  SyncProvider,
+  WebDavSyncStatus as SyncStatusValue
+} from "../../stores/webdav-store";
 import { WEBDAV_SETTINGS_SECTION } from "../../dialogs/settings/types";
 import { showToast } from "../../utils/toast";
 import { strings } from "@notesnook/intl";
@@ -83,10 +86,32 @@ type Appearance = {
 // "Offline is gray, not red: working offline is a normal, supported state of
 // the product, and the palette must say so." A conflict is amber, not red,
 // for the same reason: both versions were safely kept, nothing failed.
+/**
+ * What to call the thing notes go to. The status bar is the one place a user
+ * looks to find out whether sync is working, so it should name what they
+ * actually configured rather than a protocol they may never have chosen.
+ */
+export function describeProvider(provider?: SyncProvider): string {
+  switch (provider) {
+    case "folder":
+      return "your sync folder";
+    case "googledrive":
+      return "Google Drive";
+    case "onedrive":
+      return "OneDrive";
+    case "dropbox":
+      return "Dropbox";
+    default:
+      return "your WebDAV server";
+  }
+}
+
 export function describeSyncStatus(
   status: SyncStatusValue,
-  conflicts: number
+  conflicts: number,
+  provider?: SyncProvider
 ): Appearance {
+  const target = describeProvider(provider);
   // A recorded conflict outranks whatever the last cycle reported: an
   // otherwise "synced" repository with an unreviewed conflict must not look
   // like everything is fine.
@@ -124,7 +149,7 @@ export function describeSyncStatus(
               status.progress.total
             }`
           : strings.syncing(),
-        tooltip: "Syncing with your WebDAV server..."
+        tooltip: `Syncing with ${target}...`
       };
     case "offline":
       return {
@@ -133,7 +158,9 @@ export function describeSyncStatus(
         iconColor: "var(--on-offline)",
         label: strings.offline(),
         tooltip:
-          "The WebDAV server cannot be reached. Changes are kept on this device and will sync when it is back."
+          `${target[0].toUpperCase()}${
+            target.slice(1)
+          } cannot be reached. Changes are kept on this device and will sync when it is back.`
       };
     case "pending":
       return {
@@ -169,7 +196,7 @@ export function describeSyncStatus(
         iconColor: "var(--icon-disabled)",
         label: "Sync off",
         tooltip:
-          "WebDAV synchronization is not set up. Click to configure it."
+          "Synchronization is not set up. Click to configure it."
       };
   }
 }
@@ -190,7 +217,8 @@ async function onIndicatorClick(status: SyncStatusValue, conflicts: number) {
 export function WebDavSyncStatus() {
   const status = useWebDavStore((store) => store.status);
   const conflicts = useWebDavStore((store) => store.conflicts.length);
-  const appearance = describeSyncStatus(status, conflicts);
+  const provider = useWebDavStore((store) => store.config?.provider);
+  const appearance = describeSyncStatus(status, conflicts, provider);
 
   return (
     <Button
@@ -226,7 +254,8 @@ export function WebDavSyncStatus() {
 export function WebDavStatusPill() {
   const status = useWebDavStore((store) => store.status);
   const conflicts = useWebDavStore((store) => store.conflicts.length);
-  const appearance = describeSyncStatus(status, conflicts);
+  const provider = useWebDavStore((store) => store.config?.provider);
+  const appearance = describeSyncStatus(status, conflicts, provider);
 
   return (
     <Flex

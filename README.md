@@ -20,9 +20,15 @@ audited software — and changes what sits underneath:
 
 - **No Notesnook account.** Nothing to sign up for. The application opens
   straight into a local vault.
-- **Your server, or none at all.** Synchronization goes to a WebDAV server
-  you control — Nextcloud, ownCloud, Apache, nginx, a Raspberry Pi. Or skip
-  it entirely and stay on one machine.
+- **Your server, your drive, or none at all.** Synchronization goes to a
+  WebDAV server you control — Nextcloud, ownCloud, Apache, nginx, a
+  Raspberry Pi — or to a folder your Google Drive, OneDrive, Dropbox or
+  iCloud Drive client already keeps in step, or to a NAS mount, a USB stick
+  or Syncthing. Or skip it entirely and stay on one machine.
+- **An assistant can work with your notes.** Openotes speaks the Model
+  Context Protocol on a loopback port, so Claude Code, Claude Desktop or any
+  other MCP client on the same machine can search and read your notes, and
+  edit them if you allow it. Off by default, read-only when you turn it on.
 - **Encrypted before it leaves.** Notes, attachments and backups are
   encrypted on your machine. The server stores ciphertext and never receives
   a key. Even the filenames are keyed digests, so a directory listing gives
@@ -122,9 +128,25 @@ Start writing
 Everything after the first step is optional. Openotes is fully usable
 without a server and without a network connection.
 
-### Connecting WebDAV
+### Setting up sync
 
-`Settings → Synchronization → WebDAV`
+`Settings → Synchronization`, then pick what to sync through.
+
+**A folder on this machine** is the simplest, and it is how you use Google
+Drive, OneDrive, Dropbox or iCloud Drive: point Openotes at a folder their
+own desktop client already keeps in step with your account, and their client
+does the uploading. Openotes never signs in to anything, and the service only
+ever holds ciphertext — even the filenames are keyed digests.
+
+| Field | Example |
+|---|---|
+| Folder | `~/Google Drive/My Drive` or `%USERPROFILE%\Dropbox` |
+| Subfolder | `Openotes` |
+| Sync passphrase | **what encrypts your notes** |
+
+A NAS mount, a USB stick or a Syncthing folder works the same way.
+
+**A WebDAV server you control** talks to the server directly.
 
 | Field | Example |
 |---|---|
@@ -133,6 +155,15 @@ without a server and without a network connection.
 | Password | your WebDAV password, or an app password |
 | Remote directory | `Openotes` |
 | Sync passphrase | **what encrypts your notes** — not your WebDAV password |
+
+Set up the first device, let it finish one sync, then set up the second with
+the same passphrase. Two devices initializing an empty folder at the same
+moment is the one case a drive client cannot resolve for you.
+
+### Connecting an AI assistant
+
+`Settings → AI assistant`. Off by default; read-only when you turn it on, and
+editing is a second switch. See [MCP.md](MCP.md).
 
 Press **Test connection** first; it checks reachability, credentials and the
 passphrase without writing anything.
@@ -205,6 +236,7 @@ Full instructions, including packaging, are in [BUILDING.md](BUILDING.md).
 | [BUILDING.md](BUILDING.md) | Development and builds, entirely in Deno |
 | [ARCHITECTURE.md](ARCHITECTURE.md) | How it is put together, and why |
 | [WEBDAV.md](WEBDAV.md) | The sync protocol, in reimplementable detail |
+| [MCP.md](MCP.md) | Connecting an AI assistant, and what it can and cannot do |
 | [SECURITY.md](SECURITY.md) | Threat model — including what is *not* protected |
 | [PACKAGING.md](PACKAGING.md) | Every release artifact and how it is produced |
 | [UPSTREAM.md](UPSTREAM.md) | Relationship to Notesnook, and merging from it |
