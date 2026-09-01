@@ -29,7 +29,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
  * The one part that still belongs to the npm toolchain is the monorepo
  * prebuild: `apps/web` depends on nine sibling packages through `file:`
  * specifiers, and those are compiled by the repository's own task runner
- * (`scripts/execute.mjs`, which shells out to `npm run <task>` per package).
+ * (`scripts/execute.ts`, which shells out to `npm run <task>` per package).
  * That is a build-time-only dependency, exactly as recorded in
  * PORTING_NOTES.md §11.1. When neither `node` nor `npm` is on PATH this
  * script installs Deno-backed shims for both so the prebuild still runs
@@ -47,6 +47,15 @@ import { fromFileUrl, join } from "@std/path";
 import { copy, emptyDir, exists } from "@std/fs";
 
 export const ROOT = fromFileUrl(new URL("../../../", import.meta.url));
+
+/**
+ * The repo's build scripts are TypeScript, which Node 22 runs directly. None
+ * of those packages declare "type": "module", so Node parses each file as
+ * CommonJS, fails, and re-parses as ESM -- printing a warning every time.
+ * Suppressing that one code keeps the build output readable and leaves every
+ * other warning intact.
+ */
+const WARNING_FLAG = "--disable-warning=MODULE_TYPELESS_PACKAGE_JSON";
 export const WEB_DIR = join(ROOT, "apps", "web");
 export const WEB_BUILD_DIR = join(WEB_DIR, "build");
 export const UI_DIR = join(ROOT, "apps", "desktop", "ui");
@@ -103,7 +112,7 @@ async function readJson(path: string): Promise<Record<string, unknown>> {
 /**
  * `node` and `npm`, backed by Deno when the machine has neither.
  *
- * `scripts/execute.mjs` spawns `npm run <task>` for each package, and npm in
+ * `scripts/execute.ts` spawns `npm run <task>` for each package, and npm in
  * turn spawns `node`, so both names have to resolve. Deno can execute either:
  * a Node program is `deno run -A <file>`, and npm itself is an npm package.
  */
@@ -235,14 +244,17 @@ async function buildWorkspaceLibraries(force: boolean) {
   // the Deno-backed shims added to PATH.
   const shimDir = await ensureNodeToolchain();
   const env = withShim(shimDir);
-  const executor = join(ROOT, "scripts", "execute.mjs");
+  const executor = join(ROOT, "scripts", "execute.ts");
 
   for (const dependency of unbuilt) {
-    // `scripts/execute.mjs <package>:build` resolves that package's own
+    // `scripts/execute.ts <package>:build` resolves that package's own
     // `file:` dependencies first, so the order here does not matter and
     // already-built packages are skipped through .taskcache.
     const shortName = dependency.name.replace(/^@[^/]+\//, "");
-    await run("node", [executor, `${shortName}:build`], { cwd: ROOT, env });
+    await run("node", [WARNING_FLAG, executor, `${shortName}:build`], {
+      cwd: ROOT,
+      env,
+    });
   }
 }
 
@@ -253,7 +265,7 @@ const VITE_ENTRY = join(WEB_DIR, "node_modules", "vite", "bin", "vite.js");
  *
  * CONTRIBUTING.md promises that Deno and a C compiler are all a contributor
  * needs, so this has to be able to bootstrap the npm side itself rather than
- * telling the reader to go and run something. `scripts/bootstrap.mjs` is the
+ * telling the reader to go and run something. `scripts/bootstrap.ts` is the
  * repository's own installer — it understands the `file:` package layout and
  * the postinstall whitelist — and the root `npm ci` provides the packages
  * that script itself imports.
@@ -266,10 +278,14 @@ async function ensureNpmDependencies(shimDir: string | undefined) {
   if (!(await exists(join(ROOT, "node_modules", "listr2")))) {
     await run("npm", ["ci", "--no-audit", "--no-fund"], { cwd: ROOT, env });
   }
-  await run("node", [join(ROOT, "scripts", "bootstrap.mjs"), "--scope=web"], {
-    cwd: ROOT,
-    env,
-  });
+  await run(
+    "node",
+    [WARNING_FLAG, join(ROOT, "scripts", "bootstrap.ts"), "--scope=web"],
+    {
+      cwd: ROOT,
+      env,
+    },
+  );
 
   if (!(await exists(VITE_ENTRY))) {
     throw new Error(

@@ -20,6 +20,12 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 import { SyncError } from "@notesnook/sync-webdav";
 import type { AppContext } from "../app.ts";
 import {
+  type AcpService,
+  AgentApprovalRequired,
+  resolvePermission,
+} from "../acp/service.ts";
+import { deliverRendererResponse } from "./renderer-requests.ts";
+import {
   isKnownProcedure,
   type RpcRequest,
   type RpcResponse,
@@ -63,6 +69,121 @@ export function createHandlers(): Record<string, Handler> {
       allLocalFeatures: true,
       syncProvider: "webdav",
       cloudAccountRequired: false,
+    }),
+
+    // ---------------- interface answering the runtime ----------------
+
+    "bridge.respond": (input) => {
+      const record = isPlainObject(input) ? input : {};
+      const delivered = deliverRendererResponse(
+        asString(input, "requestId", 128),
+        record.result,
+        optionalString(record.error),
+      );
+      return { delivered };
+    },
+
+    // ---------------- AI assistant ----------------
+
+    "acp.listAgents": (_input, context) => context.acp.listAgents(),
+
+    "acp.connect": async (input, context) => {
+      const agentId = asString(input, "agentId", 64);
+      try {
+        return { ok: true as const, agent: await context.acp.connect(agentId) };
+      } catch (e) {
+        // Needing approval is not a failure — it is a question for the user,
+        // so it comes back as an answerable result rather than an error toast.
+        if (e instanceof AgentApprovalRequired) {
+          return {
+            ok: false as const,
+            needsApproval: {
+              agentId: e.agentId,
+              agentName: e.agentName,
+              resolvedPath: e.resolvedPath,
+            },
+          };
+        }
+        throw e;
+      }
+    },
+
+    "acp.approve": async (input, context) => {
+      const agentId = asString(input, "agentId", 64);
+      const resolvedPath = asString(input, "resolvedPath", 4096);
+      await context.settings.patchAi({
+        approvedAgents: [
+          ...context.settings.get("ai").approvedAgents.filter(
+            (a) => a.agentId !== agentId,
+          ),
+          { agentId, resolvedPath, approvedAt: Date.now() },
+        ],
+      });
+      return { approved: true };
+    },
+
+    "acp.forgetApprovals": async (_input, context) => {
+      // All-or-nothing on purpose: a per-agent list would imply the approvals
+      // are fine-grained, when what each one actually pins is a single binary
+      // at a single path.
+      await context.acp.stop();
+      await context.settings.patchAi({ approvedAgents: [] });
+      return { forgotten: true };
+    },
+
+    "acp.disconnect": (input, context) =>
+      context.acp.disconnect(asString(input, "agentId", 64)),
+
+    "acp.authenticate": (input, context) =>
+      context.acp.authenticate(
+        asString(input, "agentId", 64),
+        asString(input, "methodId", 128),
+      ),
+
+    "acp.newSession": (input, context) =>
+      context.acp.newSession(asString(input, "agentId", 64)),
+
+    "acp.prompt": (input, context) => {
+      const record = isPlainObject(input) ? input : {};
+      const prompt = record.prompt;
+      if (!Array.isArray(prompt)) {
+        throw new Error("prompt must be an array of content blocks");
+      }
+      return context.acp.prompt(
+        asString(input, "agentId", 64),
+        asString(input, "sessionId", 256),
+        prompt as Parameters<AcpService["prompt"]>[2],
+      );
+    },
+
+    "acp.cancel": (input, context) =>
+      context.acp.cancel(
+        asString(input, "agentId", 64),
+        asString(input, "sessionId", 256),
+      ),
+
+    "acp.setMode": (input, context) =>
+      context.acp.setMode(
+        asString(input, "agentId", 64),
+        asString(input, "sessionId", 256),
+        asString(input, "modeId", 128),
+      ),
+
+    "acp.respondPermission": (input) => {
+      const record = isPlainObject(input) ? input : {};
+      const requestId = asString(input, "requestId", 128);
+      const optionId = optionalString(record.optionId);
+      const delivered = resolvePermission(
+        requestId,
+        optionId
+          ? { outcome: { outcome: "selected", optionId } }
+          : { outcome: { outcome: "cancelled" } },
+      );
+      return { delivered };
+    },
+
+    "acp.diagnostics": (input, context) => ({
+      lines: context.acp.diagnostics(asString(input, "agentId", 64)),
     }),
 
     // ---------------- window ----------------

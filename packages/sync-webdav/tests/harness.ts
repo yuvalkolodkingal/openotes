@@ -19,6 +19,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 import { SerializedKey } from "@notesnook/crypto";
 import { WebDavClient } from "../src/client.ts";
+import { WebDavRemoteStorage } from "../src/webdav-storage.ts";
 import { SyncCrypto } from "../src/crypto.ts";
 import { FetchTransport, toBasicAuth } from "../src/http.ts";
 import { MemoryQueueStorage, OutgoingQueue } from "../src/queue.ts";
@@ -57,7 +58,9 @@ export interface TestDevice {
   store: MemorySyncStore;
   queue: OutgoingQueue;
   engine: SyncEngine;
+  /** Kept so tests can assert at the WebDAV level, below the storage seam. */
   client: WebDavClient;
+  storage: WebDavRemoteStorage;
   attachments: MemoryAttachments;
   crypto: SyncCrypto;
 }
@@ -99,6 +102,8 @@ export async function createDevice(options: {
     delay: () => Promise.resolve(),
   });
 
+  const storage = new WebDavRemoteStorage(client);
+
   const store = options.store ?? new MemorySyncStore(options.id);
   const attachments = options.attachments ?? new MemoryAttachments();
   const queue = new OutgoingQueue(
@@ -106,7 +111,7 @@ export async function createDevice(options: {
   );
 
   const engine = new SyncEngine({
-    client,
+    storage,
     crypto,
     store,
     queue,
@@ -119,7 +124,16 @@ export async function createDevice(options: {
     onConflict: (record) => options.onConflict?.(record.entityId),
   });
 
-  return { id: options.id, store, queue, engine, client, attachments, crypto };
+  return {
+    id: options.id,
+    store,
+    queue,
+    engine,
+    client,
+    storage,
+    attachments,
+    crypto,
+  };
 }
 
 /** Deterministic bytes for attachment tests. */

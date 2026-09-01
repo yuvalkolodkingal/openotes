@@ -182,6 +182,26 @@ export const PROCEDURE_NAMES = [
   // --- capabilities ---
   "capabilities.get",
 
+  // --- AI assistant (Agent Client Protocol) ---
+  // The renderer names an agent by catalog id and never a command line; the
+  // command comes from apps/desktop/src/acp/catalog.ts. See AcpService for
+  // why that distinction is what keeps the subprocess allowlist meaningful.
+  "acp.listAgents",
+  "acp.connect",
+  "acp.approve",
+  "acp.forgetApprovals",
+  "acp.disconnect",
+  "acp.authenticate",
+  "acp.newSession",
+  "acp.prompt",
+  "acp.cancel",
+  "acp.setMode",
+  "acp.respondPermission",
+  "acp.diagnostics",
+
+  // The interface answering a request the runtime made of it.
+  "bridge.respond",
+
   // --- lifecycle ---
   "bridge.ready",
 ] as const;
@@ -209,6 +229,11 @@ export const EVENT_NAMES = [
   "webdav.status",
   "webdav.conflict",
   "backup.completed",
+  "acp.update",
+  "acp.permission",
+  "acp.status",
+  // A request from the runtime that the interface must answer.
+  "bridge.request",
 ] as const;
 
 export type EventName = (typeof EVENT_NAMES)[number];

@@ -78,7 +78,7 @@ class SetManipulator {
 
   // Return items common to both sets.
   // Set.intersection([1, 1, 2], [2, 2, 3]) => [2]
-  intersection<T>(a: T[], b: T[], key: KeySelector<T>) {
+  intersection<T>(a: T[], b: T[], key?: KeySelector<T>) {
     return this.process(a, b, key, (freq) => freq === 3);
   }
 
@@ -99,7 +99,7 @@ class SetManipulator {
   // Returns true if both sets are equivalent, false otherwise.
   // Set.equals([1, 1, 2], [1, 2, 2]) => true
   // Set.equals([1, 1, 2], [1, 2, 3]) => false
-  equals<T>(a: T[], b: T[], key: KeySelector<T>) {
+  equals<T>(a: T[], b: T[], key?: KeySelector<T>) {
     let max = 0;
     let min = Math.pow(2, 53);
     const hist = <Histogram<T>>this.process(a, b, key);

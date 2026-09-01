@@ -121,12 +121,12 @@
   },
   "scripts": {
     "test": "vitest run",
-    "prebuild": "node ./scripts/build.mjs",
-    "postbuild": "node ./scripts/postbuild.mjs",
+    "prebuild": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON ./scripts/build.ts",
+    "postbuild": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON ./scripts/postbuild.ts",
     "start": "npm run watch",
     "prepublishOnly": "npm run build && npm run test",
     "postinstall": "patch-package",
-    "build": "node ../../scripts/build.mjs",
+    "build": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON ../../scripts/build.ts",
     "watch": "nodemon -V --watch src --watch styles/styles.css -i src/extensions/code-block/languages/index.ts --ext ts,tsx,css --exec npm run build"
   },
   "repository": {

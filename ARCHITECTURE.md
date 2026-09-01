@@ -100,12 +100,47 @@ side:
 | Filesystem paths | `native/paths.ts` | Every renderer-supplied path is resolved (symlinks included) and asserted to be inside a directory the user chose. |
 | Export writes | `native/filesystem.ts` | Confined to the app data directory, the chosen backup directory and Documents. |
 | Opening links | `native/shell.ts` | Only `http`, `https` and `mailto`. A note cannot launch a `file://` or custom-scheme handler. |
-| Subprocesses | `native/shell.ts` | Fixed argv, never a shell string; only for file-manager, notification and clipboard fallbacks. |
+| Subprocesses | `native/shell.ts`, `acp/service.ts` | Fixed argv, never a shell string. Two callers: OS integration (file manager, notifications, clipboard) and AI agents — see below. |
 | Database keys | `native/sqlite.ts` | Keyed at connection time; `PRAGMA key`/`rekey` from the renderer is rejected. |
 | Secrets | `security/credentials.ts` | AES-256-GCM at rest; the WebDAV password is never returned to the renderer, not even to its own settings form. |
 
 The UI is served from a loopback origin with `nosniff`, `COOP` and `COEP`,
 and static serving is confined to the built UI directory.
+
+### Running an AI agent, and what that costs
+
+Hosting an agent (see [AI.md](AI.md)) means running one, so the runtime's
+subprocess allowlist grew from twelve OS-integration binaries to also include
+agent launchers: `node`, `npx`, `deno`, `bun`, and the named agent commands.
+That is a real reduction in what this application guarantees, and it is stated
+here rather than buried.
+
+What is preserved:
+
+- **The renderer still cannot spawn anything.** It names a catalog id; the
+  command line comes from `acp/catalog.ts`. There is no procedure that accepts
+  a command, and a test asserts that connecting refuses any id not in the
+  catalog.
+- **The allowlist is still a fixed list of names**, not `run: true`. A second
+  copy lives in `acp/catalog.ts` purely so a drift between it and `deno.json`
+  fails a test rather than a user's launch.
+- **argv is always an array**, never a shell string.
+- **A first launch needs explicit consent**, recorded against the resolved
+  absolute path. If the binary at that path is replaced, consent is asked for
+  again — an agent that was swapped out is not the agent that was approved.
+- **No terminal.** The client advertises `terminal: false`, so a well-behaved
+  agent will not attempt to run commands through us.
+
+What is genuinely given up: an approved agent is a program running with the
+user's privileges. Openotes cannot constrain what it does once started, beyond
+refusing to grant it a terminal and answering its file requests from the note
+database rather than from the disk. Approving an agent is as consequential as
+installing one, and the interface says so before the first launch.
+
+Two things an agent never gets: a locked (vault) note, because the export path
+already refuses to render one without an unlocked vault; and a real directory
+of notes — its workspace is created empty and stays empty, with note reads
+answered from the database.
 
 ### Why nothing durable lives in webview storage
 
@@ -195,21 +230,47 @@ application will not quietly fall back to an unencrypted database.
 
 ## 5. Synchronization
 
-Fully specified in [WEBDAV.md](WEBDAV.md). The shape:
+There are **two** engines, because a WebDAV repository nobody reads by hand
+and a Drive folder you open on your phone want opposite things. Both sit on
+one storage seam.
 
-- `packages/sync-webdav` is transport- and database-agnostic: a WebDAV
-  client, the protocol, the crypto, conflict policy, a durable queue and a
-  scheduler. It has no knowledge of SQLite or of Notesnook's schema.
-- `apps/desktop/src/sync/store-adapter.ts` is the only place that does. It
-  reuses the dirty/tombstone bookkeeping `@notesnook/core` already
-  maintains, so "what changed locally" is a query rather than a second
-  change log that could disagree with the first.
-- `apps/desktop/src/sync/service.ts` owns the lifecycle: configuration,
-  scheduling, and the rule that a WebDAV failure surfaces as a status
-  indicator and never as an exception reaching the editor.
+**The seam.** `packages/sync-core` defines `RemoteStorage`: an object store,
+not WebDAV verbs, because PROPFIND and MKCOL do not exist on Drive or Dropbox.
+Two of its methods carry the correctness argument — `putNew` is
+create-if-absent and `putUpdate` is compare-and-swap — and `capabilities()`
+reports how well a backend can honour them rather than letting callers assume.
+Dropbox and Graph have both natively; WebDAV emulates create with a probe plus
+`If-None-Match`; Google Drive has neither and says so.
 
-The application is fully usable with no server configured. Sync is a
-feature, not a prerequisite.
+**The journal engine** (`packages/sync-webdav`, specified in
+[WEBDAV.md](WEBDAV.md)) appends encrypted, immutable batches to per-device
+journals. Nothing is ever rewritten, so "what changed" is a cursor into an
+append-only log and conflicts are decided by revision. This is what WebDAV
+users have and it is unchanged.
+
+**The file engine** (`packages/sync-files`) writes one Markdown file per note.
+Files are mutable and anyone can edit them — including a person typing into
+Drive's web UI — so "what changed" is a three-way comparison against a
+remembered merge base, never a timestamp comparison: clocks drift across
+devices and Drive reports server time, so "newest wins" silently destroys
+work. A `NoteCodec` decides whether the folder is readable Markdown (the
+default) or opaque ciphertext under keyed-digest names.
+
+The manifest holding each merge base is **local and never uploaded**: a base
+is a statement about what one device last saw, so a shared one would need
+locking and would itself conflict. Nothing is lost by that, because note
+identity travels in each file's front-matter `id`.
+
+**Shared by both.** `apps/desktop/src/sync/store-adapter.ts` is the only place
+that knows Notesnook's schema; it reuses the dirty/tombstone bookkeeping
+`@notesnook/core` already maintains, so "what changed locally" is a query
+rather than a second change log that could disagree with the first.
+`apps/desktop/src/sync/service.ts` owns the lifecycle and the rule that a
+remote failure surfaces as a status indicator and never as an exception
+reaching the editor.
+
+The application is fully usable with nothing configured. Sync is a feature,
+not a prerequisite. See [DRIVES.md](DRIVES.md) for the cloud backends.
 
 ---
 

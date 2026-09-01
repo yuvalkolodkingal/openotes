@@ -18,7 +18,7 @@
   },
   "scripts": {
     "prepublishOnly": "npm run build",
-    "build": "node ../../scripts/build.mjs",
+    "build": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON ../../scripts/build.ts",
     "watch": "npm run build -- --watch"
   },
   "repository": {

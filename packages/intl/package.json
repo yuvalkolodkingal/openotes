@@ -25,8 +25,8 @@
   "scripts": {
     "extract": "lingui extract --clean --overwrite",
     "compile": "lingui compile --typescript",
-    "build-locale": "node scripts/generate-strings.mjs && npm run extract && npm run compile",
-    "build": "npm run build-locale && npx vite build && node scripts/postbuild.mjs",
+    "build-locale": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON scripts/generate-strings.ts && npm run extract && npm run compile",
+    "build": "npm run build-locale && npx vite build && node scripts/postbuild.ts",
     "watch": "nodemon --watch scripts/ --watch src --ext ts,mjs --exec \"npm run build\"",
     "postinstall": "patch-package"
   },

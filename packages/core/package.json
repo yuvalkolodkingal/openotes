@@ -55,12 +55,12 @@
   },
   "scripts": {
     "postinstall": "patch-package",
-    "prebuild": "node scripts/prebuild.mjs",
-    "pretest": "node scripts/prebuild.mjs",
-    "pretest:e2e": "node scripts/prebuild.mjs",
+    "prebuild": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON scripts/prebuild.ts",
+    "pretest": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON scripts/prebuild.ts",
+    "pretest:e2e": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON scripts/prebuild.ts",
     "test:e2e": "cross-env IS_E2E=true vitest run",
     "test": "vitest run",
-    "build": "node ../../scripts/build.mjs",
+    "build": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON ../../scripts/build.ts",
     "prepublishOnly": "npm run build",
     "watch": "npm run build -- --watch"
   },

@@ -3,8 +3,8 @@
   "private": true,
   "description": "Node build toolchain for the Openotes web UI bundle. The application itself is built and run with Deno (see deno.json).",
   "scripts": {
-    "bootstrap": "node scripts/bootstrap.mjs",
-    "clean": "node scripts/clean.mjs",
+    "bootstrap": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON scripts/bootstrap.ts",
+    "clean": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON scripts/clean.ts",
     "build": "npm run tx -- build --all --exclude=web",
     "build:web": "npm run tx web:build",
     "build:desktop:web": "npm run tx web:build:desktop",
@@ -15,7 +15,7 @@
     "build:intl": "npm run tx intl:build",
     "test:web": "npm run tx web:test",
     "test:core": "npm run tx core:test",
-    "tx": "node scripts/execute.mjs"
+    "tx": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON scripts/execute.ts"
   },
   "devDependencies": {
     "@types/node": "^18.7.13",

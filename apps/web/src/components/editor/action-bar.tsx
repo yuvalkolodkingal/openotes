@@ -37,7 +37,8 @@ import {
   TableOfContents,
   Trash,
   Undo,
-  Unlock
+  Unlock,
+  AiAssistant as AiAssistantIcon
 } from "../icons";
 import { ScrollContainer } from "@notesnook/ui";
 import {
@@ -102,6 +103,7 @@ export function EditorActionBar() {
     (store) => store.arePropertiesVisible
   );
   const isTOCVisible = useEditorStore((store) => store.isTOCVisible);
+  const isAiVisible = useEditorStore((store) => store.isAiVisible);
   const isMobile = useMobile();
   const isTablet = useTablet();
 
@@ -147,6 +149,16 @@ export function EditorActionBar() {
         activeSession.type !== "diff" &&
         activeSession.type !== "conflicted",
       onClick: () => editorManager?.editor?.startSearch()
+    },
+    {
+      title: "AI assistant",
+      icon: AiAssistantIcon,
+      enabled:
+        activeSession &&
+        activeSession.type !== "locked" &&
+        activeSession.type !== "conflicted",
+      onClick: () => useEditorStore.getState().toggleAiAssistant(),
+      toggled: isAiVisible
     },
     {
       title: strings.properties(),

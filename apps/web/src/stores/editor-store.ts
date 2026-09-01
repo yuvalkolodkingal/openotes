@@ -215,6 +215,7 @@ class EditorStore extends BaseStore<EditorStore> {
   arePropertiesVisible = false;
   documentPreview?: DocumentPreview;
   isTOCVisible = Config.get("editor:toc", false);
+  isAiVisible = Config.get("editor:ai", false);
   editorMargins = Config.get("editor:margins", true);
   history: string[] = [];
 
@@ -1241,6 +1242,22 @@ class EditorStore extends BaseStore<EditorStore> {
         toggleState !== undefined ? toggleState : !state.arePropertiesVisible;
     });
     this.toggleTableOfContents(false);
+  };
+
+  /**
+   * The assistant shares the right-hand slot with the table of contents and
+   * the properties panel, so opening it closes them -- three panels at once
+   * would leave nothing for the note.
+   */
+  toggleAiAssistant = (toggleState?: boolean) => {
+    const { isAiVisible } = this.get();
+    const next = toggleState !== undefined ? toggleState : !isAiVisible;
+    this.set({
+      isAiVisible: next,
+      isTOCVisible: next ? false : this.get().isTOCVisible,
+      arePropertiesVisible: next ? false : this.get().arePropertiesVisible
+    });
+    Config.set("editor:ai", next);
   };
 
   toggleTableOfContents = (toggleState?: boolean) => {

@@ -19,7 +19,7 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import type { HeadConfig, TransformPageContext, PageData } from "vitepress";
-import { resolveString } from "./strings.mjs";
+import { resolveString } from "./strings.ts";
 
 const SITE = "https://notesnook.com/help";
 const OG_IMAGE = `${SITE}/logo.png`;

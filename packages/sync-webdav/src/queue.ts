@@ -17,6 +17,7 @@ You should have received a copy of the GNU General Public License
 along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
+import { MemoryTextStore, type TextStore } from "@notesnook/sync-core";
 import { SyncRecord } from "./types.ts";
 
 /**
@@ -26,21 +27,13 @@ import { SyncRecord } from "./types.ts";
  * provides (the desktop app persists it to the app data directory).
  */
 
-export interface QueueStorage {
-  read(): Promise<string | undefined>;
-  write(value: string): Promise<void>;
-}
+/**
+ * The queue's durable slot. Aliased to the shared TextStore so a host writes
+ * one file-backed implementation and both engines use it.
+ */
+export type QueueStorage = TextStore;
 
-export class MemoryQueueStorage implements QueueStorage {
-  private value?: string;
-  read() {
-    return Promise.resolve(this.value);
-  }
-  write(value: string) {
-    this.value = value;
-    return Promise.resolve();
-  }
-}
+export class MemoryQueueStorage extends MemoryTextStore {}
 
 interface QueueState {
   version: 1;

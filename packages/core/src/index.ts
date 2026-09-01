@@ -43,4 +43,9 @@ export type { SyncOptions } from "./api/sync/index.js";
 export { sanitizeTag } from "./collections/tags.js";
 export { default as DataURL } from "./utils/dataurl.js";
 export { type ResolveInternalLink } from "./content-types/tiptap.js";
+export { markdownToHTML } from "./content-types/tiptap.js";
+export {
+  parseNoteMarkdown,
+  type ParsedNote
+} from "./utils/templates/md-parse.js";
 export type * from "./api/wrapped.js";

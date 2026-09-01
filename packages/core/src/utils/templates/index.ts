@@ -19,7 +19,11 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 import { Note } from "../../types.js";
 import { buildHTML } from "./html/index.js";
-import { buildMarkdown, templateWithFrontmatter } from "./md.js";
+import {
+  buildMarkdown,
+  templateForSync,
+  templateWithFrontmatter
+} from "./md.js";
 import { buildText } from "./text.js";
 
 export type TemplateData = Omit<Note, "tags" | "color"> & {
@@ -29,7 +33,7 @@ export type TemplateData = Omit<Note, "tags" | "color"> & {
 };
 
 export async function buildFromTemplate(
-  format: "md" | "txt" | "html" | "md-frontmatter",
+  format: "md" | "txt" | "html" | "md-frontmatter" | "md-sync",
   data: TemplateData
 ): Promise<string> {
   switch (format) {
@@ -39,6 +43,8 @@ export async function buildFromTemplate(
       return buildMarkdown(data);
     case "md-frontmatter":
       return templateWithFrontmatter(data);
+    case "md-sync":
+      return templateForSync(data);
     case "txt":
       return buildText(data);
     default:

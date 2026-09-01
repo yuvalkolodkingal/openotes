@@ -182,34 +182,10 @@ export interface SyncDataStore {
   setMeta(key: string, value: string | undefined): Promise<void>;
 }
 
-export class SyncError extends Error {
-  constructor(
-    message: string,
-    readonly code:
-      | "unauthorized"
-      | "forbidden"
-      | "not-found"
-      | "conflict"
-      | "precondition-failed"
-      | "server-error"
-      | "timeout"
-      | "network"
-      | "protocol-mismatch"
-      | "bad-key"
-      | "corrupt-data"
-      | "insecure-url"
-      | "cancelled",
-    readonly status?: number,
-  ) {
-    super(message);
-    this.name = "SyncError";
-  }
-
-  get isRetryable() {
-    return (
-      this.code === "server-error" ||
-      this.code === "timeout" ||
-      this.code === "network"
-    );
-  }
-}
+/**
+ * Re-exported so the ~110 existing references keep their import path. The
+ * definition moved to @notesnook/sync-core because provider implementations
+ * outside this package raise it too, and none of them should have to depend
+ * on the WebDAV backend to do so.
+ */
+export { SyncError } from "@notesnook/sync-core";

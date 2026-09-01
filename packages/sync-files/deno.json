@@ -1,0 +1,10 @@
+{
+  "name": "@notesnook/sync-files",
+  "version": "1.0.0",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "imports": {
+    "@notesnook/sync-core": "../sync-core/src/index.ts"
+  }
+}

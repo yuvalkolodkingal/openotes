@@ -43,7 +43,7 @@ import { addItems, deleteItems } from "../utils/array.js";
 import { sql } from "@streetwriters/kysely";
 
 export type ExportOptions = {
-  format: "html" | "md" | "txt" | "md-frontmatter";
+  format: "html" | "md" | "txt" | "md-frontmatter" | "md-sync";
   contentItem?: NoteContent<false>;
   rawContent?: string;
   disableTemplate?: boolean;

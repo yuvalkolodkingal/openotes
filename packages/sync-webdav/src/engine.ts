@@ -18,7 +18,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
 import { SerializedKey } from "@notesnook/crypto";
-import { WebDavClient } from "./client.ts";
+import { PrefixedRemoteStorage, RemoteStorage } from "@notesnook/sync-core";
 import { SyncCrypto } from "./crypto.ts";
 import { OutgoingQueue, SyncTrigger } from "./queue.ts";
 import {
@@ -56,7 +56,7 @@ export interface AttachmentSource {
 }
 
 export interface SyncEngineOptions {
-  client: WebDavClient;
+  storage: RemoteStorage;
   crypto: SyncCrypto;
   store: SyncDataStore;
   queue: OutgoingQueue;
@@ -107,7 +107,7 @@ export class SyncEngine {
   private running = false;
 
   constructor(private readonly options: SyncEngineOptions) {
-    this.repository = new SyncRepository(options.client, options.crypto);
+    this.repository = new SyncRepository(options.storage, options.crypto);
     this.logger = options.logger ?? NOOP_LOGGER;
   }
 
@@ -121,8 +121,8 @@ export class SyncEngine {
    * Safe to call repeatedly.
    */
   async connect(): Promise<ProtocolMetadata> {
-    const { client, crypto, store, masterKey } = this.options;
-    await client.options();
+    const { storage, crypto, store, masterKey } = this.options;
+    await storage.probe();
 
     let metadata = await this.repository.readProtocol();
     const deviceId = await store.getDeviceId();
@@ -186,8 +186,8 @@ export class SyncEngine {
     devices: number;
     initialized: boolean;
   }> {
-    const { client } = this.options;
-    await client.options();
+    const { storage } = this.options;
+    await storage.probe();
     const metadata = await this.repository.readProtocol();
     if (!metadata) {
       return { ok: true, protocolVersion: 0, devices: 0, initialized: false };
@@ -492,7 +492,7 @@ export class SyncEngine {
 
     for (const hash of await this.options.queue.pendingAttachments()) {
       const path = attachmentPath(hash);
-      if (await this.options.client.exists(path)) {
+      if (await this.options.storage.exists(path)) {
         // Deduplicated: another device already uploaded identical content.
         await this.options.queue.acknowledgeAttachment(hash);
         continue;
@@ -509,8 +509,8 @@ export class SyncEngine {
         attachmentKey,
         stream,
       );
-      await this.options.client.put(path, encrypted);
-      await this.options.client.verifyUpload(path, encrypted.length);
+      await this.options.storage.putUpdate(path, encrypted);
+      await this.options.storage.verifyUpload(path, encrypted.length);
       await this.options.queue.acknowledgeAttachment(hash);
       uploaded++;
       void syncKey;
@@ -529,7 +529,7 @@ export class SyncEngine {
         await this.options.queue.acknowledgeDownload(hash);
         continue;
       }
-      const raw = await this.options.client.getIfExists(attachmentPath(hash));
+      const raw = await this.options.storage.getIfExists(attachmentPath(hash));
       if (!raw) {
         this.logger.warn("Attachment not yet uploaded by its owner", { hash });
         continue;
@@ -553,7 +553,7 @@ export class SyncEngine {
     if (!source) return false;
     if (await source.exists(hash)) return true;
     if (!this.syncKey || !this.metadata) await this.connect();
-    const raw = await this.options.client.getIfExists(attachmentPath(hash));
+    const raw = await this.options.storage.getIfExists(attachmentPath(hash));
     if (!raw) return false;
     const frames = await this.decryptAttachmentFrames(
       this.attachmentKey!,
@@ -667,17 +667,17 @@ export class SyncEngine {
     fullState: SyncRecord[],
     onProgress?: (done: number, total: number) => void,
   ): Promise<string> {
-    const { store, masterKey, client } = this.options;
+    const { store, masterKey, storage } = this.options;
     const deviceId = await store.getDeviceId();
     const generation = newGeneration(deviceId);
 
     const staging = `.staging-${generation}`;
-    await client.mkcolRecursive(staging + "/");
+    await storage.mkdirp(staging + "/");
 
     // Build the new state under a staging prefix, then activate it by
     // writing protocol.json last — readers never see a half-built repo.
     const stagedRepository = new SyncRepository(
-      new StagedClient(client, staging) as unknown as WebDavClient,
+      new PrefixedRemoteStorage(storage, staging),
       this.options.crypto,
     );
     const metadata = await stagedRepository.initialize(
@@ -717,14 +717,14 @@ export class SyncEngine {
     // Activate: retire the old generation, then move the staged one in.
     const retired = `.retired-${metadata.createdAt}`;
     for (const path of [PATHS.devices, PATHS.objects, PATHS.protocol]) {
-      if (await client.exists(path)) {
-        await client.mkcolRecursive(retired + "/");
-        await client.move(path, `${retired}/${path}`, true);
+      if (await storage.exists(path)) {
+        await storage.mkdirp(retired + "/");
+        await storage.move(path, `${retired}/${path}`, true);
       }
     }
     for (const path of [PATHS.devices, PATHS.objects, PATHS.protocol]) {
-      if (await client.exists(`${staging}/${path}`)) {
-        await client.move(`${staging}/${path}`, path, true);
+      if (await storage.exists(`${staging}/${path}`)) {
+        await storage.move(`${staging}/${path}`, path, true);
       }
     }
 
@@ -741,22 +741,22 @@ export class SyncEngine {
     referencedHashes: Set<string>,
     retentionMs = 30 * 24 * 60 * 60 * 1000,
   ): Promise<number> {
-    const entries = await this.options.client.list(PATHS.attachments + "/");
+    const entries = await this.options.storage.list(PATHS.attachments + "/");
     const cutoff = Date.now() - retentionMs;
     let removed = 0;
     for (const entry of entries) {
       if (entry.isCollection) continue;
-      const name = this.options.client.relativePath(entry).split("/").pop();
+      const name = entry.path.split("/").pop();
       if (!name) continue;
       const hash = name.replace(/\.bin$/, "");
       if (referencedHashes.has(hash)) continue;
-      const modified = entry.lastModified
-        ? Date.parse(entry.lastModified)
+      const modified = entry.modifiedAt
+        ? Date.parse(entry.modifiedAt)
         : Number.NaN;
       // Conservative: only delete objects we can prove are older than the
       // retention window. Unknown timestamps are kept.
       if (!Number.isFinite(modified) || modified > cutoff) continue;
-      await this.options.client.delete(attachmentPath(hash));
+      await this.options.storage.delete(attachmentPath(hash));
       removed++;
     }
     return removed;
@@ -833,68 +833,4 @@ function concatAll(chunks: readonly Uint8Array[]): Uint8Array<ArrayBuffer> {
     offset += chunk.length;
   }
   return out;
-}
-
-/** Wraps a client so all paths are prefixed — used to stage a rebuild. */
-class StagedClient {
-  constructor(
-    private readonly inner: WebDavClient,
-    private readonly prefix: string,
-  ) {}
-  url(path: string) {
-    return this.inner.url(`${this.prefix}/${path}`);
-  }
-  relativePath(entry: { href: string; isCollection: boolean }) {
-    const relative = this.inner.relativePath(entry);
-    return relative.startsWith(this.prefix + "/")
-      ? relative.slice(this.prefix.length + 1)
-      : relative;
-  }
-  options() {
-    return this.inner.options();
-  }
-  head(path: string) {
-    return this.inner.head(`${this.prefix}/${path}`);
-  }
-  propfind(path: string, depth: 0 | 1 = 1) {
-    return this.inner.propfind(`${this.prefix}/${path}`, depth);
-  }
-  list(path: string) {
-    return this.inner.list(`${this.prefix}/${path}`);
-  }
-  exists(path: string) {
-    return this.inner.exists(`${this.prefix}/${path}`);
-  }
-  mkcol(path: string) {
-    return this.inner.mkcol(`${this.prefix}/${path}`);
-  }
-  mkcolRecursive(path: string) {
-    return this.inner.mkcolRecursive(`${this.prefix}/${path}`);
-  }
-  get(path: string) {
-    return this.inner.get(`${this.prefix}/${path}`);
-  }
-  getIfExists(path: string) {
-    return this.inner.getIfExists(`${this.prefix}/${path}`);
-  }
-  put(path: string, body: Uint8Array | string, options?: unknown) {
-    return this.inner.put(
-      `${this.prefix}/${path}`,
-      body,
-      options as Parameters<WebDavClient["put"]>[2],
-    );
-  }
-  delete(path: string) {
-    return this.inner.delete(`${this.prefix}/${path}`);
-  }
-  move(from: string, to: string, overwrite = true) {
-    return this.inner.move(
-      `${this.prefix}/${from}`,
-      `${this.prefix}/${to}`,
-      overwrite,
-    );
-  }
-  verifyUpload(path: string, expectedLength: number) {
-    return this.inner.verifyUpload(`${this.prefix}/${path}`, expectedLength);
-  }
 }

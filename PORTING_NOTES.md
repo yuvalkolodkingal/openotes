@@ -41,8 +41,8 @@ web-API-clean or already platform-abstracted:
 | `packages/sodium` | **Keep (browser build)** | `src/browser.ts` delegates to `libsodium-wrappers-sumo` WASM; the vendored patch (`patches/libsodium-sumo+0.7.15.patch`) forces the Emscripten loader off the Node path, so it is Deno/webview-safe. The fork already adds `src/libsodium.ts` as the Deno entry and maps it in root `deno.json` imports. Avoid the `node` export condition (would pull `sodium-native`). |
 | `packages/streamable-fs` | **Keep** | Web-streams-only chunked encrypted file store behind a pluggable `IFileStorage` (`src/interfaces.ts:39-50`); trivially implementable over Deno FS or kept on OPFS in the webview. |
 | `packages/common` | **Keep (with paywall surgery)** | Owns the shared `database` singleton (`src/database.ts:22`), keybindings (`utils/keybindings.ts` — the editor build depends on it), `export-notes.ts`, date/file/path utilities. Only `utils/is-feature-available.ts` + `hooks/use-is-feature-available.ts` get replaced (§6). Prune the bogus self-dep on published `@notesnook/common@^2.1.3` (`packages/common/package.json:44`). |
-| `packages/editor` | **Keep** | Zero Electron/Node imports; host integration is `editor.storage` callbacks (`src/index.ts:395-411`: openLink, downloadAttachment, openAttachmentPicker, previewAttachment, getAttachmentData, …). Pro-gating is an injected claims system, not baked in (§6). Build-time gotcha: gitignored generated `src/extensions/code-block/languages/index.ts` from `scripts/langen.mjs` (§11). |
-| `packages/theme` | **Keep** | Bundled default themes; applied themes persist in localStorage. Gotcha: `default-{light,dark}.json` are gitignored and fetched at prebuild from raw.githubusercontent.com — **vendor them** (`packages/theme/scripts/prebuild.mjs` already skips-if-exists). |
+| `packages/editor` | **Keep** | Zero Electron/Node imports; host integration is `editor.storage` callbacks (`src/index.ts:395-411`: openLink, downloadAttachment, openAttachmentPicker, previewAttachment, getAttachmentData, …). Pro-gating is an injected claims system, not baked in (§6). Build-time gotcha: gitignored generated `src/extensions/code-block/languages/index.ts` from `scripts/langen.ts` (§11). |
+| `packages/theme` | **Keep** | Bundled default themes; applied themes persist in localStorage. Gotcha: `default-{light,dark}.json` are gitignored and fetched at prebuild from raw.githubusercontent.com — **vendor them** (`packages/theme/scripts/prebuild.ts` already skips-if-exists). |
 | `packages/ui`, `packages/intl`, `packages/logger` | **Keep** | Pure UI/i18n/logging leaves of the web closure. |
 | `packages/sync-webdav` | **Keep (new, the point of the fork)** | Committed WebDAV engine: verb-complete client with compatibility fallbacks, namespace-tolerant PROPFIND parsing, append-only per-device journal protocol, keyed subkey hierarchy, durable queue, conflict policy, backup subsystem (§7–§9). |
 | `apps/web` | **Keep** | Becomes the embedded UI; the desktop seams are two files (§2). |
@@ -544,7 +544,7 @@ false ("not available"), and sync delivers the content later.
   worker/PWA** on desktop (L143-164), dev server on port 3000. Output
   `apps/web/build/` is what the Deno host serves.
 - Fresh-clone build hazards: (a) `packages/editor` prebuild must run
-  (`scripts/langen.mjs` generates the gitignored refractor language loader);
+  (`scripts/langen.ts` generates the gitignored refractor language loader);
   (b) `packages/theme` prebuild fetches gitignored default-theme JSONs from
   GitHub — **vendor them**; (c) `patch-package` postinstall in editor/
   sodium/desktop must keep running; (d) `emitEditorStyles()` Vite plugin

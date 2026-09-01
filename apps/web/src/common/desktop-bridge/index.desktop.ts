@@ -123,6 +123,53 @@ function subscribe(event: string, listener: Listener): () => void {
 }
 
 // ---------------------------------------------------------------------------
+// Answering the runtime
+// ---------------------------------------------------------------------------
+
+/**
+ * The runtime asking the interface something, rather than the other way round.
+ *
+ * Needed because an AI agent asks to read a note whenever it likes, and only
+ * this half of the application can render one: the export machinery needs the
+ * database singleton that lives here. The runtime emits `bridge.request` with
+ * a correlation id, and the answer goes back as an ordinary RPC call.
+ */
+type RequestHandler = (payload: unknown) => Promise<unknown>;
+const requestHandlers = new Map<string, RequestHandler>();
+
+/** Register an answer for one request name. Returns an unregister function. */
+export function handleDesktopRequest(
+  name: string,
+  handler: RequestHandler
+): () => void {
+  requestHandlers.set(name, handler);
+  return () => requestHandlers.delete(name);
+}
+
+subscribe("bridge.request", (payload) => {
+  const request = payload as {
+    requestId: string;
+    name: string;
+    payload: unknown;
+  };
+  if (!request?.requestId) return;
+
+  const handler = requestHandlers.get(request.name);
+  const answer = handler
+    ? handler(request.payload)
+    : Promise.reject(new Error(`No handler for ${request.name}`));
+
+  void answer.then(
+    (result) => call("bridge.respond", { requestId: request.requestId, result }),
+    (error: unknown) =>
+      call("bridge.respond", {
+        requestId: request.requestId,
+        error: error instanceof Error ? error.message : String(error)
+      })
+  );
+});
+
+// ---------------------------------------------------------------------------
 // tRPC-shaped proxy
 // ---------------------------------------------------------------------------
 

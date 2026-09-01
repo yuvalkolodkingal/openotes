@@ -30,7 +30,10 @@ the upstream project, which maintains them.
 | A WebDAV operator learning note titles from filenames | Object and attachment names are keyed BLAKE2b digests. No filename derives from plaintext. |
 | Someone who steals the device's disk image | The vault database is encrypted at rest; stored credentials are encrypted; the master key exists only in memory. |
 | A network attacker | HTTPS by default. TLS errors are never ignored and there is no way to disable verification. |
-| A malicious note (imported HTML, an embedded page) | The renderer has no filesystem, shell or network capability. It can only call an allowlisted set of validated procedures. |
+| A malicious note (imported HTML, an embedded page) | The renderer has no filesystem, shell or network capability. It can only call an allowlisted set of validated procedures — including the AI ones: it names an agent by catalog id and can never supply a command line. |
+| An AI agent reading a locked note | The export path refuses to render a vault note without an unlocked vault, and the agent path does not offer to unlock one. |
+| An AI agent running shell commands through Openotes | The client advertises `terminal: false` at the handshake, and no terminal method is implemented. |
+| A cloud drive access token leaking to a compromised renderer | Tokens are held by the runtime in the encrypted credential store. The renderer is told only whether an account is connected, and which one. |
 | A tampered update | Updates are checked against this fork's own releases and verified by SHA-256 before anything is done with them. |
 | A stale device resurrecting deleted notes | Deletions are tombstones and are ordered by revision. |
 | Silent data loss during sync | A change is only marked synchronized after its remote object is verified present and the right size. |
@@ -45,6 +48,9 @@ the upstream project, which maintains them.
 | A WebDAV operator deleting or withholding data | The protocol detects corruption and refuses to act on it, but a server can still lose your data. Keep backups. |
 | An attacker with filesystem read access, when "remember without unlocking" is enabled | See §4 — this mode's key is derived from a file that same attacker can read. It is opt-in and the trade-off is stated in the UI. |
 | Evil-maid attacks on an unlocked machine | Out of scope for a notes application. |
+| What an approved AI agent does once running | An agent is a separate program running with your privileges. Openotes chooses whether to start it and answers its note requests; it cannot constrain what it does otherwise. Approving one is as consequential as installing one. See §10. |
+| A cloud provider reading notes synced in readable mode | Readable mode is plaintext by design — that is what makes the folder openable on a phone. Encryption is one setting away, and the choice is stated where it is made. |
+| A cloud provider observing that you use Openotes | Even in encrypted mode the folder name and the shape of the traffic are visible. |
 
 ---
 
@@ -274,7 +280,67 @@ properties:
 
 ---
 
-## 10. Not impersonating Notesnook
+## 10. Running an AI agent
+
+Openotes hosts agents over the Agent Client Protocol. Hosting one means
+running one, and that is a real change to what this application guarantees.
+It is stated here rather than left to be discovered.
+
+**What changed.** The runtime's subprocess allowlist grew from twelve
+OS-integration binaries (`xdg-open`, `notify-send`, and the like) to also
+include agent launchers: `node`, `npx`, `deno`, `bun`, and the named agent
+commands. It is still a fixed list in `deno.json`, never `run: true`.
+
+**What is preserved.**
+
+- The renderer still cannot spawn anything. It names a catalog id; the command
+  line comes from `apps/desktop/src/acp/catalog.ts`. No procedure accepts a
+  command, and a test asserts that connecting refuses any id not in the
+  catalog.
+- argv is always an array, never a shell string.
+- A first launch needs explicit consent, recorded against the **resolved
+  absolute path**. If the binary at that path is replaced, consent is asked
+  for again — an agent that was swapped out is not the agent that was
+  approved.
+- The permitted-command list is duplicated in `catalog.ts` so that drift
+  between it and the manifest fails a test rather than a user's launch.
+- Agents get no terminal, and their sessions get a real but permanently empty
+  workspace directory. Note reads are answered from the database; no note is
+  ever written to disk for an agent.
+
+**What is given up.** An approved agent is a program running with your
+privileges, and Openotes cannot constrain what it does once started. The
+interface says so before the first launch, naming the exact binary path.
+
+**Credentials.** Openotes never sees an agent's model credentials. Signing in
+happens in the agent's own CLI, in your browser, and the tokens live in that
+agent's config directory.
+
+---
+
+## 11. Cloud drive accounts
+
+OAuth uses the authorization-code flow with PKCE and a loopback redirect. The
+listener binds `127.0.0.1` explicitly, opens before the browser does, serves
+exactly one request and closes. `state` is compared before the authorization
+code is exchanged, so a callback the user did not initiate is discarded
+without the exchange happening at all.
+
+Access and refresh tokens are held by the runtime in `credentials.enc`,
+alongside the WebDAV password, and are never returned to the renderer.
+
+Scopes are the narrowest that work: Google Drive uses `drive.file`, which
+grants access only to files Openotes itself created and cannot see the rest of
+the drive. Dropbox and OneDrive use their app-folder equivalents.
+
+Client ids ship in the binary and are public by design — installed-app client
+ids cannot be kept secret, which is why PKCE exists. Settings → Sync →
+Advanced accepts your own, for forks, packagers, or anyone who would rather
+not appear in Openotes' OAuth application.
+
+---
+
+## 12. Not impersonating Notesnook
 
 This fork does not spoof, forge or otherwise claim a Notesnook Pro
 subscription, and it does not contact Notesnook's servers. The hosted

@@ -72,7 +72,7 @@ export function resolveString(key: string, count?: number): string {
 
 /**
  * Reverse index: rendered text -> the key(s) that produce it. Used by
- * `scripts/check-strings.mjs` to find hardcoded labels that could be keys.
+ * `scripts/check-strings.ts` to find hardcoded labels that could be keys.
  */
 export function buildReverseIndex(): Map<string, string[]> {
   const index = new Map<string, string[]>();

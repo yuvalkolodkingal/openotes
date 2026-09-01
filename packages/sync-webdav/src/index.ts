@@ -21,6 +21,7 @@ export * from "./types.ts";
 export * from "./http.ts";
 export * from "./xml.ts";
 export * from "./client.ts";
+export * from "./webdav-storage.ts";
 export * from "./crypto.ts";
 export * from "./conflicts.ts";
 export * from "./repository.ts";

@@ -21,3 +21,6 @@ packaging/flatpak/*.tar.gz
 apps/desktop/.build/
 apps/desktop/ui/
 dist/
+
+# Vite writes a timestamped copy of a .mts config next to it while loading.
+*.timestamp-*.mjs
