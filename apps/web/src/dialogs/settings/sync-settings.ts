@@ -36,6 +36,8 @@ import { ConfirmDialog } from "../confirm";
 import { showToast } from "../../utils/toast";
 import { strings } from "@notesnook/intl";
 import { WebDavConnectionPanel } from "./components/webdav-connection";
+import { DriveConnectionPanel } from "./components/drive-connection";
+import type { SyncProvider } from "../../stores/webdav-store";
 
 /** Re-renders a setting whenever the WebDAV config or status changes. */
 const onWebDavChange = (listener: (state: unknown, prev: unknown) => void) =>
@@ -61,29 +63,86 @@ export const SyncSettings: SettingsGroup[] = [
   {
     key: "webdav-connection",
     section: "sync",
-    header: "WebDAV synchronization",
+    header: "Synchronization",
     // The panel below refreshes the store when it mounts, which covers this
     // group and the two that follow (they render in the same section).
     settings: [
       {
-        key: "sync-provider",
-        title: "Synchronization provider: WebDAV",
+        key: "sync-provider-choice",
+        title: "Sync through",
         description:
-          "Openotes has no cloud account and no server of its own. Your notes " +
-          "are encrypted on this device and uploaded to a WebDAV server that " +
-          "you control — Nextcloud, ownCloud, sabre/dav, Apache mod_dav or " +
-          "anything else that speaks the protocol.",
+          "Openotes has no cloud account and no server of its own. Notes are " +
+          "encrypted on this device before they go anywhere, so whichever of " +
+          "these you pick only ever holds ciphertext — even the filenames are " +
+          "keyed digests.",
+        keywords: [
+          "provider",
+          "webdav",
+          "google drive",
+          "dropbox",
+          "onedrive",
+          "sync"
+        ],
+        onStateChange: onWebDavChange,
+        components: () => [
+          {
+            type: "dropdown",
+            options: [
+              { value: "webdav", title: "A WebDAV server you control" },
+              { value: "googledrive", title: "Google Drive" },
+              { value: "dropbox", title: "Dropbox" },
+              { value: "onedrive", title: "OneDrive" }
+            ],
+            selectedOption: () =>
+              webDavStore.get().config?.provider ?? "webdav",
+            onSelectionChanged: (provider) =>
+              run(() =>
+                webDavStore
+                  .get()
+                  .saveConfig({ provider: provider as SyncProvider })
+              )
+          }
+        ]
+      },
+      {
+        key: "sync-provider",
+        title: "Your WebDAV server",
+        description:
+          "Nextcloud, ownCloud, sabre/dav, Apache mod_dav or anything else " +
+          "that speaks the protocol.",
         keywords: [
           "webdav",
           "sync",
           "server",
           "nextcloud",
           "owncloud",
-          "provider",
           "passphrase",
           "encryption"
         ],
+        isHidden: () =>
+          (webDavStore.get().config?.provider ?? "webdav") !== "webdav",
+        onStateChange: onWebDavChange,
         components: [{ type: "custom", component: WebDavConnectionPanel }]
+      },
+      {
+        key: "sync-drive",
+        title: "Sign in to your drive",
+        description:
+          "You register the application yourself, so Openotes can only ever " +
+          "see the files it created and there is no shared client id for a " +
+          "provider to revoke.",
+        keywords: [
+          "google drive",
+          "dropbox",
+          "onedrive",
+          "oauth",
+          "sign in",
+          "client id"
+        ],
+        isHidden: () =>
+          (webDavStore.get().config?.provider ?? "webdav") === "webdav",
+        onStateChange: onWebDavChange,
+        components: [{ type: "custom", component: DriveConnectionPanel }]
       },
       {
         key: "sync-now",

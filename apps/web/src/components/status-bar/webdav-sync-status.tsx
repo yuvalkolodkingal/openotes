@@ -93,8 +93,6 @@ type Appearance = {
  */
 export function describeProvider(provider?: SyncProvider): string {
   switch (provider) {
-    case "folder":
-      return "your sync folder";
     case "googledrive":
       return "Google Drive";
     case "onedrive":

@@ -5,6 +5,25 @@ server. This describes what it writes, what it can promise, and what it cannot.
 
 ---
 
+## Choosing one
+
+`Settings → Synchronization → Sync through`. Pick Google Drive, Dropbox or
+OneDrive and the panel below it walks through registering an application in
+that provider's own console — Openotes registers none of its own, so there is
+no shared client id for a provider to revoke and the scopes can be the narrow
+ones that reach only files Openotes created.
+
+Sign-in happens in your own browser, not in a window Openotes draws: a
+webview cannot be trusted by you to be showing the real Google, and it would
+not carry the session you already have.
+
+> **Currently encrypted only.** The readable-Markdown format below is
+> implemented and tested, but nothing in the application constructs its
+> engine yet, so a drive today holds the same encrypted journal a WebDAV
+> server would. The section that follows describes where this is going.
+
+---
+
 ## Two remote formats, and why the default is the readable one
 
 **Readable Markdown (the default).** One `.md` file per note, in a folder that
