@@ -25,12 +25,23 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
  * It is a thin adapter over WebDavClient on purpose: the client already
  * speaks the protocol, including the compatibility fallbacks real servers
  * need, and every failure it raises is already a SyncError with the code
- * the engine expects. The one place this adapter has to think for itself
- * is `moveRecursive`.
+ * the engine expects. Two things it still has to do for itself.
+ *
+ * THE FIRST IS PATHS. WebDavClient.url() rejects a ".." segment, but it
+ * drops a leading slash and percent-encodes a null byte, so "/protocol.json"
+ * and "devices/a\0b" resolve to *different, valid* URLs rather than failing.
+ * FolderStore refuses all three outright, and a path that is a hard error on
+ * one backend and a silent rename on another is one the engine cannot reason
+ * about — so every verb runs assertSafePath first. That is also why the
+ * verbs below are all `async`: a caller attaching .catch() to the promise
+ * `RemoteStore` declares never sees an exception thrown before it exists.
+ *
+ * THE SECOND IS `moveRecursive` — see the note on it.
  */
 
 import { WebDavClient } from "./client.ts";
 import {
+  assertSafePath,
   PutOptions,
   RemoteEntry,
   RemoteStore,
@@ -84,6 +95,7 @@ export class WebDavStore implements RemoteStore {
   }
 
   async list(path: string): Promise<RemoteEntry[]> {
+    assertSafePath(path);
     // A Depth:1 PROPFIND answers with the collection itself alongside its
     // children. The client drops that entry by comparing the *encoded*
     // request path against decoded hrefs, so a segment that needs
@@ -99,16 +111,19 @@ export class WebDavStore implements RemoteStore {
     return entries;
   }
 
-  exists(path: string): Promise<boolean> {
-    return this.client.exists(path);
+  async exists(path: string): Promise<boolean> {
+    assertSafePath(path);
+    return await this.client.exists(path);
   }
 
-  get(path: string): Promise<Uint8Array> {
-    return this.client.get(path);
+  async get(path: string): Promise<Uint8Array> {
+    assertSafePath(path);
+    return await this.client.get(path);
   }
 
-  getIfExists(path: string): Promise<Uint8Array | undefined> {
-    return this.client.getIfExists(path);
+  async getIfExists(path: string): Promise<Uint8Array | undefined> {
+    assertSafePath(path);
+    return await this.client.getIfExists(path);
   }
 
   async put(
@@ -116,6 +131,7 @@ export class WebDavStore implements RemoteStore {
     body: Uint8Array,
     options: PutOptions = {},
   ): Promise<void> {
+    assertSafePath(path);
     // The ETag the client returns is dropped: no call site reads one, and
     // store.ts keeps them out of the interface deliberately.
     await this.client.put(path, body, { contentType: options.contentType });
@@ -126,6 +142,7 @@ export class WebDavStore implements RemoteStore {
     body: Uint8Array,
     options: PutOptions = {},
   ): Promise<void> {
+    assertSafePath(path);
     // If-None-Match: * — a conforming server writes nothing and answers
     // 412, which the client already turns into a SyncError carrying
     // "precondition-failed". Passing that through untouched is the whole
@@ -136,13 +153,16 @@ export class WebDavStore implements RemoteStore {
     });
   }
 
-  delete(path: string): Promise<void> {
+  async delete(path: string): Promise<void> {
+    assertSafePath(path);
     // The client already treats a 404 as success, as the interface asks.
-    return this.client.delete(path);
+    await this.client.delete(path);
   }
 
-  move(from: string, to: string): Promise<void> {
-    return this.client.move(from, to, true);
+  async move(from: string, to: string): Promise<void> {
+    assertSafePath(from);
+    assertSafePath(to);
+    await this.client.move(from, to, true);
   }
 
   /**
@@ -154,6 +174,11 @@ export class WebDavStore implements RemoteStore {
    * subtree is always walked and only files are ever handed to MOVE.
    */
   async moveRecursive(from: string, to: string): Promise<void> {
+    // Both ends before the first request: a probe of an unsafe `from`
+    // would already have hit the server, and a bad `to` would only be
+    // caught after the source had been read.
+    assertSafePath(from);
+    assertSafePath(to);
     if (!(await this.isCollection(from))) {
       // A file, or nothing at all: one MOVE is exactly right and the
       // client's fallback is safe, there being no subtree to flatten.
@@ -170,12 +195,14 @@ export class WebDavStore implements RemoteStore {
     await this.moveTree(from, to);
   }
 
-  makeDirectory(path: string): Promise<void> {
-    return this.client.mkcolRecursive(collectionPath(path));
+  async makeDirectory(path: string): Promise<void> {
+    assertSafePath(path);
+    await this.client.mkcolRecursive(collectionPath(path));
   }
 
-  verifyUpload(path: string, expectedLength: number): Promise<void> {
-    return this.client.verifyUpload(path, expectedLength);
+  async verifyUpload(path: string, expectedLength: number): Promise<void> {
+    assertSafePath(path);
+    await this.client.verifyUpload(path, expectedLength);
   }
 
   scope(prefix: string): RemoteStore {
