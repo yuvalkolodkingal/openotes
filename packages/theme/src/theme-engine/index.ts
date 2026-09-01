@@ -87,4 +87,5 @@ export const ScopedThemeProvider = ThemeScopeContext.Provider;
 export const THEME_COMPATIBILITY_VERSION: ThemeCompatibilityVersion = 1;
 export { ThemeLight, ThemeDark, useThemeEngineStore, type ThemeEngineState };
 export { getPreviewColors, themeToCSS } from "./utils.js";
+export { preferredTheme } from "./preferred.js";
 export { validateTheme } from "./validator.js";

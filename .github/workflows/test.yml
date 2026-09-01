@@ -83,6 +83,7 @@ jobs:
           apps/desktop/scripts/build-native.ts
           apps/desktop/scripts/checksums.ts
           apps/desktop/scripts/smoke-test.ts
+          apps/desktop/scripts/mcp-check.ts
           apps/desktop/scripts/update-manifest.ts
           apps/desktop/scripts/verify-dependencies.ts
 

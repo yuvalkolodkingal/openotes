@@ -28,12 +28,21 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
  * whatever the defaults looked like on the day it was installed, so shipping
  * a fix to the default dark theme would reach nobody.
  *
- * So a stored copy of a *shipped* theme is only used while its version
- * matches the shipped one. Anything else — a downloaded theme, a theme the
- * user edited — has a different id and is returned untouched.
+ * So a stored copy of a *shipped* theme is replaced when it is an OLDER
+ * copy of it: same id, lower version. Anything else is returned untouched.
+ *
+ * "Same id and same version" was the first rule, and it was too eager in
+ * both directions. Nothing enforces the assumption underneath it — the
+ * validator (packages/theme/src/theme-engine/validator.ts) is happy for any
+ * theme to claim the id `default-dark`, so a downloaded theme that does,
+ * with any version other than the exact one shipped, was silently thrown
+ * away and replaced by ours on the next launch. Comparing versions in one
+ * direction only fixes that: a theme claiming to be newer than ours is
+ * left alone, and only a copy demonstrably older than what ships is
+ * refreshed, which is the case this exists for.
  */
 
-import { ThemeDark, ThemeLight } from "@notesnook/theme";
+import { preferredTheme, ThemeDark, ThemeLight } from "@notesnook/theme";
 import type { ThemeDefinition } from "@notesnook/theme";
 import Config from "../utils/config";
 
@@ -45,7 +54,8 @@ export function shippedTheme(colorScheme: ColorScheme): ThemeDefinition {
 
 export function storedTheme(colorScheme: ColorScheme): ThemeDefinition {
   const shipped = shippedTheme(colorScheme);
-  const stored = Config.get<ThemeDefinition>(`theme:${colorScheme}`, shipped);
-  if (!stored || stored.id !== shipped.id) return stored ?? shipped;
-  return stored.version === shipped.version ? stored : shipped;
+  return preferredTheme(
+    Config.get<ThemeDefinition>(`theme:${colorScheme}`, shipped),
+    shipped
+  );
 }

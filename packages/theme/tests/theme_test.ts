@@ -283,3 +283,52 @@ Deno.test("text and controls meet WCAG AA", () => {
 
   assertEquals(failures, [], `\n  ${failures.join("\n  ")}\n`);
 });
+
+/**
+ * Which stored theme survives a launch.
+ *
+ * Applying a theme persists the whole definition, so a shipped theme that is
+ * fixed later has to displace the copy an installation kept — but only an
+ * older copy of *ours*. Getting the second half wrong throws away a theme
+ * someone installed that happens to reuse the id.
+ */
+
+import { preferredTheme } from "../src/theme-engine/preferred.ts";
+
+const SHIPPED = { id: "default-dark", version: 3 };
+const copy = (overrides: Partial<typeof SHIPPED>) => ({
+  ...SHIPPED,
+  ...overrides,
+});
+
+Deno.test("nothing stored yields the shipped theme", () => {
+  assertEquals(preferredTheme(undefined, SHIPPED).version, 3);
+});
+
+Deno.test("an older copy of the shipped theme is refreshed", () => {
+  // Without this, a fix to the default dark theme reaches nobody who has
+  // ever set a colour scheme.
+  assertEquals(preferredTheme(copy({ version: 2 }), SHIPPED).version, 3);
+});
+
+Deno.test("the current copy is kept", () => {
+  const stored = copy({ version: 3 });
+  assertEquals(preferredTheme(stored, SHIPPED), stored);
+});
+
+Deno.test("a theme claiming to be newer is left alone", () => {
+  // Nothing reserves the id `default-dark`, and replacing a theme someone
+  // installed on every launch would be silent data loss.
+  const stored = copy({ version: 9 });
+  assertEquals(preferredTheme(stored, SHIPPED), stored);
+});
+
+Deno.test("a theme with another id is never touched", () => {
+  const stored = copy({ id: "someone-elses", version: 1 });
+  assertEquals(preferredTheme(stored, SHIPPED), stored);
+});
+
+Deno.test("a version that is not a number is not second-guessed", () => {
+  const stored = copy({ version: "3" as unknown as number });
+  assertEquals(preferredTheme(stored, SHIPPED), stored);
+});

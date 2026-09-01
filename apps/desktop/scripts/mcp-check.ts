@@ -59,6 +59,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 import { fromFileUrl, join } from "@std/path";
 import { APP_ID, APP_NAME } from "../src/constants.ts";
+import { resolveDisplay } from "./smoke-test.ts";
 
 const ROOT = fromFileUrl(new URL("../../../", import.meta.url));
 const DEFAULT_DIST = join(ROOT, "dist");
@@ -118,18 +119,6 @@ async function executableFor(app: string): Promise<string> {
   return executable;
 }
 
-async function which(command: string): Promise<boolean> {
-  try {
-    const probe = new Deno.Command(
-      Deno.build.os === "windows" ? "where" : "which",
-      { args: [command], stdout: "null", stderr: "null" },
-    );
-    return (await probe.output()).code === 0;
-  } catch {
-    return false;
-  }
-}
-
 const { app: requested, port } = parseArguments(Deno.args);
 const app = requested ?? await findBuiltApp(DEFAULT_DIST);
 const executable = await executableFor(app);
@@ -150,22 +139,37 @@ for (const directory of configCandidates) {
   await Deno.writeTextFile(join(directory, "settings.json"), settings);
 }
 
-// A headless runner has no display; xvfb-run supplies one. Where it is
-// missing the application is launched directly and will fail if there is
-// genuinely no display, which is the honest outcome.
-const headless = Deno.build.os === "linux" && !Deno.env.get("DISPLAY") &&
-  await which("xvfb-run");
-const child = new Deno.Command(headless ? "xvfb-run" : executable, {
-  args: headless ? ["-a", executable] : [],
+// The application is spawned directly, with a display of our own if the
+// machine has none — never through xvfb-run, whose shell would be the
+// process this script holds while the application ran on as a grandchild
+// that kill() cannot reach.
+const display = await resolveDisplay();
+console.log(`  launching via ${display.note}`);
+const child = new Deno.Command(executable, {
+  args: [],
   env: {
     ...Deno.env.toObject(),
+    ...display.env,
     OPENOTES_DATA_DIR: dataDirectory,
     XDG_CONFIG_HOME: xdgConfig,
     XDG_CACHE_HOME: join(dataDirectory, "xdg-cache"),
   },
-  stdout: "null",
-  stderr: "null",
+  stdout: "piped",
+  stderr: "piped",
 }).spawn();
+
+// Drained rather than discarded: every way start-up can fail — a missing
+// ui/, a native library that will not load, the single-instance lock, a
+// port already taken — otherwise collapses into the same "no handshake
+// after 60 seconds" with nothing to go on.
+let output = "";
+const decoder = new TextDecoder();
+const drain = async (stream: ReadableStream<Uint8Array>) => {
+  for await (const chunk of stream) {
+    output += decoder.decode(chunk, { stream: true });
+  }
+};
+const drained = Promise.allSettled([drain(child.stdout), drain(child.stderr)]);
 
 interface Handshake {
   url: string;
@@ -302,34 +306,40 @@ if (handshake) {
       : `read-only mode still offered: ${mutating.join(", ")}`,
   );
 
-  const tool = names.find((name) => name.includes("search")) ?? names[0];
-  const called = await (await post({
-    jsonrpc: "2.0",
-    id: 6,
-    method: "tools/call",
-    params: { name: tool, arguments: { query: "anything" } },
-  }, handshake.token)).json();
-  const answer = called.result?.content?.[0]?.text ?? called.error?.message ??
-    JSON.stringify(called);
-  record(
-    typeof answer === "string" && answer.length > 0,
-    `${tool} before the vault is open explains itself: ` +
-      `"${String(answer).replace(/\s+/g, " ").slice(0, 100)}"`,
-  );
+  const tool = names.find((name) => name.includes("search"));
+  if (!tool) {
+    record(false, "tools/list offered no search tool to call");
+  } else {
+    const called = await (await post({
+      jsonrpc: "2.0",
+      id: 6,
+      method: "tools/call",
+      params: { name: tool, arguments: { query: "anything" } },
+    }, handshake.token)).json();
+
+    // A tool *result* saying why, not a JSON-RPC error and not any old
+    // parseable object. Falling back to JSON.stringify(called) made this
+    // pass for "Method not found", and for a call with no tool name at all.
+    const text = called.result?.content?.[0]?.text;
+    const explained = typeof text === "string" && /vault/i.test(text);
+    record(
+      explained,
+      explained
+        ? `${tool} before the vault is open explains itself: ` +
+          `"${text.replace(/\s+/g, " ").slice(0, 100)}"`
+        : `${tool} answered ${
+          JSON.stringify(called.error ?? called.result ?? called).slice(0, 160)
+        }, which does not say the vault is closed`,
+    );
+  }
 }
 
-// Shut down. A handshake file that outlives its endpoint is a token on disk
-// pointing at a port nothing is listening on.
-if (Deno.build.os !== "windows") {
-  await new Deno.Command("pkill", {
-    args: ["-x", APP_ID],
-    stdout: "null",
-    stderr: "null",
-  })
-    .output().catch(() => {});
-}
+// Shut down. Only this script's own child: `pkill -x openotes` used to be
+// here, which signals every Openotes the user is running — including the
+// real one they have open, with unsaved work in it — and flatly contradicts
+// this file's promise that it cannot touch a real installation.
 try {
-  child.kill("SIGTERM");
+  child.kill(Deno.build.os === "windows" ? "SIGKILL" : "SIGTERM");
 } catch {
   /* already gone */
 }
@@ -338,21 +348,34 @@ await Promise.race([
   new Promise((resolve) => setTimeout(resolve, 10_000)),
 ]);
 
-let stale = true;
-for (let i = 0; i < 40; i++) {
-  try {
-    await Deno.stat(handshakePath);
-    await new Promise((resolve) => setTimeout(resolve, 250));
-  } catch {
-    stale = false;
-    break;
+// A handshake file that outlives its endpoint is a token on disk pointing
+// at a port nothing is listening on. Only meaningful if one was written:
+// otherwise the first stat throws, `stale` is false, and a total failure to
+// start reports a cheerful pass.
+if (handshake) {
+  let stale = true;
+  for (let i = 0; i < 40; i++) {
+    try {
+      await Deno.stat(handshakePath);
+      await new Promise((resolve) => setTimeout(resolve, 250));
+    } catch {
+      stale = false;
+      break;
+    }
   }
+  record(!stale, "stopping the application took the handshake file with it");
 }
-record(!stale, "stopping the application took the handshake file with it");
 
+await drained;
+await display.cleanup();
 await Deno.remove(dataDirectory, { recursive: true }).catch(() => {});
 
 const failed = checks.filter((check) => !check.ok).length;
+if (failed > 0 && output.trim()) {
+  console.log("\n----- what the application said -----");
+  console.log(output.trim());
+  console.log("------------------------------------");
+}
 console.log(`
 MCP check of ${app}
   checked:     the endpoint starts from settings, publishes a handshake a

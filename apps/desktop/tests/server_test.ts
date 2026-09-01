@@ -240,3 +240,43 @@ Deno.test("only GET and HEAD are answered", async () => {
     assertEquals(response.status, 405);
   });
 });
+
+Deno.test("the health route is behind the same guards as everything else", async () => {
+  // It used to return before them, so a page at a DNS name rebound to
+  // 127.0.0.1 could still learn that Openotes is running here and which
+  // launch this is — the one thing the rest of the guard exists to deny.
+  await withServer(async (base) => {
+    const { host } = new URL(base);
+    const health = "/__openotes/health";
+
+    assertEquals(await rawStatus(base, health, { Host: host }), 200);
+    assertEquals(
+      await rawStatus(base, health, { Host: "attacker.example" }),
+      403,
+    );
+    assertEquals(
+      await rawStatus(base, health, {
+        Host: host,
+        Origin: "https://example.invalid",
+      }),
+      403,
+    );
+
+    // And it is a GET route, not a method-agnostic one.
+    const posted = await fetch(base + health, { method: "POST" });
+    await posted.body?.cancel();
+    assertEquals(posted.status, 405);
+  });
+});
+
+Deno.test("the health route still answers the application itself", async () => {
+  await withServer(async (base) => {
+    const response = await fetch(base + "/__openotes/health", {
+      headers: sameOrigin(base),
+    });
+    const body = await response.json();
+    assertEquals(response.status, 200);
+    assertEquals(body.ok, true);
+    assertEquals(body.instance, "test");
+  });
+});

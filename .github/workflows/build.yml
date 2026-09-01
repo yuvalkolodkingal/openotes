@@ -417,6 +417,38 @@ jobs:
           cp "dist/Openotes-${{ needs.version.outputs.version }}-linux-x86_64.tar.gz" \
              packaging/flatpak/openotes-linux-x86_64.tar.gz
 
+      # AppStream's <releases> is what GNOME Software and KDE Discover show
+      # as the newest version. Nothing rewrote it, so every flatpak since
+      # 1.0.0 has installed metadata naming 1.0.0 as the latest release —
+      # the same class of staleness the PKGBUILD rewrite below exists to
+      # prevent, and invisible because no packaging check reads it.
+      - name: Stamp this version into the AppStream metadata
+        run: |
+          set -eu
+          version="${{ needs.version.outputs.version }}"
+          metainfo=packaging/flatpak/org.openotes.Openotes.metainfo.xml
+          today=$(date -u +%Y-%m-%d)
+          if ! grep -q "<release version=\"$version\"" "$metainfo"; then
+            python3 - "$metainfo" "$version" "$today" <<'PY'
+          import sys
+          path, version, date = sys.argv[1], sys.argv[2], sys.argv[3]
+          text = open(path, encoding="utf-8").read()
+          entry = (
+              f'  <releases>\n'
+              f'    <release version="{version}" date="{date}">\n'
+              f'      <description>\n'
+              f'        <p>See the release notes for {version}.</p>\n'
+              f'      </description>\n'
+              f'    </release>\n'
+          )
+          assert text.count("  <releases>\n") == 1, "unexpected <releases> block"
+          open(path, "w", encoding="utf-8").write(
+              text.replace("  <releases>\n", entry, 1)
+          )
+          PY
+          fi
+          grep -m1 "<release version=" "$metainfo"
+
       - name: flatpak-builder
         run: |
           set -eu

@@ -39,10 +39,12 @@ const log = logger.scope("server");
  *     the built interface, which is public source, and the privileged
  *     surface is reached through window bindings rather than over HTTP — so
  *     the exposure is that a local process can read files it could read off
- *     disk anyway. Requests carrying an Origin, and requests for a Host
- *     that is not loopback, are refused all the same: those are what a page
- *     in the user's browser would send, and there is no reason to answer
- *     one.
+ *     disk anyway. A request for a Host that is not loopback, or carrying
+ *     an Origin that is not this server, is refused all the same: that is
+ *     what a page in the user's browser would send, and there is no reason
+ *     to answer one. That applies to every route, the health route
+ *     included — it used to return before the guards ran, which left the
+ *     one thing a rebound DNS name could still read.
  *
  *  2. The port differs on every launch, so the page's origin does too
  *     (observed: http://127.0.0.1:34265, then http://127.0.0.1:42857 on
@@ -194,18 +196,6 @@ export async function startUiServer(
     async (request) => {
       const url = new URL(request.url);
 
-      if (url.pathname === HEALTH_PATH) {
-        return new Response(
-          JSON.stringify({ ok: true, instance: options.instanceId }),
-          {
-            headers: {
-              "content-type": "application/json",
-              [INSTANCE_HEADER]: options.instanceId,
-            },
-          },
-        );
-      }
-
       if (request.method !== "GET" && request.method !== "HEAD") {
         return new Response("Method Not Allowed", { status: 405 });
       }
@@ -234,6 +224,22 @@ export async function startUiServer(
       const requestOrigin = request.headers.get("origin");
       if (requestOrigin && requestOrigin !== `http://${authority}`) {
         return new Response("Forbidden", { status: 403 });
+      }
+
+      // After the guards, deliberately. This route answers "yes, Openotes
+      // is running here, and this is which launch" — the single most useful
+      // thing for a page at a rebound DNS name to learn, and it was the
+      // only route still telling it.
+      if (url.pathname === HEALTH_PATH) {
+        return new Response(
+          JSON.stringify({ ok: true, instance: options.instanceId }),
+          {
+            headers: {
+              "content-type": "application/json",
+              [INSTANCE_HEADER]: options.instanceId,
+            },
+          },
+        );
       }
 
       return await serveStatic(

@@ -214,10 +214,50 @@ async function isLibraryBuilt(directory: string): Promise<boolean> {
   // A package with no compiled entry (source-only, resolved through exports)
   // has nothing to build.
   if (entries.length === 0) return true;
+
+  let oldestOutput = Infinity;
   for (const entry of entries) {
-    if (!(await exists(join(directory, entry)))) return false;
+    const path = join(directory, entry);
+    if (!(await exists(path))) return false;
+    const info = await Deno.stat(path).catch(() => undefined);
+    oldestOutput = Math.min(oldestOutput, info?.mtime?.getTime() ?? 0);
   }
+
+  // Only a package that knows how to rebuild itself can be out of date in a
+  // way this can act on. Reporting one that has no build script as unbuilt
+  // sends it to the task runner, which does not know it either.
+  const scripts = manifest.scripts as Record<string, unknown> | undefined;
+  if (typeof scripts?.build !== "string") return true;
+
+  // Existing output is not the same as current output. dist/ is gitignored,
+  // so CI always rebuilds and never noticed — but on a developer's machine
+  // it persists, and editing a theme JSON then rebuilding the interface
+  // quietly shipped the previous compile. The theme tests read the source
+  // and pass, the application renders the stale build, and the two disagree
+  // with nothing to show for it.
+  const newestSource = await newestModified(join(directory, "src"));
+  if (newestSource !== undefined && newestSource > oldestOutput) return false;
+
   return true;
+}
+
+/** Most recent mtime under `directory`, or undefined if it is not there. */
+async function newestModified(directory: string): Promise<number | undefined> {
+  if (!(await exists(directory))) return undefined;
+  let newest = 0;
+  const walk = async (path: string) => {
+    for await (const entry of Deno.readDir(path)) {
+      const child = join(path, entry.name);
+      if (entry.isDirectory) {
+        await walk(child);
+      } else if (entry.isFile) {
+        const info = await Deno.stat(child).catch(() => undefined);
+        newest = Math.max(newest, info?.mtime?.getTime() ?? 0);
+      }
+    }
+  };
+  await walk(directory);
+  return newest;
 }
 
 async function buildWorkspaceLibraries(force: boolean) {

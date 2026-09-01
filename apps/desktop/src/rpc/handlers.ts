@@ -588,10 +588,23 @@ export function createHandlers(): Record<string, Handler> {
             "insecure connections for a trusted local network.",
         );
       }
+      // `clientId` and `connected` describe one provider's registration, in
+      // a slot shared by all of them. Carrying them across a change of
+      // provider makes the settings screen report Dropbox as connected on
+      // the strength of a Google sign-in, and the sync service then builds
+      // a client from a client id that belongs to a different console. A
+      // provider change starts that provider disconnected; the tokens
+      // themselves are per-provider in the credential store, so signing back
+      // in costs nothing and switching back finds them still there.
+      const providerChanged = provider !== current.provider;
+
       await context.settings.patchWebDav({
         enabled: boolOr(input?.enabled, current.enabled),
         provider,
-        clientId: optionalString(input?.clientId) ?? current.clientId,
+        connected: providerChanged ? false : current.connected,
+        clientId: providerChanged
+          ? optionalString(input?.clientId) ?? ""
+          : optionalString(input?.clientId) ?? current.clientId,
         serverUrl,
         username: optionalString(input?.username) ?? current.username,
         directory: optionalString(input?.directory) ?? current.directory,
@@ -860,21 +873,41 @@ export function createHandlers(): Record<string, Handler> {
 
     "mcp.getSettings": (_input, context) => context.settings.get("mcp"),
 
+    /**
+     * Settings are written only once the endpoint has accepted them.
+     *
+     * The obvious order — persist, then apply — is wrong here, because
+     * applying can fail for a reason the user can see and fix: a port
+     * something else already holds. Persisting first leaves settings.json
+     * naming a port that does not work, so the next launch fails the same
+     * way with no hint of what changed. Worse, McpServer.start() closes the
+     * live listener before it binds the new port, so a typo took down a
+     * working endpoint and lost the setting that had been working.
+     *
+     * So: try it first, and put the old settings back if it will not bind.
+     */
     "mcp.setSettings": async (input, context) => {
       const current = context.settings.get("mcp");
-      const port = input?.port === undefined
-        ? current.port
-        : asPort(input.port);
-      await context.settings.patchMcp({
+      const wanted = {
         enabled: input?.enabled === undefined
           ? current.enabled
           : !!input.enabled,
-        port,
+        port: input?.port === undefined ? current.port : asPort(input.port),
         allowWrites: input?.allowWrites === undefined
           ? current.allowWrites
           : !!input.allowWrites,
-      });
-      await context.applyMcpSettings();
+      };
+
+      await context.settings.patchMcp(wanted);
+      try {
+        await context.applyMcpSettings();
+      } catch (error) {
+        await context.settings.patchMcp(current);
+        // Back to whatever was working before, so the endpoint the user had
+        // is not collateral damage from a port they mistyped.
+        await context.applyMcpSettings().catch(() => {});
+        throw error;
+      }
       return context.mcp.status();
     },
 

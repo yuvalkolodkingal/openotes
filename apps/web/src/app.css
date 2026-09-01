@@ -1,3 +1,11 @@
+:root {
+  color-scheme: light;
+}
+
+html[data-theme="dark"] {
+  color-scheme: dark;
+}
+
 /*
   The sync-status vocabulary from branding/DESIGN.md. These are reserved
   colours with one meaning each, so they live here rather than being spelled

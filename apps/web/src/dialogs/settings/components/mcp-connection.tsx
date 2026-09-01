@@ -52,10 +52,17 @@ export function McpConnectionPanel() {
     }
   }, []);
 
+  // Keyed on the status object, not on fields read off it. "Replace token"
+  // rotates the token and restarts the listener on the same fixed port, so
+  // url and listening come back byte-identical and an effect watching those
+  // never re-runs — leaving the panel showing, and offering to copy, a
+  // token that no longer works. The runtime publishes a fresh status object
+  // on each such change, and it only does so when something actually
+  // changed, so identity is the honest dependency here.
   useEffect(() => {
     setRevealed(false);
     void load();
-  }, [load, status?.url, status?.listening]);
+  }, [load, status]);
 
   if (!status?.listening || !config?.listening) {
     return (
