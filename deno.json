@@ -8,12 +8,14 @@
   ],
   "workspace": [
     "./apps/desktop",
-    "./packages/sync-remote"
+    "./packages/sync-remote",
+    "./packages/sync-drive"
   ],
   "imports": {
     "@notesnook/crypto": "./packages/crypto/src/index.ts",
     "@notesnook/sodium": "./packages/sodium/src/browser.ts",
     "@notesnook/sync-remote": "./packages/sync-remote/src/index.ts",
+    "@notesnook/sync-drive": "./packages/sync-drive/src/index.ts",
     "@std/assert": "jsr:@std/assert@^1.0.10",
     "@std/path": "jsr:@std/path@^1.0.8",
     "@std/fs": "jsr:@std/fs@^1.0.9",
@@ -27,7 +29,7 @@
     "dev": "deno run -A apps/desktop/scripts/dev.ts",
     "fmt": "deno fmt",
     "lint": "deno lint",
-    "check": "deno check apps/desktop/main.ts packages/sync-remote/src/index.ts",
+    "check": "deno check apps/desktop/main.ts packages/sync-remote/src/index.ts packages/sync-drive/src/index.ts",
     "test": "deno test -A packages/sync-remote/tests/ apps/desktop/tests/ packages/theme/tests/ --ignore=packages/sync-remote/tests/integration",
     "test:webdav": "deno run -A packages/sync-remote/tests/run-integration.ts",
     "test:ui": "deno run -A --node-modules-dir=auto npm:vitest@3.2.4 run --root apps/web",
@@ -62,6 +64,8 @@
       "apps/desktop/types",
       "packages/sync-remote/src",
       "packages/sync-remote/tests",
+      "packages/sync-drive/src",
+      "packages/sync-drive/tests",
       "packages/theme/tests"
     ],
     "exclude": [
@@ -81,6 +85,8 @@
       "apps/desktop/tests",
       "packages/sync-remote/src",
       "packages/sync-remote/tests",
+      "packages/sync-drive/src",
+      "packages/sync-drive/tests",
       "packages/theme/tests"
     ],
     "rules": {

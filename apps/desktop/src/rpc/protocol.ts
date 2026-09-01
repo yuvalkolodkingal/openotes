@@ -170,6 +170,9 @@ export const PROCEDURE_NAMES = [
   "webdav.setPassphrase",
   "webdav.fetchAttachment",
   "webdav.selectFolder",
+  "webdav.connectDrive",
+  "webdav.disconnectDrive",
+  "webdav.driveSetup",
 
   // --- backup engine (new in this fork) ---
   "backup.getSettings",

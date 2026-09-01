@@ -146,16 +146,22 @@ export class GraphStore implements RemoteStore {
   }
 
   async connect(): Promise<void> {
-    // A GET on the app folder is both the cheapest proof that the token is
-    // accepted with the AppFolder scope and what makes Graph provision the
-    // folder: it does not exist until something asks for it, and every
-    // path below is relative to it.
+    // The app folder itself, deliberately, and not the repository directory
+    // inside it: Graph provisions the app folder the first time something
+    // asks for it, while the directory does not exist until this store
+    // creates it, so checking that one would fail every first run.
     const response = await this.request({
-      url: withQuery(this.itemUrl(""), { "$select": "id,name" }),
+      url: withQuery(this.remoteItemUrl(""), { "$select": "id,name" }),
     });
     if (response.status !== 200) {
       throw graphError(response, `open the ${ONEDRIVE_LABEL} app folder`);
     }
+    // What turns "reachable" into "usable", which is what the interface
+    // asks for: a GET proves the token is accepted, and only a write proves
+    // the grant is not read-only. It also means every later path has its
+    // root in place, so a first sync does not depend on the order the
+    // repository happens to create things in.
+    await this.makeDirectory("");
   }
 
   async list(path: string): Promise<RemoteEntry[]> {
@@ -507,17 +513,28 @@ export class GraphStore implements RemoteStore {
 
   // ---- addressing ----
 
+  /** A store path as Graph sees it: relative to the app folder. */
+  private remotePath(path: string): string {
+    return joinPath(this.directory, assertSafePath(path));
+  }
+
   /**
    * `approot:/<path>:` is Graph's path addressing, and it is only legal
    * when there is a path: the app folder itself is the bare resource, and
    * `approot:/:` is a 400.
+   *
+   * Takes an app-folder-relative path so `makeDirectory` — the one caller
+   * that has to reach above the store root, to create the configured
+   * directory itself — can share it.
    */
-  private itemUrl(path: string): string {
-    const encoded = encodePath(
-      joinPath(this.directory, assertSafePath(path)),
-    );
+  private remoteItemUrl(remote: string): string {
+    const encoded = encodePath(remote);
     const root = `${this.baseUrl}${APP_ROOT}`;
     return encoded === "" ? root : `${root}:/${encoded}:`;
+  }
+
+  private itemUrl(path: string): string {
+    return this.remoteItemUrl(this.remotePath(path));
   }
 
   private contentUrl(path: string): string {

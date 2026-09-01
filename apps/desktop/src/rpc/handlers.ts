@@ -40,6 +40,8 @@ import {
 } from "../native/paths.ts";
 import { PathAccessError } from "../native/paths.ts";
 import type { SyncProvider } from "../native/settings.ts";
+import { type DriveProvider, endpointsFor } from "@notesnook/sync-drive";
+import { connectDrive, disconnectDrive } from "../oauth/browser-flow.ts";
 
 const log = logger.scope("rpc");
 
@@ -693,6 +695,70 @@ export function createHandlers(): Record<string, Handler> {
       return picked ?? null;
     },
 
+    /**
+     * What the user has to do in the provider's own console before any of
+     * this can work. Openotes has no registered OAuth application, so every
+     * user brings their own — which is also why a drive provider can only
+     * ever see files Openotes created.
+     */
+    "webdav.driveSetup": (input) => {
+      const provider = asDriveProvider(input?.provider);
+      if (!provider) throw new Error("Unknown drive provider.");
+      const endpoints = endpointsFor(provider);
+      return {
+        provider,
+        label: endpoints.label,
+        scopes: endpoints.scopes,
+        requiresClientSecret: endpoints.requiresClientSecret,
+        loopbackHost: endpoints.loopbackHost,
+        registrationNotes: endpoints.registrationNotes,
+      };
+    },
+
+    "webdav.connectDrive": async (input, context) => {
+      const provider = asDriveProvider(input?.provider);
+      if (!provider) throw new Error("Unknown drive provider.");
+      const clientId = asString(input, "clientId", 512).trim();
+      const clientSecret = optionalString(input?.clientSecret)?.trim();
+
+      const result = await connectDrive({
+        client: { provider, clientId, clientSecret },
+        credentials: context.credentials,
+        shell: context.shell,
+      });
+      // The client id is not a secret and lives with the rest of the sync
+      // configuration; the secret and the refresh token do not.
+      if (clientSecret) {
+        await context.credentials.set(
+          `drive.${provider}.clientSecret`,
+          clientSecret,
+        );
+      }
+      await context.settings.patchWebDav({
+        provider,
+        clientId,
+        connected: true,
+      });
+      context.reconfigureSync();
+      return result;
+    },
+
+    "webdav.disconnectDrive": async (input, context) => {
+      const provider = asDriveProvider(input?.provider) ??
+        context.settings.get("webdav").provider;
+      if (provider === "webdav" || provider === "folder") {
+        throw new Error("That provider has no account to disconnect.");
+      }
+      await disconnectDrive(provider, context.credentials);
+      await context.credentials.set(
+        `drive.${provider}.clientSecret`,
+        undefined,
+      );
+      await context.settings.patchWebDav({ connected: false, enabled: false });
+      context.reconfigureSync();
+      return { provider };
+    },
+
     "mcp.getSettings": (_input, context) => context.settings.get("mcp"),
 
     "mcp.setSettings": async (input, context) => {
@@ -755,6 +821,11 @@ export function createHandlers(): Record<string, Handler> {
       return context.mcp.status();
     },
   };
+}
+
+function asDriveProvider(value: unknown): DriveProvider | undefined {
+  const providers: DriveProvider[] = ["googledrive", "onedrive", "dropbox"];
+  return providers.find((provider) => provider === value);
 }
 
 function asProvider(value: unknown): SyncProvider | undefined {

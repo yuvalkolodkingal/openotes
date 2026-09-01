@@ -291,7 +291,10 @@ export class DrivePathIndex {
     );
     url.searchParams.set("fields", `files(${DRIVE_FILE_FIELDS})`);
     url.searchParams.set("spaces", "drive");
-    const response = await this.transport.request({ url: url.toString() }, action);
+    const response = await this.transport.request(
+      { url: url.toString() },
+      action,
+    );
     return parseDriveFileList(expectJson(response, action), action);
   }
 
@@ -308,7 +311,10 @@ export class DrivePathIndex {
         "q",
         `'${escapeQueryValue(parentId)}' in parents and trashed=false`,
       );
-      url.searchParams.set("fields", `nextPageToken,files(${DRIVE_FILE_FIELDS})`);
+      url.searchParams.set(
+        "fields",
+        `nextPageToken,files(${DRIVE_FILE_FIELDS})`,
+      );
       url.searchParams.set("spaces", "drive");
       url.searchParams.set("pageSize", "1000");
       if (pageToken !== undefined) url.searchParams.set("pageToken", pageToken);
@@ -334,7 +340,10 @@ export class DrivePathIndex {
   async fetchFile(id: string, action: string): Promise<DriveFile | undefined> {
     const url = new URL(`${DRIVE_FILES_URL}/${encodeURIComponent(id)}`);
     url.searchParams.set("fields", DRIVE_FILE_FIELDS);
-    const response = await this.transport.request({ url: url.toString() }, action);
+    const response = await this.transport.request(
+      { url: url.toString() },
+      action,
+    );
     if (response.status === 404) return undefined;
     return parseDriveFile(expectJson(response, action), action);
   }

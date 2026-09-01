@@ -50,7 +50,11 @@ import {
   decodeJson,
 } from "../http/authorized-fetch.ts";
 import type { TokenManager } from "../oauth/token-manager.ts";
-import { DEFAULT_MAX_RETRIES, RetryAfterError, withRetry } from "../http/retry.ts";
+import {
+  DEFAULT_MAX_RETRIES,
+  RetryAfterError,
+  withRetry,
+} from "../http/retry.ts";
 
 /** Shown in every message this adapter produces. */
 export const GOOGLE_DRIVE_LABEL = "Google Drive";
