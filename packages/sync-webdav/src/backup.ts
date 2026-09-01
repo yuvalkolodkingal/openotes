@@ -18,7 +18,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
 import { SerializedKey } from "@notesnook/crypto";
-import { WebDavClient } from "./client.ts";
+import { RemoteStorage } from "@notesnook/sync-core";
 import { SyncCrypto, toHex } from "./crypto.ts";
 import { PATHS } from "./repository.ts";
 import { SerializedCipher, SyncError } from "./types.ts";
@@ -280,9 +280,16 @@ export function assertSafeBackupName(name: string): string {
 }
 
 /** Backups stored in the WebDAV `backups/` directory. */
-export class WebDavBackupTarget implements BackupTarget {
+/**
+ * Backups in a remote object store.
+ *
+ * Renamed from WebDavBackupTarget: it works against any RemoteStorage now, so
+ * a name claiming WebDAV would be a lie the moment a Drive or Dropbox backend
+ * is passed in.
+ */
+export class RemoteBackupTarget implements BackupTarget {
   constructor(
-    private readonly client: WebDavClient,
+    private readonly storage: RemoteStorage,
     private readonly directory: string = PATHS.backups,
   ) {}
 
@@ -291,32 +298,32 @@ export class WebDavBackupTarget implements BackupTarget {
   }
 
   async list(): Promise<BackupEntry[]> {
-    const entries = await this.client.list(this.directory + "/");
+    const entries = await this.storage.list(this.directory + "/");
     const backups: BackupEntry[] = [];
     for (const entry of entries) {
       if (entry.isCollection) continue;
-      const name = this.client.relativePath(entry).split("/").pop();
+      const name = entry.path.split("/").pop();
       if (!name) continue;
       const createdAt = parseBackupFileName(name);
       if (createdAt === undefined) continue;
-      backups.push({ name, createdAt, size: entry.contentLength });
+      backups.push({ name, createdAt, size: entry.size });
     }
     return backups.sort((a, b) => b.createdAt - a.createdAt);
   }
 
   async read(name: string): Promise<Uint8Array> {
-    return await this.client.get(this.path(name));
+    return await this.storage.get(this.path(name));
   }
 
   async write(name: string, data: Uint8Array): Promise<void> {
-    await this.client.mkcolRecursive(this.directory + "/");
-    await this.client.put(this.path(name), data);
+    await this.storage.mkdirp(this.directory + "/");
+    await this.storage.putUpdate(this.path(name), data);
     // A backup that is not verifiably on the server is not a backup.
-    await this.client.verifyUpload(this.path(name), data.length);
+    await this.storage.verifyUpload(this.path(name), data.length);
   }
 
   async delete(name: string): Promise<void> {
-    await this.client.delete(this.path(name));
+    await this.storage.delete(this.path(name));
   }
 }
 

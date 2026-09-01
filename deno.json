@@ -8,11 +8,13 @@
   ],
   "workspace": [
     "./apps/desktop",
-    "./packages/sync-webdav"
+    "./packages/sync-webdav",
+    "./packages/sync-core"
   ],
   "imports": {
     "@notesnook/crypto": "./packages/crypto/src/index.ts",
     "@notesnook/sodium": "./packages/sodium/src/browser.ts",
+    "@notesnook/sync-core": "./packages/sync-core/src/index.ts",
     "@notesnook/sync-webdav": "./packages/sync-webdav/src/index.ts",
     "@std/assert": "jsr:@std/assert@^1.0.10",
     "@std/path": "jsr:@std/path@^1.0.8",
@@ -27,8 +29,8 @@
     "dev": "deno run -A apps/desktop/scripts/dev.ts",
     "fmt": "deno fmt",
     "lint": "deno lint",
-    "check": "deno check apps/desktop/main.ts packages/sync-webdav/src/index.ts",
-    "test": "deno test -A packages/sync-webdav/tests/ apps/desktop/tests/ --ignore=packages/sync-webdav/tests/integration",
+    "check": "deno check apps/desktop/main.ts packages/sync-webdav/src/index.ts packages/sync-core/src/index.ts",
+    "test": "deno test -A packages/sync-webdav/tests/ packages/sync-core/tests/ apps/desktop/tests/ --ignore=packages/sync-webdav/tests/integration",
     "test:webdav": "deno run -A packages/sync-webdav/tests/run-integration.ts",
     "test:ui": "deno run -A --node-modules-dir=auto npm:vitest@3.2.4 run --root apps/web",
     "bench": "deno run -A apps/desktop/scripts/benchmark.ts",
@@ -50,7 +52,7 @@
     "verify:no-electron": "deno run -A apps/desktop/scripts/verify-dependencies.ts",
     "build:native": "deno run -A apps/desktop/scripts/build-native.ts",
     "check:native": "deno run -A apps/desktop/scripts/build-native.ts --check",
-    "test:sync": "deno test -A packages/sync-webdav/tests/client_test.ts packages/sync-webdav/tests/sync_test.ts packages/sync-webdav/tests/backup_test.ts",
+    "test:sync": "deno test -A packages/sync-webdav/tests/client_test.ts packages/sync-webdav/tests/sync_test.ts packages/sync-webdav/tests/backup_test.ts packages/sync-core/tests/",
     "test:desktop": "deno test -A apps/desktop/tests/"
   },
   "fmt": {
@@ -60,7 +62,9 @@
       "apps/desktop/scripts",
       "apps/desktop/types",
       "packages/sync-webdav/src",
-      "packages/sync-webdav/tests"
+      "packages/sync-webdav/tests",
+      "packages/sync-core/src",
+      "packages/sync-core/tests"
     ],
     "exclude": [
       "apps/web/src/common/sqlite/*.js",
@@ -77,7 +81,9 @@
       "apps/desktop/src",
       "apps/desktop/scripts",
       "packages/sync-webdav/src",
-      "packages/sync-webdav/tests"
+      "packages/sync-webdav/tests",
+      "packages/sync-core/src",
+      "packages/sync-core/tests"
     ],
     "rules": {
       "tags": [

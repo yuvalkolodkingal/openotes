@@ -30,6 +30,7 @@ import {
   type SyncTrigger,
   toBasicAuth,
   WebDavClient,
+  WebDavRemoteStorage,
 } from "@notesnook/sync-webdav";
 import type { SerializedKey } from "@notesnook/crypto";
 import { join } from "@std/path";
@@ -185,7 +186,7 @@ export class SyncService {
     );
 
     const engine = new SyncEngine({
-      client,
+      storage: new WebDavRemoteStorage(client),
       crypto: this.crypto,
       store: this.options.store,
       queue: this.queue,
@@ -276,7 +277,7 @@ export class SyncService {
       );
 
       const probe = new SyncEngine({
-        client,
+        storage: new WebDavRemoteStorage(client),
         crypto: this.crypto,
         store: this.options.store,
         queue: new OutgoingQueue(

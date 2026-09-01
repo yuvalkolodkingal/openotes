@@ -25,10 +25,11 @@ import {
   type FileSystemAdapter,
   LocalBackupTarget,
   parseBackupFileName,
-  WebDavBackupTarget,
+  RemoteBackupTarget,
 } from "../src/backup.ts";
 import { SyncCrypto } from "../src/crypto.ts";
 import { WebDavClient } from "../src/client.ts";
+import { WebDavRemoteStorage } from "../src/webdav-storage.ts";
 import { FetchTransport } from "../src/http.ts";
 import { SyncError } from "../src/types.ts";
 import { FakeWebDavServer } from "./fake-server.ts";
@@ -228,7 +229,10 @@ Deno.test("full backup lifecycle: create, upload, wipe, download, restore", asyn
       allowInsecureHttp: true,
       delay: () => Promise.resolve(),
     });
-    const remote = new WebDavBackupTarget(client, "backups");
+    const remote = new RemoteBackupTarget(
+      new WebDavRemoteStorage(client),
+      "backups",
+    );
 
     // Create notes and attachments.
     const store = new MemorySyncStore("DEVICEA");
@@ -430,7 +434,10 @@ Deno.test("a WebDAV backup upload is verified before it counts", async () => {
       maxRetries: 0,
       delay: () => Promise.resolve(),
     });
-    const target = new WebDavBackupTarget(client, "backups");
+    const target = new RemoteBackupTarget(
+      new WebDavRemoteStorage(client),
+      "backups",
+    );
     const key = await backupKey();
     const { name, data } = await engineFor().create(key, {
       data: { items: [] },

@@ -30,10 +30,11 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 import { assert, assertEquals, assertRejects } from "@std/assert";
 import { WebDavClient } from "../../src/client.ts";
+import { WebDavRemoteStorage } from "../../src/webdav-storage.ts";
 import { FetchTransport, toBasicAuth } from "../../src/http.ts";
 import { SyncError } from "../../src/types.ts";
 import { SyncCrypto } from "../../src/crypto.ts";
-import { BackupEngine, WebDavBackupTarget } from "../../src/backup.ts";
+import { BackupEngine, RemoteBackupTarget } from "../../src/backup.ts";
 import {
   bytesEqual,
   createDevice,
@@ -338,7 +339,10 @@ Deno.test("real server: backup upload, download and restore", async () => {
       });
     }
 
-    const target = new WebDavBackupTarget(client, "backups");
+    const target = new RemoteBackupTarget(
+      new WebDavRemoteStorage(client),
+      "backups",
+    );
     const { name, data } = await engine.create(key, {
       data: store.snapshot(),
       counts: { note: 10 },

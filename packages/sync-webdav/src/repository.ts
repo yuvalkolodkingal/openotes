@@ -18,7 +18,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
 import { SerializedKey } from "@notesnook/crypto";
-import { WebDavClient } from "./client.ts";
+import { RemoteStorage } from "@notesnook/sync-core";
 import { SyncCrypto } from "./crypto.ts";
 import {
   ChangeBatchEnvelope,
@@ -99,13 +99,13 @@ export function assertSafeId(id: string): void {
 
 export class SyncRepository {
   constructor(
-    private readonly client: WebDavClient,
+    private readonly storage: RemoteStorage,
     private readonly crypto: SyncCrypto,
   ) {}
 
   /** Read protocol.json. Returns undefined when the remote is empty. */
   async readProtocol(): Promise<ProtocolMetadata | undefined> {
-    const raw = await this.client.getIfExists(PATHS.protocol);
+    const raw = await this.storage.getIfExists(PATHS.protocol);
     if (!raw) return undefined;
     let parsed: ProtocolMetadata;
     try {
@@ -149,10 +149,10 @@ export class SyncRepository {
     deviceId: string,
     generation: string,
   ): Promise<ProtocolMetadata> {
-    await this.client.mkcolRecursive(PATHS.devices + "/");
-    await this.client.mkcolRecursive(PATHS.objects + "/");
-    await this.client.mkcolRecursive(PATHS.attachments + "/");
-    await this.client.mkcolRecursive(PATHS.backups + "/");
+    await this.storage.mkdirp(PATHS.devices + "/");
+    await this.storage.mkdirp(PATHS.objects + "/");
+    await this.storage.mkdirp(PATHS.attachments + "/");
+    await this.storage.mkdirp(PATHS.backups + "/");
 
     const syncKey = await this.crypto.deriveSubkey(masterKey, "sync");
     const metadata: ProtocolMetadata = {
@@ -167,8 +167,7 @@ export class SyncRepository {
 
     const body = new TextEncoder().encode(JSON.stringify(metadata, null, 2));
     try {
-      await this.client.put(PATHS.protocol, body, {
-        ifNoneMatch: true,
+      await this.storage.putNew(PATHS.protocol, body, {
         contentType: "application/json",
       });
     } catch (e) {
@@ -182,7 +181,7 @@ export class SyncRepository {
       if (existing) return existing;
       throw e;
     }
-    await this.client.verifyUpload(PATHS.protocol, body.length);
+    await this.storage.verifyUpload(PATHS.protocol, body.length);
     return metadata;
   }
 
@@ -210,12 +209,11 @@ export class SyncRepository {
 
   /** List device ids present in the remote repository. */
   async listDevices(): Promise<string[]> {
-    const entries = await this.client.list(PATHS.devices + "/");
+    const entries = await this.storage.list(PATHS.devices + "/");
     const ids: string[] = [];
     for (const entry of entries) {
       if (!entry.isCollection) continue;
-      const relative = this.client.relativePath(entry);
-      const id = relative.split("/").filter(Boolean).pop();
+      const id = entry.path.split("/").filter(Boolean).pop();
       if (!id) continue;
       if (!/^[A-Za-z0-9_-]{1,128}$/.test(id)) continue;
       ids.push(id);
@@ -229,7 +227,7 @@ export class SyncRepository {
     info: { name: string; platform: string; appVersion: string },
   ): Promise<void> {
     const path = `${devicePath(deviceId)}/device.json`;
-    await this.client.mkcolRecursive(`${devicePath(deviceId)}/changes/`);
+    await this.storage.mkdirp(`${devicePath(deviceId)}/changes/`);
     const payload = JSON.stringify({
       id: deviceId,
       info: await this.crypto.encryptJson(syncKey, {
@@ -238,14 +236,16 @@ export class SyncRepository {
       }),
     });
     const body = new TextEncoder().encode(payload);
-    await this.client.put(path, body, { contentType: "application/json" });
+    await this.storage.putUpdate(path, body, undefined, {
+      contentType: "application/json",
+    });
   }
 
   async readDeviceInfo(
     syncKey: SerializedKey,
     deviceId: string,
   ): Promise<{ name: string; platform: string } | undefined> {
-    const raw = await this.client.getIfExists(
+    const raw = await this.storage.getIfExists(
       `${devicePath(deviceId)}/device.json`,
     );
     if (!raw) return undefined;
@@ -259,13 +259,13 @@ export class SyncRepository {
 
   /** Sequence numbers present in a device's journal, ascending. */
   async listSequences(deviceId: string): Promise<number[]> {
-    const entries = await this.client.list(
+    const entries = await this.storage.list(
       `${devicePath(deviceId)}/changes/`,
     );
     const sequences: number[] = [];
     for (const entry of entries) {
       if (entry.isCollection) continue;
-      const name = this.client.relativePath(entry).split("/").pop();
+      const name = entry.path.split("/").pop();
       if (!name) continue;
       const sequence = parseSequenceFileName(name);
       if (sequence !== undefined) sequences.push(sequence);
@@ -277,16 +277,18 @@ export class SyncRepository {
    * Append one immutable batch to this device's journal.
    *
    * Journal entries are immutable, so overwriting one would destroy records
-   * another run already published. Two defences, because servers differ:
+   * another run already published. `putNew` is the create-if-absent primitive
+   * that guarantees this, and each backend implements it with the strongest
+   * mechanism it has — for WebDAV that is an existence probe plus
+   * `If-None-Match`, because some servers accept the header and ignore it
+   * (see WebDavRemoteStorage.putNew).
    *
-   *  1. If-None-Match, which a conforming server answers with 412; and
-   *  2. an explicit existence check first, because some servers (dufs, for
-   *     one) accept the header and ignore it — verified against real
-   *     servers in the integration suite. Without this check those servers
-   *     would silently clobber the entry.
+   * However the backend enforces it, a loser sees "precondition-failed" and
+   * the caller advances to the next free sequence.
    *
-   * Both report the same "precondition-failed" so the caller can advance to
-   * the next free sequence either way.
+   * Backends that cannot enforce it report `atomicCreate: false` from
+   * `capabilities()`; on those the immutability guarantee is best-effort and
+   * a racing writer is resolved with a conflict copy instead.
    */
   async writeBatch(
     syncKey: SerializedKey,
@@ -296,14 +298,6 @@ export class SyncRepository {
   ): Promise<void> {
     const path = changePath(deviceId, sequence);
 
-    if (await this.client.exists(path)) {
-      throw new SyncError(
-        `Journal entry ${deviceId}/${sequence} already exists on the server`,
-        "precondition-failed",
-        412,
-      );
-    }
-
     const envelope: ChangeBatchEnvelope = {
       protocolVersion: PROTOCOL_VERSION,
       deviceId,
@@ -311,9 +305,9 @@ export class SyncRepository {
       cipher: await this.crypto.encryptJson(syncKey, records),
     };
     const body = new TextEncoder().encode(JSON.stringify(envelope));
-    await this.client.put(path, body, { ifNoneMatch: true });
+    await this.storage.putNew(path, body);
     // Verify the remote object before the caller marks anything synced.
-    await this.client.verifyUpload(path, body.length);
+    await this.storage.verifyUpload(path, body.length);
   }
 
   async readBatch(
@@ -321,7 +315,7 @@ export class SyncRepository {
     deviceId: string,
     sequence: number,
   ): Promise<SyncRecord[]> {
-    const raw = await this.client.get(changePath(deviceId, sequence));
+    const raw = await this.storage.get(changePath(deviceId, sequence));
     let envelope: ChangeBatchEnvelope;
     try {
       envelope = JSON.parse(new TextDecoder().decode(raw));
@@ -365,11 +359,11 @@ export class SyncRepository {
   ): Promise<string> {
     const hash = await this.crypto.contentAddress(syncKey, data);
     const path = objectPath(hash);
-    if (await this.client.exists(path)) return hash; // deduplicated
+    if (await this.storage.exists(path)) return hash; // deduplicated
     const cipher = await this.crypto.encryptBytes(syncKey, data);
     const body = new TextEncoder().encode(JSON.stringify(cipher));
-    await this.client.put(path, body);
-    await this.client.verifyUpload(path, body.length);
+    await this.storage.putUpdate(path, body);
+    await this.storage.verifyUpload(path, body.length);
     return hash;
   }
 
@@ -377,7 +371,7 @@ export class SyncRepository {
     syncKey: SerializedKey,
     hash: string,
   ): Promise<Uint8Array> {
-    const raw = await this.client.get(objectPath(hash));
+    const raw = await this.storage.get(objectPath(hash));
     const cipher = JSON.parse(new TextDecoder().decode(raw));
     const data = await this.crypto.decryptBytes(syncKey, cipher);
     const actual = await this.crypto.contentAddress(syncKey, data);

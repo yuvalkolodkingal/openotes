@@ -17,14 +17,14 @@ You should have received a copy of the GNU General Public License
 along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
-export * from "./types.ts";
-export * from "./http.ts";
-export * from "./xml.ts";
-export * from "./client.ts";
-export * from "./webdav-storage.ts";
-export * from "./crypto.ts";
-export * from "./conflicts.ts";
-export * from "./repository.ts";
-export * from "./queue.ts";
-export * from "./engine.ts";
-export * from "./backup.ts";
+/**
+ * Transport-agnostic pieces shared by every synchronization backend.
+ *
+ * Nothing here knows about WebDAV, OAuth, SQLite or Notesnook's schema. A new
+ * provider implements `RemoteStorage` (and optionally `DeltaSource`) and works
+ * with any engine built on this package.
+ */
+
+export * from "./errors.ts";
+export * from "./remote.ts";
+export * from "./prefixed.ts";
