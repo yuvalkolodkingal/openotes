@@ -28,3 +28,7 @@ export * from "./types.ts";
 export * from "./resolve.ts";
 export * from "./manifest.ts";
 export * from "./engine.ts";
+export * from "./providers/auth.ts";
+export * from "./providers/dropbox.ts";
+export * from "./providers/onedrive.ts";
+export * from "./providers/gdrive.ts";
