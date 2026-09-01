@@ -18,15 +18,13 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
 /**
- * Transport-agnostic pieces shared by every synchronization backend.
+ * One readable Markdown file per note, synchronized against any RemoteStorage.
  *
- * Nothing here knows about WebDAV, OAuth, SQLite or Notesnook's schema. A new
- * provider implements `RemoteStorage` (and optionally `DeltaSource`) and works
- * with any engine built on this package.
+ * See types.ts for how this differs from the append-only journal engine in
+ * @notesnook/sync-webdav, and why both exist.
  */
 
-export * from "./errors.ts";
-export * from "./conflicts.ts";
-export * from "./store.ts";
-export * from "./remote.ts";
-export * from "./prefixed.ts";
+export * from "./types.ts";
+export * from "./resolve.ts";
+export * from "./manifest.ts";
+export * from "./engine.ts";

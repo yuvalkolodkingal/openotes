@@ -17,7 +17,12 @@ You should have received a copy of the GNU General Public License
 along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
+import { ConflictDecision } from "@notesnook/sync-core";
 import { SyncRecord } from "./types.ts";
+
+// The decision union and the conflict-copy title are shared with the file
+// engine; only the revision-based *detection* below is specific to journals.
+export { type ConflictDecision, conflictTitle } from "@notesnook/sync-core";
 
 /**
  * Conflict policy (spec §22). The single rule that outranks everything else
@@ -38,13 +43,6 @@ export interface LocalItemState {
   /** Content fingerprint used to detect "same edit applied twice". */
   contentHash?: string;
 }
-
-export type ConflictDecision =
-  | { action: "apply-remote" }
-  | { action: "keep-local" }
-  | { action: "apply-tombstone" }
-  | { action: "ignore-stale-resurrect" }
-  | { action: "create-conflict-copy"; reason: string };
 
 /**
  * Decide what to do with one incoming remote record given local state.
@@ -156,17 +154,4 @@ export function stableStringify(
     return out;
   };
   return JSON.stringify(walk(value));
-}
-
-/**
- * Title for a conflict copy, e.g.
- *   "Shopping List — Conflict from Laptop (2026-08-31)"
- */
-export function conflictTitle(
-  originalTitle: string,
-  deviceName: string,
-  timestamp: number,
-): string {
-  const date = new Date(timestamp).toISOString().slice(0, 10);
-  return `${originalTitle} — Conflict from ${deviceName} (${date})`;
 }
