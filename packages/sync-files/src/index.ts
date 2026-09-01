@@ -26,6 +26,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 export * from "./types.ts";
 export * from "./resolve.ts";
+export * from "./codec.ts";
 export * from "./manifest.ts";
 export * from "./engine.ts";
 export * from "./providers/auth.ts";

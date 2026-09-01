@@ -23,6 +23,7 @@ import {
   type RemoteStorage,
   SyncError,
 } from "@notesnook/sync-core";
+import { type NoteCodec, PlaintextCodec } from "./codec.ts";
 import { ManifestStore } from "./manifest.ts";
 import { type FileSyncAction, resolveFileSync } from "./resolve.ts";
 import type {
@@ -38,6 +39,11 @@ const RESERVED_PREFIX = ".openotes";
 export interface FileSyncOptions {
   storage: RemoteStorage;
   manifest: ManifestStore;
+  /**
+   * How notes are written. Defaults to readable Markdown; an EncryptedCodec
+   * makes the same protocol write opaque bytes under digest filenames.
+   */
+  codec?: NoteCodec;
   deviceName?: string;
   /** Called for each conflict so the interface can tell the user. */
   onConflict?: (info: ConflictInfo) => void;
@@ -77,7 +83,11 @@ export interface FileSyncResult {
  * decision of what to do — nothing about Markdown or Notesnook's schema.
  */
 export class FileSyncEngine {
-  constructor(private readonly options: FileSyncOptions) {}
+  private readonly codec: NoteCodec;
+
+  constructor(private readonly options: FileSyncOptions) {
+    this.codec = options.codec ?? new PlaintextCodec();
+  }
 
   private get log() {
     return this.options.logger ?? { info: () => {}, warn: () => {} };
@@ -147,11 +157,17 @@ export class FileSyncEngine {
       // conditioned on the action -- meant a pure rename compared equal,
       // decided "none", and then deleted the old file without ever writing
       // the new one.
+      // Only the readable codec derives a path from the title, so only it can
+      // need a rename. Encrypted names are keyed on the note id and never move.
+      const wantedPath = localNote
+        ? await this.targetPath(noteId, localNote.path)
+        : undefined;
       if (
-        base && localNote && remoteEntry && base.remotePath !== localNote.path
+        base && localNote && remoteEntry && wantedPath &&
+        base.remotePath !== wantedPath
       ) {
         const previousPath = remoteEntry.path;
-        remoteEntry = await this.relocate(remoteEntry, localNote.path, base);
+        remoteEntry = await this.relocate(remoteEntry, wantedPath, base);
         remote.delete(previousPath);
         // The file no longer lives at the old path, so it must not be left in
         // the unmatched set — adopting it would mean reading a file we just
@@ -182,8 +198,8 @@ export class FileSyncEngine {
 
     // Files in the folder that belong to no note we know about.
     for (const entry of unmatched.values()) {
-      const bytes = await storage.get(entry.path);
-      result.incoming.push({ path: entry.path, content: bytes });
+      const decoded = await this.readNote(entry.path);
+      result.incoming.push({ path: decoded.path, content: decoded.content });
       result.pulled++;
       this.log.info("Adopting a file that is not yet a note", {
         path: entry.path,
@@ -211,11 +227,29 @@ export class FileSyncEngine {
       base?.baseRemoteVersion !== undefined;
     if (base && canCompareVersions) return { version: entry.version };
 
-    const bytes = await this.options.storage.get(entry.path);
-    return { version: entry.version, hash: contentHashOfBytes(bytes) };
+    // Hash the note, not the stored bytes: encryption is randomised, so
+    // ciphertext hashes would never match and every file would look changed.
+    const decoded = await this.readNote(entry.path);
+    return {
+      version: entry.version,
+      hash: contentHashOfBytes(decoded.content),
+    };
   }
 
-  /** Every `.md` file in the folder, keyed by path, excluding our own state. */
+  /** The remote path a note's bytes occupy under the current codec. */
+  private targetPath(noteId: string, logicalPath: string): Promise<string> {
+    return this.codec.remotePath(noteId, logicalPath);
+  }
+
+  /** Read a note's bytes back as its logical path and content. */
+  private async readNote(
+    remotePath: string,
+  ): Promise<{ path: string; content: Uint8Array }> {
+    const stored = await this.options.storage.get(remotePath);
+    return await this.codec.decode(remotePath, stored);
+  }
+
+  /** Every file in the folder this codec claims, excluding our own state. */
   private async listNotes(): Promise<Map<string, RemoteEntry>> {
     const out = new Map<string, RemoteEntry>();
     const walk = async (prefix: string) => {
@@ -226,7 +260,7 @@ export class FileSyncEngine {
           await walk(entry.path + "/");
           continue;
         }
-        if (!entry.path.endsWith(".md")) continue;
+        if (!this.codec.claims(entry.path)) continue;
         out.set(entry.path, entry);
       }
     };
@@ -255,22 +289,28 @@ export class FileSyncEngine {
       case "create":
       case "push": {
         if (!localNote) return;
-        const target = localNote.path;
+        const target = await this.targetPath(noteId, localNote.path);
+        const stored = await this.codec.encode(
+          localNote.path,
+          localNote.content,
+        );
         const written = action.action === "create"
-          ? await this.createOrAdopt(target, localNote.content)
+          ? await this.createOrAdopt(target, stored)
           : await storage.putUpdate(
             target,
-            localNote.content,
+            stored,
             // Only assert a version when the backend gave us one to assert.
             base?.baseRemoteVersion,
           );
-        await storage.verifyUpload(target, localNote.content.length);
+        await storage.verifyUpload(target, stored.length);
         await manifest.record({
           noteId,
           remotePath: target,
-          remoteId: written.path === target ? written.path : undefined,
           baseHash: contentHashOfBytes(localNote.content),
           baseRemoteVersion: written.version,
+          // Hashes describe the *note*, not the stored bytes, because
+          // encryption is randomised: the same note encrypts differently every
+          // time, so hashing ciphertext would report every note as changed.
           baseRemoteHash: contentHashOfBytes(localNote.content),
           lastSyncedAt: Date.now(),
         });
@@ -344,33 +384,30 @@ export class FileSyncEngine {
 
     let conflictPath = "";
     if (remoteEntry) {
-      const bytes = await storage.get(remoteEntry.path);
-      conflictPath = conflictFileName(
-        remoteEntry.path,
-        this.options.deviceName,
-      );
+      const decoded = await this.readNote(remoteEntry.path);
+      conflictPath = conflictFileName(decoded.path, this.options.deviceName);
+      const stored = await this.codec.encode(conflictPath, decoded.content);
       await storage.mkdirp(CONFLICTS_DIR + "/");
-      await storage.putUpdate(conflictPath, bytes);
-      await storage.verifyUpload(conflictPath, bytes.length);
+      await storage.putUpdate(conflictPath, stored);
+      await storage.verifyUpload(conflictPath, stored.length);
       // The copy is on the server before anything is overwritten. Surfacing it
       // to the renderer too means the user sees it as a note, not only as a
       // file they would have to go looking for.
       result.incoming.push({
         path: conflictPath,
-        content: bytes,
+        content: decoded.content,
         conflictOf: noteId,
       });
     }
 
     if (localNote) {
-      const written = await storage.putUpdate(
-        localNote.path,
-        localNote.content,
-      );
-      await storage.verifyUpload(localNote.path, localNote.content.length);
+      const target = await this.targetPath(noteId, localNote.path);
+      const stored = await this.codec.encode(localNote.path, localNote.content);
+      const written = await storage.putUpdate(target, stored);
+      await storage.verifyUpload(target, stored.length);
       await manifest.record({
         noteId,
-        remotePath: localNote.path,
+        remotePath: target,
         baseHash: contentHashOfBytes(localNote.content),
         baseRemoteVersion: written.version,
         baseRemoteHash: contentHashOfBytes(localNote.content),
