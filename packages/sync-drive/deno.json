@@ -1,0 +1,11 @@
+{
+  "name": "@notesnook/sync-drive",
+  "version": "2.1.0",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "imports": {
+    "@notesnook/sync-remote": "../sync-remote/src/index.ts",
+    "@std/encoding": "jsr:@std/encoding@^1.0.7"
+  }
+}

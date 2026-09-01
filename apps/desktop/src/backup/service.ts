@@ -23,14 +23,10 @@ import {
   type BackupManifest,
   type BackupSnapshot,
   type BackupTarget,
-  FetchTransport,
   type FileSystemAdapter,
   LocalBackupTarget,
   RemoteBackupTarget,
   SyncCrypto,
-  toBasicAuth,
-  WebDavClient,
-  webDavStore,
 } from "@notesnook/sync-remote";
 import type { SerializedKey } from "@notesnook/crypto";
 import { join } from "@std/path";
@@ -39,6 +35,11 @@ import { logger } from "../native/logger.ts";
 import { APP_NAME, APP_VERSION } from "../constants.ts";
 import type { SettingsStore } from "../native/settings.ts";
 import type { CredentialStore } from "../security/credentials.ts";
+import {
+  buildRemoteStore,
+  missingConfiguration,
+  providerNeedsSecret,
+} from "../sync/provider.ts";
 import type { AttachmentChunkStore } from "../native/attachment-store.ts";
 import type { SqliteService } from "../native/sqlite.ts";
 import type { DatabaseSyncStore } from "../sync/store-adapter.ts";
@@ -182,30 +183,29 @@ export class BackupService {
     return new LocalBackupTarget(denoFs, directory);
   }
 
-  private async webdavTarget(): Promise<BackupTarget | undefined> {
+  /**
+   * Backups go to the same place notes sync to, whatever provider that is —
+   * a WebDAV server, a folder a drive client keeps in step, or a drive API.
+   */
+  private async remoteTarget(): Promise<BackupTarget | undefined> {
     const backup = this.options.settings.get("backup");
     const webdav = this.options.settings.get("webdav");
-    if (!backup.webdavEnabled || !webdav.serverUrl || !webdav.username) {
+    if (!backup.webdavEnabled || missingConfiguration(webdav)) {
       return undefined;
     }
-    const password = await this.options.credentials.get("webdav.password");
-    if (!password) {
+    const password = providerNeedsSecret(webdav.provider)
+      ? await this.options.credentials.get("webdav.password")
+      : undefined;
+    if (providerNeedsSecret(webdav.provider) && !password) {
       throw new Error(
         "The WebDAV password is not available; unlock the vault to run a " +
           "remote backup.",
       );
     }
-    const transport = new FetchTransport({
-      getBasicAuth: () =>
-        Promise.resolve(toBasicAuth(webdav.username, password)),
-    });
-    const client = new WebDavClient(transport, {
-      baseUrl: joinUrl(webdav.serverUrl, webdav.directory),
-      requestTimeout: webdav.timeoutSeconds * 1000,
-      maxRetries: webdav.maxRetries,
-      allowInsecureHttp: webdav.allowInsecureHttp,
-    });
-    return new RemoteBackupTarget(webDavStore(client), backup.webdavDirectory);
+    return new RemoteBackupTarget(
+      buildRemoteStore({ config: webdav, secret: password }),
+      backup.webdavDirectory,
+    );
   }
 
   /** Create a backup and write it to every enabled target. */
@@ -237,7 +237,7 @@ export class BackupService {
       try {
         const target = which === "local"
           ? this.localTarget()
-          : await this.webdavTarget();
+          : await this.remoteTarget();
         if (!target) continue;
         await target.write(name, data);
         if (settings.retention > 0) {
@@ -307,7 +307,7 @@ export class BackupService {
   ): Promise<BackupEntry[]> {
     const target = which === "local"
       ? this.localTarget()
-      : await this.webdavTarget();
+      : await this.remoteTarget();
     if (!target) return [];
     return await target.list();
   }
@@ -347,7 +347,7 @@ export class BackupService {
     } else {
       const target = which === "local"
         ? this.localTarget()
-        : await this.webdavTarget();
+        : await this.remoteTarget();
       if (!target) {
         throw new Error(`The ${which} backup location is not configured`);
       }
@@ -453,15 +453,4 @@ export class BackupService {
     });
     return { counts, safetyBackup };
   }
-}
-
-function joinUrl(base: string, directory: string): string {
-  let url = base.trim();
-  if (!url.endsWith("/")) url += "/";
-  const clean = directory
-    .split("/")
-    .filter((part) => part.length > 0 && part !== "." && part !== "..")
-    .map(encodeURIComponent)
-    .join("/");
-  return clean ? `${url}${clean}/` : url;
 }

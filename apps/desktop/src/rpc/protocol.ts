@@ -169,6 +169,7 @@ export const PROCEDURE_NAMES = [
   "webdav.rebuildRemote",
   "webdav.setPassphrase",
   "webdav.fetchAttachment",
+  "webdav.selectFolder",
 
   // --- backup engine (new in this fork) ---
   "backup.getSettings",

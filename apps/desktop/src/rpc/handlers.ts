@@ -39,6 +39,7 @@ import {
   isSnap,
 } from "../native/paths.ts";
 import { PathAccessError } from "../native/paths.ts";
+import type { SyncProvider } from "../native/settings.ts";
 
 const log = logger.scope("rpc");
 
@@ -440,22 +441,56 @@ export function createHandlers(): Record<string, Handler> {
 
     "webdav.setConfig": async (input, context) => {
       const current = context.settings.get("webdav");
+      const provider = asProvider(input?.provider) ?? current.provider;
       const serverUrl = optionalString(input?.serverUrl) ?? current.serverUrl;
-      if (serverUrl && !/^https?:\/\//i.test(serverUrl)) {
-        throw new Error("The server URL must start with https:// or http://");
+      // Only checked for the provider that uses it: switching to a folder
+      // must not be blocked by a server URL left over from before.
+      if (provider === "webdav") {
+        if (serverUrl && !/^https?:\/\//i.test(serverUrl)) {
+          throw new Error(
+            "The server URL must start with https:// or http://",
+          );
+        }
+        if (
+          serverUrl.startsWith("http://") &&
+          !(input?.allowInsecureHttp ?? current.allowInsecureHttp)
+        ) {
+          throw new Error(
+            "Plain HTTP is disabled. Use https://, or explicitly enable " +
+              "insecure connections for a trusted local network.",
+          );
+        }
       }
-      if (
-        serverUrl.startsWith("http://") &&
-        !(input?.allowInsecureHttp ?? current.allowInsecureHttp)
-      ) {
-        throw new Error(
-          "Plain HTTP is disabled. Use https://, or explicitly enable " +
-            "insecure connections for a trusted local network.",
-        );
+      const folderPath = optionalString(input?.folderPath) ??
+        current.folderPath;
+      if (provider === "folder" && folderPath) {
+        // A folder that is not there yet is fine — the store creates it —
+        // but one whose parent is missing is a stale mount point, and
+        // syncing into it would quietly write to the mount point itself.
+        const parent = folderPath.replace(/[\\/]+[^\\/]+[\\/]*$/, "");
+        if (parent && parent !== folderPath) {
+          try {
+            const info = await Deno.stat(parent);
+            if (!info.isDirectory) throw new Error("not a directory");
+          } catch {
+            throw new Error(
+              `${parent} is not there. Choose a folder inside a drive that ` +
+                `is currently mounted.`,
+            );
+          }
+        }
       }
       await context.settings.patchWebDav({
         enabled: boolOr(input?.enabled, current.enabled),
+        provider,
         serverUrl,
+        folderPath,
+        folderConsistency: input?.folderConsistency === "immediate"
+          ? "immediate"
+          : input?.folderConsistency === "eventual"
+          ? "eventual"
+          : current.folderConsistency,
+        clientId: optionalString(input?.clientId) ?? current.clientId,
         username: optionalString(input?.username) ?? current.username,
         directory: optionalString(input?.directory) ?? current.directory,
         intervalMinutes: clampInt(
@@ -650,6 +685,14 @@ export function createHandlers(): Record<string, Handler> {
 
     // ---------------- the assistant endpoint (MCP) ----------------
 
+    /** The native folder picker, for the "folder" sync provider. */
+    "webdav.selectFolder": async (_input, context) => {
+      const picked = await context.dialogs.selectDirectory({
+        title: "Choose the folder to synchronize through",
+      });
+      return picked ?? null;
+    },
+
     "mcp.getSettings": (_input, context) => context.settings.get("mcp"),
 
     "mcp.setSettings": async (input, context) => {
@@ -712,6 +755,17 @@ export function createHandlers(): Record<string, Handler> {
       return context.mcp.status();
     },
   };
+}
+
+function asProvider(value: unknown): SyncProvider | undefined {
+  const providers: SyncProvider[] = [
+    "webdav",
+    "folder",
+    "googledrive",
+    "onedrive",
+    "dropbox",
+  ];
+  return providers.find((provider) => provider === value);
 }
 
 /**

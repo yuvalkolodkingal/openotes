@@ -64,10 +64,24 @@ export type WebDavSyncStatus =
  * `hasPassword` flag the handler adds. The password itself is never sent to
  * the renderer, so there is no field for it.
  */
+export type SyncProvider =
+  | "webdav"
+  | "folder"
+  | "googledrive"
+  | "onedrive"
+  | "dropbox";
+
 export type WebDavConfig = {
   enabled: boolean;
+  provider: SyncProvider;
   serverUrl: string;
   username: string;
+  /** The folder provider's directory on this machine. */
+  folderPath: string;
+  folderConsistency: "immediate" | "eventual";
+  /** A drive provider's OAuth client id, which the user registers. */
+  clientId: string;
+  connected: boolean;
   directory: string;
   intervalMinutes: number;
   syncOnStartup: boolean;

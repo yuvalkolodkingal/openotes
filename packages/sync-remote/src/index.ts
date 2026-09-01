@@ -23,6 +23,7 @@ export * from "./http.ts";
 export * from "./xml.ts";
 export * from "./client.ts";
 export * from "./webdav-store.ts";
+export * from "./folder-store.ts";
 export * from "./crypto.ts";
 export * from "./conflicts.ts";
 export * from "./repository.ts";

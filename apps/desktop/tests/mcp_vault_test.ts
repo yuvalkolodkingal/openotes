@@ -242,6 +242,14 @@ Deno.test({
         [note.id],
       );
 
+      // A token too short for the trigram index still has to find the note.
+      repository.createNote({ title: "Q3 plan", content: "AI things" });
+      assertEquals(repository.searchNotes("Q3").length, 1);
+      assertEquals(repository.searchNotes("AI").length, 1);
+      assertEquals(repository.searchNotes("zz").length, 0);
+      // A LIKE metacharacter is matched literally, not as a wildcard.
+      assertEquals(repository.searchNotes("%").length, 0);
+
       // ...and an edit re-indexes it.
       repository.updateNote({ id: note.id, content: "Revenue fell." });
       assertEquals(repository.searchNotes("twelve"), []);
@@ -355,6 +363,16 @@ Deno.test({
       assertEquals(repository.listNotes({ notebookId: notebook.id }).length, 1);
       assertEquals(repository.listNotes({ tag: "daily" }).length, 1);
       assertEquals(repository.listNotes({ tag: "nope" }).length, 0);
+
+      // Core matches tag titles COLLATE BINARY, so a different case is a
+      // different tag. Matching case-insensitively here would attach the
+      // note to the existing "team" and silently rename it on the next sync.
+      repository.setTags(note.id, ["daily", "team", "Team"]);
+      assertEquals(repository.listTags().length, 3);
+      assertEquals(
+        repository.listTags().map((t) => t.title).sort(),
+        ["Team", "daily", "team"],
+      );
     }),
 });
 

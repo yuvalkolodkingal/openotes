@@ -36,7 +36,13 @@ import type { SerializedKey } from "@notesnook/crypto";
 import { join } from "@std/path";
 import { appDataDir, ensureDir } from "../native/paths.ts";
 import { logger } from "../native/logger.ts";
-import { USER_AGENT } from "../constants.ts";
+import { APP_VERSION } from "../constants.ts";
+import {
+  buildRemoteStore,
+  joinUrl,
+  missingConfiguration,
+  providerNeedsSecret,
+} from "./provider.ts";
 import type { SettingsStore } from "../native/settings.ts";
 import type { CredentialStore } from "../security/credentials.ts";
 import type { AttachmentChunkStore } from "../native/attachment-store.ts";
@@ -129,15 +135,17 @@ export class SyncService {
    */
   private async buildEngine(): Promise<SyncEngine | undefined> {
     const config = this.options.settings.get("webdav");
-    if (!config.enabled || !config.serverUrl || !config.username) {
+    if (!config.enabled || missingConfiguration(config)) {
       this.setStatus({ type: "disabled" });
       return undefined;
     }
 
-    const password = await this.options.credentials
-      .get(CREDENTIAL_KEY_PASSWORD)
-      .catch(() => undefined);
-    if (!password) {
+    const password = providerNeedsSecret(config.provider)
+      ? await this.options.credentials
+        .get(CREDENTIAL_KEY_PASSWORD)
+        .catch(() => undefined)
+      : undefined;
+    if (providerNeedsSecret(config.provider) && !password) {
       throw new SyncError(
         "The WebDAV password is not available. Unlock the vault, or " +
           "re-enter the password in Settings → Synchronization.",
@@ -156,22 +164,7 @@ export class SyncService {
       );
     }
 
-    const transport = new FetchTransport({
-      getBasicAuth: () =>
-        Promise.resolve(toBasicAuth(config.username, password)),
-    }, (input, init) => {
-      const headers = new Headers(init?.headers);
-      headers.set("user-agent", USER_AGENT);
-      return fetch(input, { ...init, headers });
-    });
-
-    const baseUrl = joinUrl(config.serverUrl, config.directory);
-    const client = new WebDavClient(transport, {
-      baseUrl,
-      requestTimeout: config.timeoutSeconds * 1000,
-      maxRetries: config.maxRetries,
-      allowInsecureHttp: config.allowInsecureHttp,
-    });
+    const remote = buildRemoteStore({ config, secret: password });
 
     // The salt lives in the remote protocol.json so a second device with
     // the same passphrase derives the same keys. On a fresh repository we
@@ -186,7 +179,7 @@ export class SyncService {
     );
 
     const engine = new SyncEngine({
-      remote: webDavStore(client),
+      remote,
       crypto: this.crypto,
       store: this.options.store,
       queue: this.queue,
@@ -194,7 +187,7 @@ export class SyncService {
       attachments: new DiskAttachments(this.options.files),
       syncAttachments: config.syncAttachments,
       deviceName: this.options.settings.get("sync").deviceName ?? hostName(),
-      appVersion: "1.0.0",
+      appVersion: APP_VERSION,
       platform: Deno.build.os,
       onStatus: (status) => this.setStatus(status),
       onConflict: (record) =>
@@ -446,17 +439,6 @@ export function describeError(error: unknown): string {
   if (error instanceof SyncError) return error.message;
   if (error instanceof Error) return error.message;
   return String(error);
-}
-
-function joinUrl(base: string, directory: string): string {
-  let url = base.trim();
-  if (!url.endsWith("/")) url += "/";
-  const clean = directory
-    .split("/")
-    .filter((part) => part.length > 0 && part !== "." && part !== "..")
-    .map(encodeURIComponent)
-    .join("/");
-  return clean ? `${url}${clean}/` : url;
 }
 
 function hostName(): string {

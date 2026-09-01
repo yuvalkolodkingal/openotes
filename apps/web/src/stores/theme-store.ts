@@ -20,6 +20,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 import createStore from "../common/store";
 import BaseStore from "./index";
 import Config from "../utils/config";
+import { storedTheme } from "../common/default-theme";
 import { desktop } from "../common/desktop-bridge";
 import { ThemeDark, ThemeDefinition, ThemeLight } from "@notesnook/theme";
 
@@ -89,9 +90,7 @@ function getKey(theme: ThemeDefinition) {
 }
 
 function getTheme(colorScheme: ColorScheme) {
-  return colorScheme === "dark"
-    ? Config.get("theme:dark", ThemeDark)
-    : Config.get("theme:light", ThemeLight);
+  return storedTheme(colorScheme);
 }
 
 function changeDesktopTheme(theme: ThemeDefinition, system: boolean) {

@@ -253,6 +253,26 @@ export class NoteRepository {
       );
     }
 
+    // The FTS5 tables are trigram-tokenized, so a token shorter than three
+    // characters matches nothing at all — "AI" or "Q3" would silently return
+    // no results rather than the notes that plainly contain them. Fall back
+    // to a scan for those, bounded by the same limit.
+    if (!ids.size) {
+      for (
+        const row of this.query(
+          `SELECT n.id FROM notes n
+             LEFT JOIN content c ON c.noteId = n.id AND c.deleted IS NOT 1
+            WHERE n.type = 'note' AND n.deleted IS NOT 1
+              AND (n.title LIKE ? ESCAPE '\\'
+                   OR (c.locked IS NOT 1 AND c.data LIKE ? ESCAPE '\\'))
+            ORDER BY n.dateEdited DESC LIMIT ?`,
+          [likePattern(query), likePattern(query), capped],
+        )
+      ) {
+        if (typeof row.id === "string") ids.add(row.id);
+      }
+    }
+
     if (!ids.size) return [];
     const list = [...ids].slice(0, capped);
     const rows = this.query(
@@ -454,6 +474,7 @@ export class NoteRepository {
           `UPDATE notes SET headline = ?, dateEdited = ? WHERE id = ?`,
           [headlineOf(html), now, input.id],
         );
+        this.syncAttachmentLinks(input.id, current, html, now);
       }
 
       const sets: string[] = ["dateModified = ?", "synced = 0"];
@@ -609,10 +630,16 @@ export class NoteRepository {
   }
 
   private linkTag(noteId: string, title: string, now: number) {
-    const clean = title.trim();
+    // Core trims each line of a tag title and then matches COLLATE BINARY
+    // (collections/tags.ts). The column is NOCASE, so a plain `=` here would
+    // reuse "Work" for "work" and quietly rename the user's tag on the next
+    // sync. Match core exactly instead.
+    const clean = title.split("\n").map((line) => line.trim()).join("\n")
+      .trim();
     if (!clean) return;
     const [existing] = this.query(
-      `SELECT id FROM tags WHERE title = ? AND type = 'tag' AND deleted IS NOT 1`,
+      `SELECT id FROM tags WHERE title = ? COLLATE BINARY AND type = 'tag'
+         AND deleted IS NOT 1`,
       [clean],
     );
     let tagId = existing?.id === undefined ? undefined : String(existing.id);
@@ -625,6 +652,57 @@ export class NoteRepository {
       );
     }
     this.relate("tag", tagId, "note", noteId, now);
+  }
+
+  /**
+   * Keep `note -> attachment` relations in step with the body.
+   *
+   * @notesnook/core does this on every content write (collections/content.ts
+   * processLinkedAttachments): the relations are what the attachment manager
+   * counts references with, so a body that loses its last reference to a file
+   * has to lose the relation too, or the file is never collectable. Writing
+   * content.data directly means doing it here.
+   *
+   * Markdown cannot express an attachment, so this only ever has anything to
+   * do when the caller wrote HTML or removed something that was there.
+   */
+  private syncAttachmentLinks(
+    noteId: string,
+    before: string,
+    after: string,
+    now: number,
+  ) {
+    const previous = attachmentHashes(before);
+    const current = attachmentHashes(after);
+    if (previous.size === 0 && current.size === 0) return;
+
+    for (const hash of previous) {
+      if (current.has(hash)) continue;
+      const [attachment] = this.query(
+        `SELECT id FROM attachments WHERE hash = ? AND deleted IS NOT 1`,
+        [hash],
+      );
+      if (!attachment) continue;
+      this.query(
+        `UPDATE relations SET deleted = 1, dateModified = ?, synced = 0
+           WHERE fromType = 'note' AND fromId = ? AND toType = 'attachment'
+             AND toId = ? AND deleted IS NOT 1`,
+        [now, noteId, String(attachment.id)],
+      );
+    }
+
+    for (const hash of current) {
+      if (previous.has(hash)) continue;
+      const [attachment] = this.query(
+        `SELECT id FROM attachments WHERE hash = ? AND deleted IS NOT 1`,
+        [hash],
+      );
+      // An unknown hash means the caller pasted markup referring to a file
+      // this vault does not hold. There is nothing to relate it to, and
+      // inventing an attachment row would be worse than leaving it inert.
+      if (!attachment) continue;
+      this.relate("note", noteId, "attachment", String(attachment.id), now);
+    }
   }
 
   private relate(
@@ -752,6 +830,22 @@ function toHtml(content: string, format: ContentFormat): string {
       .join("");
   }
   return markdownToHtml(content);
+}
+
+/** A LIKE pattern that matches `value` anywhere, with wildcards escaped. */
+function likePattern(value: string): string {
+  return `%${value.trim().replace(/[\\%_]/g, (c) => `\\${c}`)}%`;
+}
+
+/** The attachment hashes a body refers to, as the editor writes them. */
+export function attachmentHashes(html: string): Set<string> {
+  const hashes = new Set<string>();
+  for (
+    const match of html.matchAll(/data-hash=["']([A-Za-z0-9_-]{1,128})["']/g)
+  ) {
+    hashes.add(match[1]);
+  }
+  return hashes;
 }
 
 function headlineOf(html: string): string {

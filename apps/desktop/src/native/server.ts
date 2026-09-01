@@ -27,17 +27,22 @@ const log = logger.scope("server");
  *
  * HOW THE ADDRESS WORKS, AND WHY IT MATTERS
  *
- * Under `deno desktop` the runtime owns the listening address. A port
- * passed to `Deno.serve` is ignored: the runtime substitutes its own and
- * publishes it as DENO_SERVE_ADDRESS, and the socket is wired to the
- * embedded webview rather than published on the machine — a fetch to that
- * port from another process fails.
+ * Under `deno desktop` the runtime owns the listening address when the port
+ * is left to it: it substitutes its own and publishes it as
+ * DENO_SERVE_ADDRESS.
  *
- * Two consequences, both measured rather than assumed:
+ * Two consequences, both measured on Deno 2.9.6 rather than assumed:
  *
- *  1. Nothing outside the application can reach this server. That is good
- *     for security, and it is why the smoke test inspects the window
- *     instead of curling a health endpoint.
+ *  1. The socket IS reachable from other processes on the machine. An
+ *     earlier version of this comment claimed otherwise; a `curl` to the
+ *     assigned port answers 200. Nothing here is confidential — it serves
+ *     the built interface, which is public source, and the privileged
+ *     surface is reached through window bindings rather than over HTTP — so
+ *     the exposure is that a local process can read files it could read off
+ *     disk anyway. Requests carrying an Origin, and requests for a Host
+ *     that is not loopback, are refused all the same: those are what a page
+ *     in the user's browser would send, and there is no reason to answer
+ *     one.
  *
  *  2. The port differs on every launch, so the page's origin does too
  *     (observed: http://127.0.0.1:34265, then http://127.0.0.1:42857 on
@@ -90,6 +95,16 @@ export interface RunningUiServer {
   /** The origin the runtime actually assigned. */
   origin: string;
   shutdown(): Promise<void>;
+}
+
+/** Refuses a DNS name pointed at 127.0.0.1, which is how rebinding works. */
+export function isLoopbackHost(host: string): boolean {
+  return (
+    host === "localhost" ||
+    host === "::1" ||
+    host === "0:0:0:0:0:0:0:1" ||
+    /^127\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(host)
+  );
 }
 
 /** Health route, used by the interface handshake and by the smoke test. */
@@ -193,6 +208,18 @@ export async function startUiServer(
 
       if (request.method !== "GET" && request.method !== "HEAD") {
         return new Response("Method Not Allowed", { status: 405 });
+      }
+
+      // The webview's own requests are same-origin navigations and
+      // subresource loads, neither of which carries an Origin. A page in
+      // the user's browser trying to load the interface does.
+      if (request.headers.get("origin")) {
+        return new Response("Forbidden", { status: 403 });
+      }
+      const host = (request.headers.get("host") ?? "").replace(/:\d+$/, "")
+        .replace(/^\[|\]$/g, "");
+      if (host && !isLoopbackHost(host)) {
+        return new Response("Forbidden", { status: 403 });
       }
 
       return await serveStatic(
