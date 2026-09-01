@@ -2,7 +2,8 @@
 
 This document specifies the protocol Openotes uses to synchronize a vault
 between devices over an ordinary WebDAV server, and the separate format it
-uses for backups. It is the reference for anyone implementing a compatible
+uses for backups. §10a covers the other backends the same protocol runs on —
+a folder your drive client keeps in step, a NAS mount, a USB stick. It is the reference for anyone implementing a compatible
 client, auditing the encryption, or debugging a sync problem.
 
 Implementation: [`packages/sync-remote`](packages/sync-remote).
@@ -313,6 +314,74 @@ HTTPS is the default and plain HTTP is refused unless the user explicitly
 enables it for a trusted local network, with a warning. TLS certificate
 errors are never ignored, and there is no global "disable TLS verification"
 switch.
+
+---
+
+## 10a. Other places than a WebDAV server
+
+The engine does not speak WebDAV. It reads, writes and lists opaque encrypted
+blobs at slash-separated paths, through the eleven-verb `RemoteStore`
+interface in [`packages/sync-remote/src/store.ts`](packages/sync-remote/src/store.ts).
+WebDAV is one implementation of that interface; a plain directory is another.
+
+### What a backend has to be able to do
+
+| Verb | Why the protocol needs it |
+|---|---|
+| `create` | The append-only journal. Either the bytes land as the sole content at that path, or the call fails having written nothing. |
+| `put`, `get`, `getIfExists`, `exists`, `delete` | Ordinary reads and writes. |
+| `list` | Discovering devices and sequence numbers. |
+| `makeDirectory`, `moveRecursive`, `move` | Building and activating a rebuilt generation. |
+| `verifyUpload` | Nothing is marked synchronized before the store confirms the bytes. |
+| `connect`, `scope` | Reachability, and the rebuild staging prefix. |
+
+ETags are *not* in the interface. Every `put` call site discards them and
+`If-Match` has no call site at all, so a backend with no ETag story loses
+nothing. `create` is a separate method rather than a flag on `put` precisely
+because a flag is something an implementation can quietly ignore — which is
+what some WebDAV servers do with `If-None-Match`.
+
+### The folder provider
+
+`FolderStore` treats a local directory as the repository. That directory can
+be one a Google Drive, OneDrive, Dropbox or iCloud Drive client keeps in step
+with an account, a Syncthing share, a NAS mount, a USB stick, or a plain local
+folder. Openotes writes encrypted files and waits; whatever replicates the
+folder does the replicating, and it only ever sees ciphertext.
+
+Writes are a temp file plus a rename in the same directory, so a reader on
+this machine never sees a partial file. Exclusive create is `link()`, falling
+back to `O_EXCL` on filesystems without hard links (FAT32 and exFAT — every
+USB stick). Symlinks are refused, both when writing and in listings: a shared
+folder is a write surface someone else may reach.
+
+### Where the guarantees are weaker, stated plainly
+
+Two invariants that hold on a WebDAV server do not hold as strongly on a
+replicated folder, and the store declares both rather than pretending:
+
+- **Exclusive create is emulated, not native.** `link()` and `O_EXCL` exclude
+  another process on *this* machine. They do not exclude another machine
+  sharing the folder: both see the path free, both create it, and the drive
+  client resolves the collision afterwards by renaming one copy. A folder
+  marked `immediate` (a local disk, a NAS) declares `native`; one marked
+  `eventual` declares `reconciled`.
+
+  In practice this only bites on `protocol.json`, the one write two devices
+  genuinely race for. **Set up the first device, let it finish one sync, then
+  set up the second.** Two devices initializing an empty folder within the
+  same minute is the case nothing here can resolve for you.
+
+- **`verifyUpload` proves less.** On a server it is a `HEAD` against the
+  server's own copy. On a folder it is a `stat` of the local mirror: it proves
+  the replicating client has been handed the bytes, not that another device
+  can see them yet.
+
+`propagationGraceMs` is how the engine copes with the second point. A WebDAV
+store declares `0` — a gap in a sequence listing means the batch is gone, the
+behaviour this protocol has always had. A replicated folder declares two
+minutes, so a batch that is merely still uploading is not mistaken for one
+that was lost.
 
 ---
 
