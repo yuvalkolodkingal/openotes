@@ -30,7 +30,7 @@
     "fmt": "deno fmt",
     "lint": "deno lint",
     "check": "deno check apps/desktop/main.ts packages/sync-remote/src/index.ts packages/sync-drive/src/index.ts",
-    "test": "deno test -A packages/sync-remote/tests/ apps/desktop/tests/ packages/theme/tests/ --ignore=packages/sync-remote/tests/integration",
+    "test": "deno test -A packages/sync-remote/tests/ packages/sync-drive/tests/ apps/desktop/tests/ packages/theme/tests/ --ignore=packages/sync-remote/tests/integration",
     "test:webdav": "deno run -A packages/sync-remote/tests/run-integration.ts",
     "test:ui": "deno run -A --node-modules-dir=auto npm:vitest@3.2.4 run --root apps/web",
     "bench": "deno run -A apps/desktop/scripts/benchmark.ts",
