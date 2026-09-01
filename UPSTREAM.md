@@ -196,6 +196,47 @@ diff smaller.** A smaller diff is not worth a worse application.
 
 ## Fork changelog
 
+### 2.1.2
+
+Everything 2.1.1 fixed, plus what an adversarial review of the whole 2.1 diff
+turned up — seventeen confirmed defects out of thirty candidates, looking
+specifically for the kind that passes a unit test and breaks in the real
+webview. 2.1.1 itself was never published: the release job refused to build it a
+second time under a tag already pointing elsewhere, which is the guard working.
+
+- **The smoke test was asking a dead process.** Its new boot check ran after the
+  shutdown block had signalled the application and awaited its exit, so
+  "connection refused" was the corpse rather than a fact about the platform —
+  and the 2.1.1 commit mistook it for one and exempted Windows. The questions
+  that need a live application are now asked before it is stopped, and the
+  exemption is gone.
+- **The smoke test never stopped the application at all.** It launched through
+  xvfb-run, whose shell was the process it held, so the application was
+  reparented to init and survived, while the isolated HOME was deleted
+  underneath it. It now starts its own X server and spawns the application
+  directly. `mcp-check` did the same thing and additionally ran
+  `pkill -x
+  openotes`, which signals every Openotes on the machine — including
+  the real one the user has open.
+- **Two `mcp-check` assertions could not fail** — one fell back to stringifying
+  any reply, the other passed when the endpoint never started.
+- **The health route answered before the guards**, so a page at a DNS name
+  rebound to 127.0.0.1 could still learn Openotes is running here.
+- **A start-up failure is now on screen** instead of a dropped promise behind
+  the splash. That is what 2.1.0 looked like from the outside, and why
+  diagnosing it needed a hand-injected probe.
+- **A downloaded theme reusing a shipped id** was discarded on every launch;
+  only an older copy of a shipped theme is refreshed now.
+- **The boot theme outlived its purpose**, pinning one scheme's background and
+  `color-scheme` for the life of the page.
+- **Changing sync provider carried the previous provider's connection**, so the
+  settings screen reported one drive connected on another's sign-in.
+- **A mistyped MCP port took down a working endpoint** and was saved for the
+  next launch; and the panel kept showing a token that "Replace token" had
+  already invalidated.
+- The flatpak advertised 1.0.0 as its newest release, and a local build could
+  ship a stale compiled theme while the theme tests read the source and passed.
+
 ### 2.1.1
 
 - **2.1.0 did not start.** Every window sat at "Starting up the engines" and
