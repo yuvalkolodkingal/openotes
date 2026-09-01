@@ -58,8 +58,25 @@ export function appDataDir(): string {
   }
 }
 
+/**
+ * True when the user has asked for everything to live in one directory:
+ * either an explicit data directory, or a portable build.
+ *
+ * On Linux the config and cache directories are normally XDG paths that have
+ * nothing to do with the data directory, which is right for an installed
+ * app. It is wrong for the two cases here. `OPENOTES_DATA_DIR` is documented
+ * as the way to run two independent profiles, and a portable build is
+ * supposed to leave nothing on the machine — but if only the notes move, two
+ * "independent" profiles still share one settings.json (one sync account,
+ * one assistant port, one theme) and a portable build still writes logs into
+ * the home directory. Under either, the whole of the app's state moves.
+ */
+function isRelocated(): boolean {
+  return !!Deno.env.get("OPENOTES_DATA_DIR") || isPortable();
+}
+
 export function configDir(): string {
-  if (Deno.build.os === "linux") {
+  if (Deno.build.os === "linux" && !isRelocated()) {
     const xdg = Deno.env.get("XDG_CONFIG_HOME") ?? join(homeDir(), ".config");
     return join(xdg, APP_ID);
   }
@@ -67,7 +84,7 @@ export function configDir(): string {
 }
 
 export function cacheDir(): string {
-  if (Deno.build.os === "linux") {
+  if (Deno.build.os === "linux" && !isRelocated()) {
     const xdg = Deno.env.get("XDG_CACHE_HOME") ?? join(homeDir(), ".cache");
     return join(xdg, APP_ID);
   }

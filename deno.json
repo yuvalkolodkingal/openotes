@@ -51,6 +51,7 @@
     "build:zip": "deno run -A apps/desktop/scripts/build.ts --target x86_64-pc-windows-msvc --format zip",
     "build:all": "deno run -A apps/desktop/scripts/build.ts --all",
     "smoke": "deno run -A apps/desktop/scripts/smoke-test.ts",
+    "check:mcp": "deno run -A apps/desktop/scripts/mcp-check.ts",
     "checksums": "deno run -A apps/desktop/scripts/checksums.ts",
     "checksums:check": "deno run -A apps/desktop/scripts/checksums.ts dist --check",
     "verify:no-electron": "deno run -A apps/desktop/scripts/verify-dependencies.ts",
