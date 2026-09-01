@@ -27,6 +27,7 @@ import {
 import MockDate from "mockdate";
 import { describe, afterAll, beforeEach, test, expect } from "vitest";
 import { databaseTest } from "./utils/index.ts";
+import { Reminder, SortOptions } from "../src/types.js";
 import dayjs from "dayjs";
 import utc from "dayjs/plugin/utc.js";
 import assert from "assert";
@@ -48,7 +49,7 @@ describe("format reminder time", () => {
       date: new Date(0).setHours(14),
       mode: "repeat",
       title: "Random reminder"
-    };
+    } as Reminder;
 
     expect(await compareReminder(reminder)).toBe(true);
     expect(formatReminderTime(reminder)).toBe("Upcoming: Today, 02:00 PM");
@@ -60,7 +61,7 @@ describe("format reminder time", () => {
       date: new Date(0).setHours(3),
       mode: "repeat",
       title: "Random reminder"
-    };
+    } as Reminder;
 
     expect(await compareReminder(reminder)).toBe(true);
     expect(formatReminderTime(reminder)).toBe("Upcoming: Tomorrow, 03:00 AM");
@@ -73,7 +74,7 @@ describe("format reminder time", () => {
       selectedDays: [3, 5],
       mode: "repeat",
       title: "Random reminder"
-    };
+    } as Reminder;
 
     expect(await compareReminder(reminder)).toBe(true);
     expect(formatReminderTime(reminder)).toBe(
@@ -88,7 +89,7 @@ describe("format reminder time", () => {
       selectedDays: [0],
       mode: "repeat",
       title: "Random reminder"
-    };
+    } as Reminder;
 
     expect(await compareReminder(reminder)).toBe(true);
     expect(formatReminderTime(reminder)).toBe(
@@ -103,7 +104,7 @@ describe("format reminder time", () => {
       selectedDays: [0, 5, 6],
       mode: "repeat",
       title: "Random reminder"
-    };
+    } as Reminder;
 
     expect(await compareReminder(reminder)).toBe(true);
     expect(formatReminderTime(reminder)).toBe(
@@ -118,7 +119,7 @@ describe("format reminder time", () => {
       selectedDays: [0, 1],
       mode: "repeat",
       title: "Random reminder"
-    };
+    } as Reminder;
 
     expect(await compareReminder(reminder)).toBe(true);
     expect(formatReminderTime(reminder)).toBe("Upcoming: Today, 09:00 PM");
@@ -131,7 +132,7 @@ describe("format reminder time", () => {
       selectedDays: [1, 2, 5, 6],
       mode: "repeat",
       title: "Random reminder"
-    };
+    } as Reminder;
 
     expect(await compareReminder(reminder)).toBe(true);
     expect(formatReminderTime(reminder)).toBe("Upcoming: Today, 09:00 PM");
@@ -145,7 +146,7 @@ describe("format reminder time", () => {
       selectedDays: [1, 2, 3, 4],
       mode: "repeat",
       title: "Random reminder"
-    };
+    } as Reminder;
 
     expect(await compareReminder(reminder)).toBe(true);
     expect(formatReminderTime(reminder)).toBe("Upcoming: Tomorrow, 07:00 AM");
@@ -158,7 +159,7 @@ describe("format reminder time", () => {
       selectedDays: [12, 18],
       mode: "repeat",
       title: "Random reminder"
-    };
+    } as Reminder;
 
     expect(await compareReminder(reminder)).toBe(true);
     expect(formatReminderTime(reminder)).toBe(
@@ -174,7 +175,7 @@ describe("format reminder time", () => {
       selectedDays: [8, 9, 10, 11, 12],
       mode: "repeat",
       title: "Random reminder"
-    };
+    } as Reminder;
 
     expect(await compareReminder(reminder)).toBe(true);
     expect(formatReminderTime(reminder)).toBe("Upcoming: Tomorrow, 07:00 AM");
@@ -187,7 +188,7 @@ describe("format reminder time", () => {
       selectedDays: [1, 2, 3],
       mode: "repeat",
       title: "Random reminder"
-    };
+    } as Reminder;
 
     expect(await compareReminder(reminder)).toBe(true);
     expect(formatReminderTime(reminder)).toBe(
@@ -202,7 +203,7 @@ describe("format reminder time", () => {
       selectedDays: [6],
       mode: "repeat",
       title: "Random reminder"
-    };
+    } as Reminder;
 
     expect(await compareReminder(reminder)).toBe(true);
     expect(formatReminderTime(reminder)).toBe("Upcoming: Today, 09:00 PM");
@@ -215,7 +216,7 @@ describe("format reminder time", () => {
       selectedDays: [6, 7, 8],
       mode: "repeat",
       title: "Random reminder"
-    };
+    } as Reminder;
 
     expect(await compareReminder(reminder)).toBe(true);
     expect(formatReminderTime(reminder)).toBe("Upcoming: Today, 09:00 PM");
@@ -226,7 +227,7 @@ describe("format reminder time", () => {
       date: new Date(2022, 5, 6, 8, 5).getTime(),
       mode: "once",
       title: "Random reminder"
-    };
+    } as Reminder;
 
     expect(await compareReminder(reminder)).toBe(true);
     expect(formatReminderTime(reminder)).toBe("Upcoming: Today, 08:05 AM");
@@ -237,7 +238,7 @@ describe("format reminder time", () => {
       date: new Date(2022, 5, 7, 8, 5).getTime(),
       mode: "once",
       title: "Random reminder"
-    };
+    } as Reminder;
 
     expect(await compareReminder(reminder)).toBe(true);
     expect(formatReminderTime(reminder)).toBe("Upcoming: Tomorrow, 08:05 AM");
@@ -248,7 +249,7 @@ describe("format reminder time", () => {
       date: new Date(2022, 5, 5, 8, 5).getTime(),
       mode: "once",
       title: "Random reminder"
-    };
+    } as Reminder;
 
     expect(await compareReminder(reminder)).toBe(true);
     expect(formatReminderTime(reminder)).toBe("Last: Yesterday, 08:05 AM");
@@ -259,7 +260,7 @@ describe("format reminder time", () => {
       date: new Date(2022, 5, 6, 5, 5).getTime(),
       mode: "once",
       title: "Random reminder"
-    };
+    } as Reminder;
 
     expect(await compareReminder(reminder)).toBe(true);
     expect(formatReminderTime(reminder)).toBe("Last: Today, 05:05 AM");
@@ -270,7 +271,7 @@ describe("format reminder time", () => {
       date: new Date(2022, 5, 6, 3, 5).getTime(),
       mode: "once",
       title: "Random reminder"
-    };
+    } as Reminder;
 
     expect(await compareReminder(reminder)).toBe(true);
     expect(formatReminderTime(reminder)).toBe("Last: Today, 03:05 AM");
@@ -282,7 +283,7 @@ describe("format reminder time", () => {
       mode: "repeat",
       recurringMode: "day",
       title: "Random reminder"
-    };
+    } as Reminder;
 
     expect(await compareReminder(reminder)).toBe(true);
     expect(formatReminderTime(reminder)).toBe("Upcoming: Tomorrow, 05:05 AM");
@@ -295,7 +296,7 @@ describe("format reminder time", () => {
       selectedDays: [1],
       mode: "repeat",
       title: "Random reminder"
-    };
+    } as Reminder;
 
     expect(await compareReminder(reminder)).toBe(true);
     expect(formatReminderTime(reminder)).toBe(
@@ -307,10 +308,10 @@ describe("format reminder time", () => {
     const reminder = {
       recurringMode: "year",
       date: dayjs().month(7).date(20).hour(5).minute(5).valueOf(),
-      selectedDays: [],
+      selectedDays: [] as number[],
       mode: "repeat",
       title: "Random reminder"
-    };
+    } as Reminder;
 
     expect(await compareReminder(reminder)).toBe(true);
     expect(formatReminderTime(reminder)).toBe(
@@ -322,10 +323,10 @@ describe("format reminder time", () => {
     const reminder = {
       recurringMode: "year",
       date: dayjs().month(2).date(20).hour(5).minute(5).valueOf(),
-      selectedDays: [],
+      selectedDays: [] as number[],
       mode: "repeat",
       title: "Random reminder"
-    };
+    } as Reminder;
 
     expect(await compareReminder(reminder)).toBe(true);
     expect(formatReminderTime(reminder)).toBe(
@@ -343,11 +344,13 @@ test("sorting reminders by dateEdited shouldn't throw", () =>
       title: "Random reminder"
     });
     await expect(
+      // `ids` only takes `SortOptions`; `groupBy` is passed through here
+      // exactly as the JS test did.
       db.reminders.all.ids({
         groupBy: "default",
         sortBy: "dateEdited",
         sortDirection: "desc"
-      })
+      } as SortOptions)
     ).resolves.toBeDefined();
     await expect(
       db.reminders.all.groups({
@@ -367,7 +370,7 @@ test("sorting reminders by dateEdited shouldn't throw", () =>
     ).resolves.toBeDefined();
   }));
 
-async function compareReminder(reminder) {
+async function compareReminder(reminder: Reminder) {
   const db = await databaseTest();
   const id = await db.reminders.add(reminder);
   const result = await db
@@ -382,15 +385,18 @@ async function compareReminder(reminder) {
       ),
       "id"
     ])
-    .where("id", "=", id)
+    .where("id", "=", id!)
     .executeTakeFirst();
 
   assert(
-    result.isActive === Number(isReminderActive(reminder)),
+    // the query declares `isActive` as a boolean but SQLite hands back 0/1,
+    // which is what the JS test compared against
+    (result!.isActive as unknown as number) ===
+      Number(isReminderActive(reminder)),
     "is active value is not equal"
   );
   return (
-    result.dueDate ===
+    result!.dueDate ===
     dayjs(getUpcomingReminderTime(reminder)).second(0).millisecond(0).valueOf()
   );
 }

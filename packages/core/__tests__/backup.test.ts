@@ -24,16 +24,32 @@ import {
   notebookTest
 } from "./utils/index.ts";
 import { test, expect } from "vitest";
+import type Backup from "../src/database/backup.js";
+import { Item, MaybeDeletedItem } from "../src/types.js";
+
+/**
+ * `db.backup.export` yields either a file chunk or an attachment chunk. None of
+ * the databases in this suite have attachments, so every chunk is a file — the
+ * JS version already relied on that by reading `.data`/`.path` unconditionally.
+ */
+type BackupExportChunk = ReturnType<Backup["export"]> extends AsyncGenerator<
+  infer TChunk,
+  unknown,
+  unknown
+>
+  ? TChunk
+  : never;
+type BackupFileChunk = Extract<BackupExportChunk, { type: "file" }>;
 
 test("export backup", () =>
   notebookTest().then(async ({ db }) => {
     const id = await db.notes.add(TEST_NOTE);
-    const exp = [];
+    const exp: BackupFileChunk[] = [];
     for await (const file of db.backup.export({
       type: "node",
       encrypt: false
     })) {
-      exp.push(file);
+      exp.push(file as BackupFileChunk);
     }
 
     let backup = JSON.parse(exp[1].data);
@@ -46,7 +62,7 @@ test("export backup", () =>
     expect(backup.encrypted).toBe(false);
     expect(
       JSON.parse(await (await db.compressor()).decompress(backup.data)).find(
-        (i) => i.id === id
+        (i: MaybeDeletedItem<Item>) => i.id === id
       )
     ).toBeDefined();
   }));
@@ -56,12 +72,12 @@ test("export encrypted backup", () =>
     await loginFakeUser(db);
     await db.notes.add(TEST_NOTE);
 
-    const exp = [];
+    const exp: BackupFileChunk[] = [];
     for await (const file of db.backup.export({
       type: "node",
       encrypt: true
     })) {
-      exp.push(file);
+      exp.push(file as BackupFileChunk);
     }
 
     const backup = JSON.parse(exp[1].data);
@@ -77,17 +93,17 @@ test("export encrypted backup", () =>
 
 test("import backup", async () => {
   const { db, id } = await notebookTest();
-  const exp = [];
+  const exp: BackupFileChunk[] = [];
   for await (const file of db.backup.export({
     type: "node",
     encrypt: false
   })) {
-    exp.push(file);
+    exp.push(file as BackupFileChunk);
   }
 
   const db2 = await databaseTest();
   await db2.backup.import(JSON.parse(exp[1].data));
-  expect((await db2.notebooks.notebook(id)).id).toBe(id);
+  expect((await db2.notebooks.notebook(id))!.id).toBe(id);
 });
 
 test("import encrypted backup", async () => {
@@ -95,29 +111,29 @@ test("import encrypted backup", async () => {
   await loginFakeUser(db);
   await db.notes.add(TEST_NOTE);
 
-  const exp = [];
+  const exp: BackupFileChunk[] = [];
   for await (const file of db.backup.export({
     type: "node",
     encrypt: true
   })) {
-    exp.push(file);
+    exp.push(file as BackupFileChunk);
   }
 
   const db2 = await databaseTest();
   await db2.backup.import(JSON.parse(exp[1].data), { password: "password" });
-  expect((await db2.notebooks.notebook(id)).id).toBe(id);
+  expect((await db2.notebooks.notebook(id))!.id).toBe(id);
 });
 
 test("import tempered backup", () =>
   notebookTest().then(async ({ db }) => {
     await db.notes.add(TEST_NOTE);
 
-    const exp = [];
+    const exp: BackupFileChunk[] = [];
     for await (const file of db.backup.export({
       type: "node",
       encrypt: false
     })) {
-      exp.push(file);
+      exp.push(file as BackupFileChunk);
     }
 
     await db.storage().clear();

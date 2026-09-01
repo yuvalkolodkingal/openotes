@@ -17,10 +17,10 @@ You should have received a copy of the GNU General Public License
 along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
-import { isHTMLEqual } from "../html-diff.ts";
+import { isHTMLEqual } from "../html-diff.js";
 import { test, expect, describe } from "vitest";
 
-const equalPairs = [
+const equalPairs: [string, string, string][] = [
   [
     "ignore whitespace difference",
     `<div>hello   \n\n\n\n\n</div>\n\n\n\n\n\n`,
@@ -56,7 +56,7 @@ describe("pairs should be equal", () => {
   });
 });
 
-const inequalPairs = [
+const inequalPairs: [string, unknown, unknown][] = [
   [
     "textual difference",
     `<div>hello   \n\n\n\n\nworld</div>\n\n\n\n\n\n`,

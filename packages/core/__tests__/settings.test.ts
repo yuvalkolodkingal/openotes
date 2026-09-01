@@ -19,10 +19,15 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 import { databaseTest } from "./utils/index.ts";
 import { test, expect } from "vitest";
+import {
+  GroupingByIdKey,
+  GroupOptions,
+  ToolbarConfig
+} from "../src/types.js";
 
 test("save group options", () =>
   databaseTest().then(async (db) => {
-    const groupOptions = {
+    const groupOptions: GroupOptions = {
       groupBy: "abc",
       sortBy: "dateCreated",
       sortDirection: "asc"
@@ -37,7 +42,12 @@ test("save toolbar config", () =>
       preset: "custom",
       config: ["bold", "italic"]
     };
-    await db.settings.setToolbarConfig("mobile", toolbarConfig);
+    // `ToolbarConfig.version` is required by the type but the stored config is
+    // written without it here, exactly as the JS test did.
+    await db.settings.setToolbarConfig(
+      "mobile",
+      toolbarConfig as ToolbarConfig
+    );
     expect(db.settings.getToolbarConfig("mobile")).toMatchObject(toolbarConfig);
   }));
 
@@ -48,13 +58,17 @@ test("save trash cleanup interval", () =>
     expect(db.settings.getTrashCleanupInterval()).toBe(interval);
   }));
 
-const GROUP_OPTIONS_BY_ID_TESTS = ["notebook", "tag", "color"];
+const GROUP_OPTIONS_BY_ID_TESTS: GroupingByIdKey[] = [
+  "notebook",
+  "tag",
+  "color"
+];
 
 for (const type of GROUP_OPTIONS_BY_ID_TESTS) {
   test(`get ${type} id group options`, () =>
     databaseTest().then(async (db) => {
       const id = `test-${type}-id`;
-      const groupOptions = {
+      const groupOptions: GroupOptions = {
         groupBy: "year",
         sortBy: "title",
         sortDirection: "asc"

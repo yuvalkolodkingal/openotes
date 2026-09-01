@@ -17,7 +17,7 @@ You should have received a copy of the GNU General Public License
 along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
-import { set } from "../set.ts";
+import { set } from "../set.js";
 import { test, expect } from "vitest";
 
 test("union", () => {
@@ -25,7 +25,9 @@ test("union", () => {
 });
 
 test("intersection", () => {
-  expect(set.intersection([1, 1, 2], [2, 2, 3])).toStrictEqual([2]);
+  expect(
+    set.intersection([1, 1, 2], [2, 2, 3])
+  ).toStrictEqual([2]);
 });
 
 test("difference", () => {
@@ -41,5 +43,7 @@ test("equals", () => {
 });
 
 test("not equals", () => {
-  expect(set.equals([1, 1, 2], [1, 5, 2])).toBe(false);
+  expect(set.equals([1, 1, 2], [1, 5, 2])).toBe(
+    false
+  );
 });

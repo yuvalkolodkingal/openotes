@@ -21,8 +21,9 @@ import {
   databaseTest,
   TEST_NOTE,
   loginFakeUser
-} from "../../../../__tests__/utils/index.ts";
-import Collector from "../collector.ts";
+} from "../../../../__tests__/utils/index.js";
+import Collector from "../collector.js";
+import { SyncTransferItem } from "../types.js";
 import { test, expect } from "vitest";
 
 test("newly created note should get included in collector", () =>
@@ -36,7 +37,7 @@ test("newly created note should get included in collector", () =>
 
     expect(items).toHaveLength(2);
     expect(items[0].type).toBe("content");
-    expect(items[0].items[0].id).toBe((await db.notes.note(noteId)).contentId);
+    expect(items[0].items[0].id).toBe((await db.notes.note(noteId))!.contentId);
     expect(items[1].items[0].id).toBe(noteId);
     expect(items[1].type).toBe("note");
   }));
@@ -54,7 +55,7 @@ test("synced property should be true after getting collected by the collector", 
     expect(items2).toHaveLength(0);
     expect(items).toHaveLength(2);
     expect(items[0].type).toBe("content");
-    expect(items[0].items[0].id).toBe((await db.notes.note(noteId)).contentId);
+    expect(items[0].items[0].id).toBe((await db.notes.note(noteId))!.contentId);
     expect(items[1].items[0].id).toBe(noteId);
     expect(items[1].type).toBe("note");
   }));
@@ -121,12 +122,12 @@ test("collector should use latest key version for encryption", () =>
     // Find the note item
     const noteItem = items.find((i) => i.type === "note");
     expect(noteItem).toBeDefined();
-    expect(noteItem.items[0].keyVersion).toBeDefined();
+    expect(noteItem!.items[0].keyVersion).toBeDefined();
 
     // Should use the latest key version available
-    const keys = await db.user.getDataEncryptionKeys();
+    const keys = (await db.user.getDataEncryptionKeys())!;
     const latestKeyVersion = Math.max(...keys.map((k) => k.version));
-    expect(noteItem.items[0].keyVersion).toBe(latestKeyVersion);
+    expect(noteItem!.items[0].keyVersion).toBe(latestKeyVersion);
   }));
 
 test("collector should assign keyVersion to all encrypted items", () =>
@@ -152,7 +153,7 @@ test("collector should assign keyVersion to all encrypted items", () =>
 test("sync roundtrip: items encrypted with keyVersion can be decrypted", () =>
   databaseTest().then(async (db) => {
     await loginFakeUser(db);
-    const { Sync } = await import("../index.ts");
+    const { Sync } = await import("../index.js");
     const sync = new Sync(db);
     const collector = new Collector(db);
 
@@ -166,25 +167,25 @@ test("sync roundtrip: items encrypted with keyVersion can be decrypted", () =>
     const noteChunk = items.find((i) => i.type === "note");
 
     expect(noteChunk).toBeDefined();
-    expect(noteChunk.items[0].keyVersion).toBeDefined();
+    expect(noteChunk!.items[0].keyVersion).toBeDefined();
 
     // Simulate receiving the same item back from server
-    const keys = await db.user.getDataEncryptionKeys();
-    await sync.processChunk(noteChunk, keys, { type: "fetch" });
+    const keys = (await db.user.getDataEncryptionKeys())!;
+    await sync.processChunk(noteChunk!, keys, { type: "fetch" });
 
     // Verify the note is still intact
     const syncedNote = await db.notes.note(noteId);
-    expect(syncedNote.title).toBe("Sync Test Note");
-    expect(syncedNote.id).toBe(note.id);
+    expect(syncedNote!.title).toBe("Sync Test Note");
+    expect(syncedNote!.id).toBe(note!.id);
   }));
 
 test("sync should handle mixed keyVersion items in same chunk", () =>
   databaseTest().then(async (db) => {
     await loginFakeUser(db);
-    const { Sync } = await import("../index.ts");
+    const { Sync } = await import("../index.js");
     const sync = new Sync(db);
 
-    const keys = await db.user.getDataEncryptionKeys();
+    const keys = (await db.user.getDataEncryptionKeys())!;
 
     // Create mock items with different key versions
     const note1 = JSON.stringify({
@@ -206,7 +207,7 @@ test("sync should handle mixed keyVersion items in same chunk", () =>
         ? await db.storage().encrypt(keys[1].key, note2)
         : await db.storage().encrypt(keys[0].key, note2);
 
-    const chunk = {
+    const chunk: SyncTransferItem = {
       type: "note",
       count: 2,
       items: [
@@ -229,8 +230,8 @@ test("sync should handle mixed keyVersion items in same chunk", () =>
 
     expect(savedNote1).toBeDefined();
     expect(savedNote2).toBeDefined();
-    expect(savedNote1.title).toBe("Note 1");
-    expect(savedNote2.title).toBe("Note 2");
+    expect(savedNote1!.title).toBe("Note 1");
+    expect(savedNote2!.title).toBe("Note 2");
   }));
 
 test("sync should maintain stable ordering across decryptMulti", () =>
@@ -239,7 +240,7 @@ test("sync should maintain stable ordering across decryptMulti", () =>
     const collector = new Collector(db);
 
     // Create multiple notes with predictable order
-    const noteIds = [];
+    const noteIds: string[] = [];
     for (let i = 0; i < 5; i++) {
       const id = await db.notes.add({
         ...TEST_NOTE,
@@ -252,10 +253,10 @@ test("sync should maintain stable ordering across decryptMulti", () =>
     const noteChunk = items.find((i) => i.type === "note");
 
     expect(noteChunk).toBeDefined();
-    expect(noteChunk.items).toHaveLength(5);
+    expect(noteChunk!.items).toHaveLength(5);
 
     // Verify all items have IDs
-    const collectedIds = noteChunk.items.map((item) => item.id);
+    const collectedIds = noteChunk!.items.map((item) => item.id);
     expect(collectedIds).toHaveLength(5);
 
     // All IDs should be present
@@ -264,27 +265,27 @@ test("sync should maintain stable ordering across decryptMulti", () =>
     }
 
     // Decrypt and verify ID mapping is preserved
-    const keys = await db.user.getDataEncryptionKeys();
-    const { Sync } = await import("../index.ts");
+    const keys = (await db.user.getDataEncryptionKeys())!;
+    const { Sync } = await import("../index.js");
     const sync = new Sync(db);
 
-    await sync.processChunk(noteChunk, keys, { type: "fetch" });
+    await sync.processChunk(noteChunk!, keys, { type: "fetch" });
 
     // Verify each note can be retrieved with correct content
     for (let i = 0; i < 5; i++) {
       const note = await db.notes.note(noteIds[i]);
       expect(note).toBeDefined();
-      expect(note.title).toBe(`Note ${i}`);
+      expect(note!.title).toBe(`Note ${i}`);
     }
   }));
 
 test("sync should correctly select key based on keyVersion", () =>
   databaseTest().then(async (db) => {
     await loginFakeUser(db);
-    const { Sync } = await import("../index.ts");
+    const { Sync } = await import("../index.js");
     const sync = new Sync(db);
 
-    const keys = await db.user.getDataEncryptionKeys();
+    const keys = (await db.user.getDataEncryptionKeys())!;
 
     // Create items encrypted with specific key versions
     const testCases = keys.map((keyInfo, idx) => ({
@@ -294,7 +295,7 @@ test("sync should correctly select key based on keyVersion", () =>
       key: keyInfo.key
     }));
 
-    const chunks = [];
+    const chunks: SyncTransferItem[] = [];
     for (const testCase of testCases) {
       const noteData = JSON.stringify({
         id: testCase.id,
@@ -322,12 +323,12 @@ test("sync should correctly select key based on keyVersion", () =>
     for (const testCase of testCases) {
       const note = await db.notes.note(testCase.id);
       expect(note).toBeDefined();
-      expect(note.title).toBe(testCase.title);
+      expect(note!.title).toBe(testCase.title);
     }
   }));
 
-async function iteratorToArray(iterator) {
-  let items = [];
+async function iteratorToArray<T>(iterator: AsyncIterable<T>): Promise<T[]> {
+  let items: T[] = [];
   for await (const item of iterator) {
     items.push(item);
   }

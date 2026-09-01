@@ -17,21 +17,24 @@ You should have received a copy of the GNU General Public License
 along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
-const zlib = require("zlib");
-const utils = require("util");
+import zlib from "zlib";
+import utils from "util";
+import { ICompressor } from "../src/interfaces.js";
 
 const gzipAsync = utils.promisify(zlib.gzip);
 const gunzipAsync = utils.promisify(zlib.gunzip);
 
-async function compress(data) {
+async function compress(data: string): Promise<string> {
   return (await gzipAsync(data, { level: 6 })).toString("base64");
 }
 
-async function decompress(data) {
+async function decompress(data: string): Promise<string> {
   return (await gunzipAsync(Buffer.from(data, "base64"))).toString("utf-8");
 }
 
-module.exports = {
+const Compressor: ICompressor = {
   compress,
   decompress
 };
+
+export default Compressor;

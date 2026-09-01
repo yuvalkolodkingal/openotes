@@ -17,11 +17,18 @@ You should have received a copy of the GNU General Public License
 along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
-import { formatTitle } from "../title-format.ts";
+import { formatTitle } from "../title-format.js";
 import MockDate from "mockdate";
 import { test, expect, describe, beforeAll, afterAll } from "vitest";
+import { TimeFormat } from "../../types.js";
 
-const templates = {
+// NOTE: `formatTitle` declares `timeFormat` as `TimeFormat`
+// ("12-hour" | "24-hour"), but every call below deliberately passes a raw dayjs
+// pattern to exercise the non-"12-hour" (i.e. "HH:mm") branch of
+// `getTimeFormat`. Each occurrence is cast so the calls keep receiving exactly
+// the same value they did in JS.
+
+const templates: Record<string, string> = {
   $time$: "11:25",
   $date$: "DD-MM-YYYY",
   $day$: "Wed",
@@ -30,8 +37,8 @@ const templates = {
   $headline$: "HEADLINE"
 };
 
-const cases = [
-  ...Object.entries(templates).map(([key, value]) => {
+const cases: [string, string][] = [
+  ...Object.entries(templates).map(([key, value]): [string, string] => {
     return [`Note ${key}`, `Note ${value}`];
   })
 ];
@@ -47,7 +54,14 @@ afterAll(() => {
 describe("pairs should be equal", () => {
   test.each(cases)("%s", (one, two) => {
     expect(
-      formatTitle(one, "[DD-MM-YYYY]", "[hh:mm]", "short", "HEADLINE", 0)
+      formatTitle(
+        one,
+        "[DD-MM-YYYY]",
+        "[hh:mm]" as TimeFormat,
+        "short",
+        "HEADLINE",
+        0
+      )
     ).toBe(two);
   });
 });
@@ -58,7 +72,7 @@ describe("day format", () => {
       formatTitle(
         "Note $day$",
         "[DD-MM-YYYY]",
-        "[hh:mm]",
+        "[hh:mm]" as TimeFormat,
         "long",
         "HEADLINE",
         0
@@ -70,7 +84,7 @@ describe("day format", () => {
       formatTitle(
         "Note $day$",
         "[DD-MM-YYYY]",
-        "[hh:mm]",
+        "[hh:mm]" as TimeFormat,
         "short",
         "HEADLINE",
         0

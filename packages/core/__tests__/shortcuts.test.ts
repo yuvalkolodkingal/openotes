@@ -19,11 +19,14 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 import { databaseTest, notebookTest } from "./utils/index.ts";
 import { test, expect } from "vitest";
+import { Shortcut } from "../src/types.js";
 
 test("create a shortcut of an invalid item should throw", () =>
   databaseTest().then(async (db) => {
+    // `itemType` is deliberately not one of `Shortcut["itemType"]` here: the
+    // point of the test is to reach the runtime check, so it is cast through.
     await expect(() =>
-      db.shortcuts.add({ itemType: "HELLO!" })
+      db.shortcuts.add({ itemType: "HELLO!" } as unknown as Partial<Shortcut>)
     ).rejects.toThrow(/cannot create a shortcut/i);
   }));
 
@@ -62,6 +65,6 @@ test("remove shortcut", () =>
 
     expect(db.shortcuts.all).toHaveLength(1);
 
-    await db.shortcuts.remove(shortcutId);
+    await db.shortcuts.remove(shortcutId!);
     expect(db.shortcuts.all).toHaveLength(0);
   }));

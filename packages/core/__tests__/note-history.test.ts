@@ -19,6 +19,12 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 import { delay, noteTest, TEST_NOTE } from "./utils/index.ts";
 import { test, expect } from "vitest";
+import { NoteContent } from "../src/types.js";
+
+// `noteTest`/`notes.add` declare `sessionId` as a string, but several of these
+// tests pass the raw numeric timestamp the JS suite used (the value is only ever
+// interpolated into a session id). The `as unknown as string` casts below are
+// erased at runtime, so the database still receives the same numbers.
 
 // async function sessionTest(db, noteId) {
 //   let note = await db.notes.note(noteId).data;
@@ -32,7 +38,10 @@ import { test, expect } from "vitest";
 // }
 
 test("new history session should be automatically created on note save", () =>
-  noteTest({ ...TEST_NOTE, sessionId: Date.now() }).then(async ({ db, id }) => {
+  noteTest({
+    ...TEST_NOTE,
+    sessionId: Date.now() as unknown as string
+  }).then(async ({ db, id }) => {
     const sessions = await db.noteHistory.get(id).items();
     expect(sessions).toHaveLength(1);
     await expect(db.noteHistory.content(sessions[0].id)).resolves.toMatchObject(
@@ -41,8 +50,11 @@ test("new history session should be automatically created on note save", () =>
   }));
 
 test("editing the same note should create multiple history sessions", () =>
-  noteTest({ ...TEST_NOTE, sessionId: Date.now() }).then(async ({ db, id }) => {
-    let editedContent = {
+  noteTest({
+    ...TEST_NOTE,
+    sessionId: Date.now() as unknown as string
+  }).then(async ({ db, id }) => {
+    let editedContent: NoteContent<false> = {
       data: TEST_NOTE.content.data + "<p>Some new content</p>",
       type: "tiptap"
     };
@@ -50,7 +62,7 @@ test("editing the same note should create multiple history sessions", () =>
     await db.notes.add({
       id: id,
       content: editedContent,
-      sessionId: Date.now() + 10000
+      sessionId: (Date.now() + 10000) as unknown as string
     });
 
     const sessions = await db.noteHistory
@@ -67,9 +79,12 @@ test("editing the same note should create multiple history sessions", () =>
   }));
 
 test("restoring an old session should replace note's content", () =>
-  noteTest({ ...TEST_NOTE, sessionId: Date.now() }).then(async ({ db, id }) => {
+  noteTest({
+    ...TEST_NOTE,
+    sessionId: Date.now() as unknown as string
+  }).then(async ({ db, id }) => {
     await delay(1000);
-    let editedContent = {
+    let editedContent: NoteContent<false> = {
       data: TEST_NOTE.content.data + "<p>Some new content</p>",
       type: "tiptap"
     };
@@ -87,8 +102,10 @@ test("restoring an old session should replace note's content", () =>
     expect(firstVersion.id).not.toBe(`${id}_${sessionId}`);
     await db.noteHistory.restore(firstVersion.id);
 
-    const contentId = (await db.notes.note(id)).contentId;
-    expect((await db.content.get(contentId)).data).toBe(TEST_NOTE.content.data);
+    const contentId = (await db.notes.note(id))!.contentId!;
+    expect((await db.content.get(contentId))!.data).toBe(
+      TEST_NOTE.content.data
+    );
   }));
 
 test("date created of session should not change on edit", () =>
@@ -97,7 +114,7 @@ test("date created of session should not change on edit", () =>
       .get(id)
       .items(undefined, { sortBy: "dateModified", sortDirection: "desc" });
 
-    let editedContent = {
+    let editedContent: NoteContent<false> = {
       data: TEST_NOTE.content.data + "<p>Some new content</p>",
       type: "tiptap"
     };
@@ -140,9 +157,12 @@ test("return empty array if no history available", () =>
   }));
 
 test("auto clear sessions if they exceed the limit", () =>
-  noteTest({ ...TEST_NOTE, sessionId: Date.now() }).then(async ({ db, id }) => {
+  noteTest({
+    ...TEST_NOTE,
+    sessionId: Date.now() as unknown as string
+  }).then(async ({ db, id }) => {
     await delay(1000);
-    let editedContent = {
+    let editedContent: NoteContent<false> = {
       data: TEST_NOTE.content.data + "<p>Some new content</p>",
       type: "tiptap"
     };
@@ -156,14 +176,20 @@ test("auto clear sessions if they exceed the limit", () =>
 
     expect(await db.noteHistory.get(id).count()).toBe(2);
 
-    await db.noteHistory.cleanup(id, 1);
+    // `cleanup` is private on `NoteHistory`; the JS suite called it directly,
+    // so name its signature here rather than widening the collection's API.
+    await (
+      db.noteHistory as unknown as {
+        cleanup(noteId: string, limit?: number): Promise<void>;
+      }
+    ).cleanup(id, 1);
 
     const sessions = await db.noteHistory.get(id).items();
     expect(sessions).toHaveLength(1);
 
     const content = await db.noteHistory.content(sessions[0].id);
     expect(sessions[0].id).toBe(`${id}_${sessionId}`);
-    expect(content.data).toBe(editedContent.data);
+    expect(content!.data).toBe(editedContent.data);
   }));
 
 test("save a locked note should add a locked session to note history", () =>
@@ -172,9 +198,12 @@ test("save a locked note should add a locked session to note history", () =>
     await db.vault.add(id);
 
     const note = await db.notes.note(id);
-    const editedContent = { type: "tiptap", data: "<p>hello world</p>" };
+    const editedContent: NoteContent<false> = {
+      type: "tiptap",
+      data: "<p>hello world</p>"
+    };
     await db.vault.save({
-      ...note,
+      ...note!,
       content: editedContent,
       sessionId: "lockedsession"
     });
@@ -184,7 +213,9 @@ test("save a locked note should add a locked session to note history", () =>
 
     const lockedContent = await db.noteHistory.content(sessions[0].id);
     const unlockedContent = await db.vault.decryptContent(
-      lockedContent,
+      // the session content is stored encrypted here, which `noteHistory`
+      // still types as a partial, possibly-unlocked `NoteContent`
+      lockedContent as NoteContent<true>,
       "password"
     );
     expect(unlockedContent).toMatchObject(editedContent);
@@ -209,7 +240,7 @@ test("note history item can be created by setting note title", () =>
       const content = await db.noteHistory.sessionContent.get(
         items[0].sessionContentId
       );
-      expect(content.title).toBe("Test note");
+      expect(content!.title).toBe("Test note");
     }
   ));
 
@@ -226,8 +257,8 @@ test("note history item can be created by setting note title and content both", 
       items[0].sessionContentId
     );
     expect(await db.noteHistory.collection.count()).toBe(1);
-    expect(content.data).toBe(TEST_NOTE.content.data);
-    expect(content.title).toBe("Test note");
+    expect(content!.data).toBe(TEST_NOTE.content.data);
+    expect(content!.title).toBe("Test note");
     await db.notes.add({
       id: id,
       content: TEST_NOTE.content,
@@ -239,8 +270,8 @@ test("note history item can be created by setting note title and content both", 
       items[0].sessionContentId
     );
 
-    expect(content.data).toBe(TEST_NOTE.content.data);
-    expect(content.title).toBe("Test note");
+    expect(content!.data).toBe(TEST_NOTE.content.data);
+    expect(content!.title).toBe("Test note");
     await db.notes.add({
       id: id,
       title: "Test note",
@@ -252,13 +283,15 @@ test("note history item can be created by setting note title and content both", 
       items[0].sessionContentId
     );
 
-    expect(content.data).toBe(TEST_NOTE.content.data);
-    expect(content.title).toBe("Test note");
+    expect(content!.data).toBe(TEST_NOTE.content.data);
+    expect(content!.title).toBe("Test note");
   }));
 
 test("restoring an old session should replace note's content title", () =>
-  noteTest({ title: "Test note", sessionId: Date.now() }).then(
-    async ({ db, id }) => {
+  noteTest({
+    title: "Test note",
+    sessionId: Date.now() as unknown as string
+  }).then(async ({ db, id }) => {
       await delay(1000);
       let newTitle = "Test note (edited)";
 
@@ -275,17 +308,20 @@ test("restoring an old session should replace note's content title", () =>
       expect(firstVersion.id).not.toBe(`${id}_${sessionId}`);
       await db.noteHistory.restore(firstVersion.id);
 
-      const title = (await db.notes.note(id)).title;
+      const title = (await db.notes.note(id))!.title;
       expect(title).toBe("Test note");
     }
   ));
 
 test("restoring an old session should replace note's content and title", () =>
-  noteTest({ ...TEST_NOTE, title: "Test note", sessionId: Date.now() }).then(
-    async ({ db, id }) => {
+  noteTest({
+    ...TEST_NOTE,
+    title: "Test note",
+    sessionId: Date.now() as unknown as string
+  }).then(async ({ db, id }) => {
       await delay(1000);
       let newTitle = "Test note (edited)";
-      let editedContent = {
+      let editedContent: NoteContent<false> = {
         data: TEST_NOTE.content.data + "<p>Some new content</p>",
         type: "tiptap"
       };
@@ -304,11 +340,11 @@ test("restoring an old session should replace note's content and title", () =>
       expect(firstVersion.id).not.toBe(`${id}_${sessionId}`);
       await db.noteHistory.restore(firstVersion.id);
 
-      const title = (await db.notes.note(id)).title;
+      const title = (await db.notes.note(id))!.title;
       expect(title).toBe("Test note");
 
-      const contentId = (await db.notes.note(id)).contentId;
-      expect((await db.content.get(contentId)).data).toBe(
+      const contentId = (await db.notes.note(id))!.contentId!;
+      expect((await db.content.get(contentId))!.data).toBe(
         TEST_NOTE.content.data
       );
     }
@@ -327,8 +363,8 @@ test("note history item has consistent note and title data between sessions", ()
       items[0].sessionContentId
     );
     expect(await db.noteHistory.collection.count()).toBe(1);
-    expect(content.data).toBe(TEST_NOTE.content.data);
-    expect(content.title).toBe("Test note");
+    expect(content!.data).toBe(TEST_NOTE.content.data);
+    expect(content!.title).toBe("Test note");
 
     await db.notes.add({
       id: id,
@@ -341,8 +377,8 @@ test("note history item has consistent note and title data between sessions", ()
       items[1].sessionContentId
     );
 
-    expect(content.data).toBe(TEST_NOTE.content.data);
-    expect(content.title).toBe("Test note");
+    expect(content!.data).toBe(TEST_NOTE.content.data);
+    expect(content!.title).toBe("Test note");
 
     await db.notes.add({
       id: id,
@@ -355,6 +391,6 @@ test("note history item has consistent note and title data between sessions", ()
       items[2].sessionContentId
     );
 
-    expect(content.data).toBe(TEST_NOTE.content.data);
-    expect(content.title).toBe("Test note updated");
+    expect(content!.data).toBe(TEST_NOTE.content.data);
+    expect(content!.title).toBe("Test note updated");
   }));

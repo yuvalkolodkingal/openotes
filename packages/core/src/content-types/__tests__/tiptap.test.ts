@@ -20,8 +20,8 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 import {
   IMG_CONTENT,
   IMG_CONTENT_WITHOUT_HASH
-} from "../../../__tests__/utils/index.ts";
-import { Tiptap } from "../tiptap.ts";
+} from "../../../__tests__/utils/index.js";
+import { ResolveHashes, Tiptap } from "../tiptap.js";
 import { test, expect } from "vitest";
 
 test("img src is empty after extract attachments", async () => {
@@ -38,16 +38,23 @@ test("img src is empty after extract attachments", async () => {
 test("img src is present after insert attachments", async () => {
   const tiptap = new Tiptap(IMG_CONTENT);
   const result = await tiptap.postProcess(async () => {
-    return { key: "hello", metadata: {} };
+    // `postProcess` expects `saveAttachment` to resolve to a hash string.
+    // IMG_CONTENT already carries a `data-hash`, so this callback is never
+    // invoked; the non-conforming return value is kept as-is (and cast) so
+    // behaviour matches the JS version exactly.
+    return { key: "hello", metadata: {} } as unknown as string;
   });
   const tiptap2 = new Tiptap(result.data);
-  const result2 = await tiptap2.insertMedia((hashes) => {
-    const images = {};
+  // `insertMedia` declares a `ResolveHashes` callback returning a promise. This
+  // resolver is synchronous (the result is awaited either way), so the function
+  // is cast rather than made `async`, again to keep behaviour identical.
+  const result2 = await tiptap2.insertMedia(((hashes: string[]) => {
+    const images: Record<string, string> = {};
     for (const hash of hashes) {
       images[hash] = "i am a data";
     }
     return images;
-  });
+  }) as unknown as ResolveHashes);
   expect(result2).toContain(`src="i am a data"`);
 });
 
@@ -57,7 +64,7 @@ test("remove attachments with particular hash", async () => {
   expect(result).not.toContain(`d3eab72e94e3cd35`);
 });
 
-const HTMLS = {
+const HTMLS: Record<string, string> = {
   tables: `<table style="border-collapse: collapse; width: 811px;" border="1"><tbody><tr><td style="width: 81.375px;">Goal</td><td style="width: 708.625px;">To introduce various features of the app to the user and to convert a user on trial or basic plan to upgrade.</td></tr><tr><td style="width: 81.375px;">Frequency</td><td style="width: 708.625px;">1/week or 2/week</td></tr><tr><td style="width: 81.375px;">Types</td><td style="width: 708.625px;">Feature intro, upgrade promo, one time emails</td></tr><tr><td style="width: 81.375px;"></td><td style="width: 708.625px;"></td></tr></tbody></table><h2>Emails</h2><h3>Feature intro</h3><p>Features:</p><ol style="list-style-type: decimal;"><li>Web clipper on mobile</li><li>Pin any note to notification</li><li>Take notes from notifications</li><li>App lock</li><li>Importer</li><li>Encrypted attachments</li><li>Session history &amp; automatic backups</li><li>Note publishing</li><li>Note exports</li><li>Collapsible headers</li></ol><h3>Promos</h3><ol style="list-style-type: decimal;"><li>Trial about to end</li><li>Trial ending (with option to request an extension)</li><li>Try free for 14 days</li></ol><h3>One time</h3><ol style="list-style-type: decimal;"><li>End-of-month progress report</li><li>What's coming/roadmap</li><li>What we are working on</li><li>Join the community</li></ol>`,
   tables2: `<h1>Note 8/6/22, 10:48 AM</h1>
   <p  data-spacing="double">hell</p><p  data-spacing="double">what</p><table><tbody><tr><th colspan="1" rowspan="1"><p  data-spacing="double">sdsdavav</p></th><th colspan="1" rowspan="1"><p  data-spacing="double">daskvjbdsva</p></th><th colspan="1" rowspan="1"><p  data-spacing="double">vsadjkvsadbvjk</p></th></tr><tr><td colspan="1" rowspan="1"><p  data-spacing="double">dsvsajkdb</p></td><td colspan="1" rowspan="1"><p  data-spacing="double">dskajvbsadj</p></td><td colspan="1" rowspan="1"><p  data-spacing="double">kjdasvbkj</p></td></tr><tr><td colspan="1" rowspan="1"><p  data-spacing="double">daskvbkdsa</p></td><td colspan="1" rowspan="1"><p  data-spacing="double">kdsajvbsajkd</p></td><td colspan="1" rowspan="1"><p  data-spacing="double">kjdsavbdsa</p></td></tr></tbody></table>`,

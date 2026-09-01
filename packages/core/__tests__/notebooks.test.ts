@@ -19,13 +19,14 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 import { notebookTest, TEST_NOTEBOOK } from "./utils/index.ts";
 import { test, expect } from "vitest";
+import { ItemReference } from "../src/types.js";
 
 test("add a notebook", () =>
   notebookTest().then(async ({ db, id }) => {
     expect(id).toBeDefined();
     const notebook = await db.notebooks.notebook(id);
     expect(notebook).toBeDefined();
-    expect(notebook.title).toBe(TEST_NOTEBOOK.title);
+    expect(notebook!.title).toBe(TEST_NOTEBOOK.title);
   }));
 
 test("get all notebooks", () =>
@@ -37,14 +38,14 @@ test("pin a notebook", () =>
   notebookTest().then(async ({ db, id }) => {
     await db.notebooks.pin(true, id);
     const notebook = await db.notebooks.notebook(id);
-    expect(notebook.pinned).toBe(true);
+    expect(notebook!.pinned).toBe(true);
   }));
 
 test("unpin a notebook", () =>
   notebookTest().then(async ({ db, id }) => {
     await db.notebooks.pin(false, id);
     const notebook = await db.notebooks.notebook(id);
-    expect(notebook.pinned).toBe(false);
+    expect(notebook!.pinned).toBe(false);
   }));
 
 test("updating notebook with empty title should throw", () =>
@@ -57,7 +58,9 @@ test("parentId() returns parentId if notebook is a subnotebook", () =>
     const subId = await db.notebooks.add({ title: "Sub", id });
     await db.relations.add(
       { type: "notebook", id },
-      { type: "notebook", id, subId }
+      // `subId` is not part of `ItemReference`; it is passed here (alongside
+      // `id`) exactly as the JS test did, so the cast keeps the same payload.
+      { type: "notebook", id, subId } as ItemReference
     );
     expect(await db.notebooks.parentId(subId)).toBe(id);
   }));

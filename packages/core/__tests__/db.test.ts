@@ -23,6 +23,8 @@ import { databaseTest } from "./utils/index.ts";
 
 test("db.host should change HOST", () =>
   databaseTest().then((db) => {
-    db.host({ API_HOST: "hello world" });
+    // `db.host` takes the whole host map; this test only overrides one entry
+    // (the implementation falls back to the existing value for the rest).
+    db.host({ API_HOST: "hello world" } as typeof Constants);
     expect(Constants.API_HOST).toBe("hello world");
   }));

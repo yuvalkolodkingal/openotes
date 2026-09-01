@@ -25,8 +25,9 @@ import {
   databaseTest
 } from "./utils/index.ts";
 import { test, expect, describe } from "vitest";
+import { NoteContent } from "../src/types.js";
 
-const content = {
+const content: NoteContent<false> = {
   ...TEST_NOTE.content,
   data: "<p>hello i am a note of the world</p>"
 };
@@ -155,7 +156,7 @@ describe("notesWithHighlighting", () => {
       );
       const item = await filtered.item(0);
       expect(item.item).toBeDefined();
-      expect(item.item.content[0][0].suffix.includes("&nbsp;")).toBe(false);
+      expect(item.item!.content[0][0].suffix.includes("&nbsp;")).toBe(false);
     }));
 
   test("search notes with parentheses in query should load the item", () =>

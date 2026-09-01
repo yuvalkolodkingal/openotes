@@ -21,9 +21,20 @@ import {
   TEST_NOTE,
   databaseTest,
   loginFakeUser
-} from "../../../../__tests__/utils/index.ts";
+} from "../../../../__tests__/utils/index.js";
 import { expect, describe, vi } from "vitest";
-import Merger from "../merger.ts";
+import Merger from "../merger.js";
+import {
+  Attachment,
+  ContentItem,
+  Item,
+  MaybeDeletedItem
+} from "../../../types.js";
+
+// The merger only ever reads a handful of fields off the items it is given, so
+// these suites feed it deliberately partial fixtures. The literals are kept
+// exactly as they were and cast to the item types `Merger` declares, rather
+// than being padded out with fields the assertions do not exercise.
 
 describe.concurrent("merge item synchronously", (test) => {
   test("accept remote item if no local item is found", () =>
@@ -34,12 +45,12 @@ describe.concurrent("merge item synchronously", (test) => {
       const merged = merger.mergeItem(
         {
           type: "color"
-        },
+        } as unknown as MaybeDeletedItem<Item>,
         undefined
-      );
+      ) as Item | undefined;
 
       expect(merged).toBeDefined();
-      expect(merged.type).toBe("color");
+      expect(merged!.type).toBe("color");
     }));
 
   test("accept remote item if it is newer than local item", () =>
@@ -51,15 +62,15 @@ describe.concurrent("merge item synchronously", (test) => {
         {
           type: "color",
           dateModified: Date.now()
-        },
+        } as unknown as MaybeDeletedItem<Item>,
         {
           type: "color",
           dateModified: Date.now() - 1000
-        }
-      );
+        } as unknown as MaybeDeletedItem<Item>
+      ) as Item | undefined;
 
       expect(merged).toBeDefined();
-      expect(merged.type).toBe("color");
+      expect(merged!.type).toBe("color");
     }));
 
   test("accept local item if it is newer than remote item", () =>
@@ -71,12 +82,12 @@ describe.concurrent("merge item synchronously", (test) => {
         {
           type: "color",
           dateModified: Date.now() - 1000
-        },
+        } as unknown as MaybeDeletedItem<Item>,
         {
           type: "color",
           dateModified: Date.now()
-        }
-      );
+        } as unknown as MaybeDeletedItem<Item>
+      ) as Item | undefined;
 
       expect(merged).toBeUndefined();
     }));
@@ -88,16 +99,16 @@ describe.concurrent("merge content", (test) => {
       await loginFakeUser(db);
       const merger = new Merger(db);
 
-      const merged = await merger.mergeContent(
+      const merged = (await merger.mergeContent(
         {
           type: "tiptap",
           data: "Hello"
-        },
+        } as unknown as ContentItem,
         {
           type: "tiptap",
           localOnly: true
-        }
-      );
+        } as unknown as ContentItem
+      )) as ContentItem | undefined;
 
       expect(merged).toBeUndefined();
     }));
@@ -107,15 +118,15 @@ describe.concurrent("merge content", (test) => {
       await loginFakeUser(db);
       const merger = new Merger(db);
 
-      const merged = await merger.mergeContent(
+      const merged = (await merger.mergeContent(
         {
           type: "tiptap"
-        },
+        } as unknown as ContentItem,
         undefined
-      );
+      )) as ContentItem | undefined;
 
       expect(merged).toBeDefined();
-      expect(merged.type).toBe("tiptap");
+      expect(merged!.type).toBe("tiptap");
     }));
 
   test("accept remote item if it is newer than local item", () =>
@@ -128,17 +139,17 @@ describe.concurrent("merge content", (test) => {
           type: "tiptap",
           data: "Remote",
           dateEdited: Date.now()
-        },
+        } as unknown as ContentItem,
         {
           type: "tiptap",
           data: "Local",
           synced: true,
           dateEdited: Date.now() - 1000
-        }
-      );
+        } as unknown as ContentItem
+      ) as ContentItem | undefined;
 
       expect(merged).toBeDefined();
-      expect(merged.data).toBe("Remote");
+      expect(merged!.data).toBe("Remote");
     }));
 
   test("trigger conflict if local item is unsynced", () =>
@@ -153,20 +164,20 @@ describe.concurrent("merge content", (test) => {
           data: "Remote",
           noteId,
           dateEdited: Date.now() - 60000
-        },
+        } as unknown as ContentItem,
         {
           type: "tiptap",
           data: "Local",
           noteId,
           synced: false,
           dateEdited: Date.now()
-        }
-      );
+        } as unknown as ContentItem
+      ) as ContentItem | undefined;
 
       expect(merged).toBeDefined();
-      expect(merged.data).toBe("Local");
-      expect(merged.conflicted).toBeDefined();
-      expect(merged.conflicted.data).toBe("Remote");
+      expect(merged!.data).toBe("Local");
+      expect(merged!.conflicted).toBeDefined();
+      expect(merged!.conflicted!.data).toBe("Remote");
     }));
 
   test("merge conflicts if local item is already conflicted", () =>
@@ -175,24 +186,24 @@ describe.concurrent("merge content", (test) => {
       const merger = new Merger(db);
 
       const noteId = await db.notes.add({ ...TEST_NOTE, conflicted: true });
-      const merged = await merger.mergeContent(
+      const merged = (await merger.mergeContent(
         {
           type: "tiptap",
           data: "Conflicted remote 2",
           noteId
-        },
+        } as unknown as ContentItem,
         {
           type: "tiptap",
           data: "Local",
           noteId,
           conflicted: { type: "tiptap", data: "Conflicted remote" }
-        }
-      );
+        } as unknown as ContentItem
+      )) as ContentItem | undefined;
 
       expect(merged).toBeDefined();
-      expect(merged.data).toBe("Local");
-      expect(merged.conflicted).toBeDefined();
-      expect(merged.conflicted.data).toBe("Conflicted remote 2");
+      expect(merged!.data).toBe("Local");
+      expect(merged!.conflicted).toBeDefined();
+      expect(merged!.conflicted!.data).toBe("Conflicted remote 2");
       expect(await db.notes.conflicted.has(noteId)).toBe(true);
     }));
 
@@ -204,25 +215,25 @@ describe.concurrent("merge content", (test) => {
           const merger = new Merger(db);
 
           const noteId = await db.notes.add(TEST_NOTE);
-          const merged = await merger.mergeContent(
+          const merged = (await merger.mergeContent(
             {
               type: "tiptap",
               data: "Remote",
               noteId,
               dateEdited: Date.now() - 300,
               dateModified: Date.now()
-            },
+            } as unknown as ContentItem,
             {
               type: "tiptap",
               data: "Local",
               noteId,
               dateEdited: Date.now(),
               dateModified: Date.now() - 600
-            }
-          );
+            } as unknown as ContentItem
+          )) as ContentItem | undefined;
 
           expect(merged).toBeDefined();
-          expect(merged.data).toBe("Remote");
+          expect(merged!.data).toBe("Remote");
         }));
 
       test("keep local if it is newer", () =>
@@ -231,22 +242,22 @@ describe.concurrent("merge content", (test) => {
           const merger = new Merger(db);
 
           const noteId = await db.notes.add(TEST_NOTE);
-          const merged = await merger.mergeContent(
+          const merged = (await merger.mergeContent(
             {
               type: "tiptap",
               data: "Remote",
               noteId,
               dateEdited: Date.now() - 300,
               dateModified: Date.now() - 600
-            },
+            } as unknown as ContentItem,
             {
               type: "tiptap",
               data: "Local",
               noteId,
               dateEdited: Date.now(),
               dateModified: Date.now()
-            }
-          );
+            } as unknown as ContentItem
+          )) as ContentItem | undefined;
 
           expect(merged).toBeUndefined();
         }));
@@ -259,25 +270,25 @@ describe.concurrent("merge content", (test) => {
           const merger = new Merger(db);
 
           const noteId = await db.notes.add(TEST_NOTE);
-          const merged = await merger.mergeContent(
+          const merged = (await merger.mergeContent(
             {
               type: "tiptap",
               data: "Remote",
               noteId,
               dateEdited: Date.now() - 60000,
               dateModified: Date.now()
-            },
+            } as unknown as ContentItem,
             {
               type: "tiptap",
               data: "Remote",
               noteId,
               dateEdited: Date.now(),
               dateModified: Date.now() - 6000
-            }
-          );
+            } as unknown as ContentItem
+          )) as ContentItem | undefined;
 
           expect(merged).toBeDefined();
-          expect(merged.data).toBe("Remote");
+          expect(merged!.data).toBe("Remote");
         }));
 
       test("keep local if it is newer", () =>
@@ -286,22 +297,22 @@ describe.concurrent("merge content", (test) => {
           const merger = new Merger(db);
 
           const noteId = await db.notes.add(TEST_NOTE);
-          const merged = await merger.mergeContent(
+          const merged = (await merger.mergeContent(
             {
               type: "tiptap",
               data: "Remote",
               noteId,
               dateEdited: Date.now() - 60000,
               dateModified: Date.now() - 6000
-            },
+            } as unknown as ContentItem,
             {
               type: "tiptap",
               data: "Remote",
               noteId,
               dateEdited: Date.now(),
               dateModified: Date.now()
-            }
-          );
+            } as unknown as ContentItem
+          )) as ContentItem | undefined;
 
           expect(merged).toBeUndefined();
         }));
@@ -311,7 +322,11 @@ describe.concurrent("merge content", (test) => {
 
 describe.concurrent("merge attachment", () => {
   describe("accept remote item", (test) => {
-    const cases = [
+    const cases: {
+      name: string;
+      remote: Partial<Attachment>;
+      local?: Partial<Attachment>;
+    }[] = [
       {
         name: "local item is undefined",
         remote: { type: "attachment" },
@@ -346,11 +361,15 @@ describe.concurrent("merge attachment", () => {
         databaseTest().then(async (db) => {
           await loginFakeUser(db);
           const merger = new Merger(db);
-          db.attachments.remove = vi.fn(() => true);
+          // `remove` is async and takes (hashOrId, localOnly); the stub only
+          // needs to report success, so it is cast instead of reshaped.
+          db.attachments.remove = vi.fn(
+            () => true
+          ) as unknown as typeof db.attachments.remove;
 
           const merged = await merger.mergeAttachment(
-            testCase.remote,
-            testCase.local
+            testCase.remote as MaybeDeletedItem<Attachment>,
+            testCase.local as MaybeDeletedItem<Attachment> | undefined
           );
 
           expect(merged).toBeDefined();
@@ -361,7 +380,11 @@ describe.concurrent("merge attachment", () => {
   });
 
   describe("accept local item", (test) => {
-    const cases = [
+    const cases: {
+      name: string;
+      remote: Partial<Attachment>;
+      local?: Partial<Attachment>;
+    }[] = [
       {
         name: "local item is deleted (local is newer)",
         remote: { type: "attachment", dateModified: Date.now() - 1000 },
@@ -397,8 +420,8 @@ describe.concurrent("merge attachment", () => {
           const merger = new Merger(db);
 
           const merged = await merger.mergeAttachment(
-            testCase.remote,
-            testCase.local
+            testCase.remote as MaybeDeletedItem<Attachment>,
+            testCase.local as MaybeDeletedItem<Attachment> | undefined
           );
 
           expect(merged).toBeUndefined();

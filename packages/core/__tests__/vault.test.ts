@@ -20,15 +20,16 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 import { VAULT_ERRORS } from "../src/api/vault.ts";
 import { databaseTest, delay, noteTest, TEST_NOTE } from "./utils/index.ts";
 import { test, expect } from "vitest";
+import { EncryptedContentItem } from "../src/types.js";
 
 test("create vault", () =>
   databaseTest().then(async (db) => {
     await expect(db.vault.create("password")).resolves.toBe(true);
     const vault = await db.vaults.default();
     expect(vault).toBeDefined();
-    expect(vault.key.iv).toBeDefined();
-    expect(vault.key.cipher).toBeDefined();
-    expect(vault.key.length).toBeDefined();
+    expect(vault!.key.iv).toBeDefined();
+    expect(vault!.key.cipher).toBeDefined();
+    expect(vault!.key.length).toBeDefined();
   }));
 
 test("lock vault", () =>
@@ -73,16 +74,19 @@ test("lock a note", () =>
     await db.vault.add(id);
 
     const note = await db.notes.note(id);
-    const content = await db.content.get(note.contentId);
+    // the note was just locked, so its content is an encrypted item
+    const content = (await db.content.get(
+      note!.contentId!
+    )) as EncryptedContentItem;
     const vault = await db.vaults.default();
 
-    expect(note.headline).toBe("");
+    expect(note!.headline).toBe("");
 
     expect(content.noteId).toBeDefined();
     expect(content.data.iv).toBeDefined();
     expect(content.data.cipher).toBeDefined();
 
-    expect(await db.relations.from(vault, "note").has(id)).toBe(true);
+    expect(await db.relations.from(vault!, "note").has(id)).toBe(true);
   }));
 
 test("locked note is not favorited", () =>
@@ -91,7 +95,7 @@ test("locked note is not favorited", () =>
     await db.vault.add(id);
     const note = await db.notes.note(id);
 
-    expect(note.favorite).toBeFalsy();
+    expect(note!.favorite).toBeFalsy();
   }));
 
 test("unlock a note", () =>
@@ -102,10 +106,10 @@ test("unlock a note", () =>
     const note = await db.vault.open(id, "password");
 
     const vault = await db.vaults.default();
-    expect(note.id).toBe(id);
-    expect(note.content.data).toBeDefined();
-    expect(note.content.type).toBe(TEST_NOTE.content.type);
-    expect(await db.relations.from(vault, "note").has(id)).toBe(true);
+    expect(note!.id).toBe(id);
+    expect(note!.content!.data).toBeDefined();
+    expect(note!.content!.type).toBe(TEST_NOTE.content.type);
+    expect(await db.relations.from(vault!, "note").has(id)).toBe(true);
   }));
 
 test("unlock a note permanently", () =>
@@ -116,14 +120,14 @@ test("unlock a note permanently", () =>
     await db.vault.remove(id, "password");
 
     const note = await db.notes.note(id);
-    const content = await db.content.get(note.contentId);
+    const content = await db.content.get(note!.contentId!);
     const vault = await db.vaults.default();
 
-    expect(note.id).toBe(id);
-    expect(note.headline).not.toBe("");
-    expect(content.data).toBeDefined();
-    expect(typeof content.data).toBe("string");
-    expect(await db.relations.from(vault, "note").has(id)).toBe(false);
+    expect(note!.id).toBe(id);
+    expect(note!.headline).not.toBe("");
+    expect(content!.data).toBeDefined();
+    expect(typeof content!.data).toBe("string");
+    expect(await db.relations.from(vault!, "note").has(id)).toBe(false);
   }));
 
 test("lock an empty note", () =>
@@ -133,14 +137,17 @@ test("lock an empty note", () =>
     await db.vault.add(id);
 
     const note = await db.notes.note(id);
-    const content = await db.content.get(note.contentId);
+    // the note was just locked, so its content is an encrypted item
+    const content = (await db.content.get(
+      note!.contentId!
+    )) as EncryptedContentItem;
     const vault = await db.vaults.default();
-    expect(note.headline).toBe("");
+    expect(note!.headline).toBe("");
     expect(content.locked).toBeTruthy();
     expect(content.noteId).toBeDefined();
     expect(content.data.iv).toBeDefined();
     expect(content.data.cipher).toBeDefined();
-    expect(await db.relations.from(vault, "note").has(id)).toBe(true);
+    expect(await db.relations.from(vault!, "note").has(id)).toBe(true);
   }));
 
 test("save a locked note", () =>
@@ -149,9 +156,12 @@ test("save a locked note", () =>
     await db.vault.add(id);
 
     const note = await db.notes.note(id);
-    await db.vault.save(note);
+    await db.vault.save(note!);
 
-    const content = await db.content.get(note.contentId);
+    // the note is in the vault, so its saved content is an encrypted item
+    const content = (await db.content.get(
+      note!.contentId!
+    )) as EncryptedContentItem;
 
     expect(content.data.cipher).toBeTypeOf("string");
   }));
@@ -163,16 +173,21 @@ test("save an edited locked note", () =>
 
     const note = await db.notes.note(id);
     await db.vault.save({
-      ...note,
+      ...note!,
       content: { type: "tiptap", data: "<p>hello world</p>" }
     });
 
-    const content = await db.content.get(note.contentId);
+    // the note is in the vault, so its saved content is an encrypted item
+    const content = (await db.content.get(
+      note!.contentId!
+    )) as EncryptedContentItem;
 
     expect(content.data.cipher).toBeTypeOf("string");
     expect(() => JSON.parse(content.data.cipher)).toThrow();
-    expect(note.dateEdited).toBeLessThan((await db.notes.note(id)).dateEdited);
-    expect(note.dateEdited).toBeLessThan(content.dateEdited);
+    expect(note!.dateEdited).toBeLessThan(
+      (await db.notes.note(id))!.dateEdited
+    );
+    expect(note!.dateEdited).toBeLessThan(content.dateEdited);
   }));
 
 test("change vault password", () =>
@@ -203,7 +218,7 @@ test("clear vault", () =>
     await db.vault.clear("password");
 
     const vault = await db.vaults.default();
-    expect(await db.relations.from(vault, "note").has(id)).toBe(false);
+    expect(await db.relations.from(vault!, "note").has(id)).toBe(false);
   }));
 
 test("delete vault without deleting all locked notes", () =>
@@ -214,7 +229,7 @@ test("delete vault without deleting all locked notes", () =>
 
     await db.vault.delete();
 
-    expect(await db.relations.from(vault, "note").has(id)).toBe(false);
+    expect(await db.relations.from(vault!, "note").has(id)).toBe(false);
     expect(await db.vaults.default()).toBeUndefined();
   }));
 
@@ -226,7 +241,7 @@ test("delete vault and delete all locked notes", () =>
 
     await db.vault.delete(true);
 
-    expect(await db.relations.from(vault, "note").has(id)).toBe(false);
+    expect(await db.relations.from(vault!, "note").has(id)).toBe(false);
     expect(await db.notes.exists(id)).toBe(false);
     expect(await db.vaults.default()).toBeUndefined();
   }));
@@ -238,7 +253,7 @@ test("delete all vaults and their locked notes", () =>
      * and each vault has a locked note
      */
     const key = {
-      format: "base64",
+      format: "base64" as const,
       alg: "aes-256-gcm",
       cipher: "key",
       iv: "iv",
