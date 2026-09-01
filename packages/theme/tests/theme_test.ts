@@ -185,6 +185,52 @@ Deno.test("every colour parses and every background matches the scheme", () => {
   }
 });
 
+Deno.test("a selected row reads more strongly than a hovered one", () => {
+  // The 1.0 dark theme had hover (#292524) a bigger step off the page than
+  // list.selected (#211d1a), so moving the mouse made an unselected note look
+  // more selected than the selected one.
+  for (const theme of [light, dark]) {
+    const base = theme.scopes.base.primary;
+    const page = parseColor(base.background);
+    const hover = contrast(parseColor(base.hover, page), page);
+    const selected = contrast(
+      parseColor(
+        theme.scopes.list?.selected?.background ??
+          theme.scopes.base.selected.background,
+        page,
+      ),
+      page,
+    );
+    assert(
+      selected >= hover - 0.01,
+      `${theme.id}: hover stands out more than selection ` +
+        `(${hover.toFixed(2)} vs ${selected.toFixed(2)})`,
+    );
+  }
+});
+
+Deno.test("disabled colours survive being drawn on the status bar", () => {
+  // components/status-bar/webdav-sync-status.tsx renders
+  // var(--icon-disabled) on the status bar's own background, not on the
+  // disabled surface, so "inert" still has to mean "visible" there.
+  for (const theme of [light, dark]) {
+    const page = parseColor(theme.scopes.base.primary.background);
+    const statusBar = parseColor(
+      theme.scopes.statusBar?.primary?.background ??
+        theme.scopes.base.primary.background,
+      page,
+    );
+    const disabled = theme.scopes.base.disabled;
+    for (const key of ["icon", "paragraph"] as const) {
+      const ratio = contrast(parseColor(disabled[key], statusBar), statusBar);
+      assert(
+        ratio >= 3,
+        `${theme.id}: disabled ${key} is ${ratio.toFixed(2)} on the status bar`,
+      );
+    }
+  }
+});
+
 Deno.test("text and controls meet WCAG AA", () => {
   const failures: string[] = [];
 

@@ -179,6 +179,13 @@ export const PROCEDURE_NAMES = [
   "backup.selectLocalDirectory",
   "backup.importFile",
 
+  // --- the built-in MCP endpoint for AI assistants (new in 2.1) ---
+  "mcp.getSettings",
+  "mcp.setSettings",
+  "mcp.status",
+  "mcp.clientConfig",
+  "mcp.regenerateToken",
+
   // --- capabilities ---
   "capabilities.get",
 
@@ -209,6 +216,10 @@ export const EVENT_NAMES = [
   "webdav.status",
   "webdav.conflict",
   "backup.completed",
+  // An assistant changed a note through the MCP endpoint; the interface
+  // holds its own cache of the vault and has to reload.
+  "mcp.notesChanged",
+  "mcp.status",
 ] as const;
 
 export type EventName = (typeof EVENT_NAMES)[number];

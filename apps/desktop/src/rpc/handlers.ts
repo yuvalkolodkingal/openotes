@@ -647,7 +647,89 @@ export function createHandlers(): Record<string, Handler> {
         (progress) => context.emit("backup.completed", progress),
       );
     },
+
+    // ---------------- the assistant endpoint (MCP) ----------------
+
+    "mcp.getSettings": (_input, context) => context.settings.get("mcp"),
+
+    "mcp.setSettings": async (input, context) => {
+      const current = context.settings.get("mcp");
+      const port = input?.port === undefined
+        ? current.port
+        : asPort(input.port);
+      await context.settings.patchMcp({
+        enabled: input?.enabled === undefined
+          ? current.enabled
+          : !!input.enabled,
+        port,
+        allowWrites: input?.allowWrites === undefined
+          ? current.allowWrites
+          : !!input.allowWrites,
+      });
+      await context.applyMcpSettings();
+      return context.mcp.status();
+    },
+
+    "mcp.status": (_input, context) => context.mcp.status(),
+
+    /**
+     * The snippet a user pastes into their MCP client. The token is in it,
+     * which is the point — it is shown once the user asks for it, in the
+     * settings screen, and nowhere else.
+     */
+    "mcp.clientConfig": (_input, context) => {
+      const status = context.mcp.status();
+      if (!status.listening || !status.url) {
+        return { listening: false };
+      }
+      const token = context.mcp.currentToken();
+      return {
+        listening: true,
+        url: status.url,
+        token,
+        // Claude Code and anything else that takes a command line.
+        command: `claude mcp add --transport http openotes ${status.url} ` +
+          `--header "Authorization: Bearer ${token}"`,
+        // The shape most desktop clients keep in a JSON config file.
+        json: JSON.stringify(
+          {
+            mcpServers: {
+              openotes: {
+                type: "http",
+                url: status.url,
+                headers: { Authorization: `Bearer ${token}` },
+              },
+            },
+          },
+          null,
+          2,
+        ),
+      };
+    },
+
+    "mcp.regenerateToken": async (_input, context) => {
+      await context.regenerateMcpToken();
+      return context.mcp.status();
+    },
   };
+}
+
+/**
+ * A TCP port the endpoint may bind. 0 means "any free port"; anything below
+ * 1024 needs privileges the app does not have and should not ask for.
+ */
+function asPort(value: unknown): number {
+  const port = typeof value === "string" ? Number(value) : value;
+  if (typeof port !== "number" || !Number.isInteger(port)) {
+    throw new Error("The port must be a whole number.");
+  }
+  if (port === 0) return 0;
+  if (port < 1024 || port > 65535) {
+    throw new Error(
+      "Choose a port between 1024 and 65535, or 0 for any free port.",
+    );
+  }
+  return port;
 }
 
 /** Dispatch one renderer call. Never throws; always returns an RpcResponse. */

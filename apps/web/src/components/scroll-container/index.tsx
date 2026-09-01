@@ -20,6 +20,18 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 import React, { PropsWithChildren, useLayoutEffect } from "react";
 import { MacScrollbar, MacScrollbarProps } from "mac-scrollbar";
 import "mac-scrollbar/dist/mac-scrollbar.css";
+import { useThemeEngineStore } from "@notesnook/theme";
+
+/**
+ * mac-scrollbar hardcodes `skin: "light"`, which paints the thumb
+ * rgba(0,0,0,.5) — black on black in dark mode. app.css overrides the thumb
+ * colour, but only that one property, so telling the library which skin it
+ * is actually rendering keeps the rest of its rules (track, hover, active)
+ * from being wrong too.
+ */
+function useSkin(): "light" | "dark" {
+  return useThemeEngineStore((store) => store.theme.colorScheme);
+}
 
 export type ScrollContainerProps = {
   style?: React.CSSProperties;
@@ -32,10 +44,12 @@ const ScrollContainer = ({
   style,
   ...props
 }: PropsWithChildren<ScrollContainerProps>) => {
+  const skin = useSkin();
   return (
     <MacScrollbar
       suppressScrollX
       minThumbSize={40}
+      skin={skin}
       {...props}
       ref={(div) => {
         forwardedRef && forwardedRef(div as HTMLDivElement);
@@ -67,8 +81,10 @@ export function FlexScrollContainer({
   scrollRef,
   ...restProps
 }: PropsWithChildren<FlexScrollContainerProps>) {
+  const skin = useSkin();
   return (
     <MacScrollbar
+      skin={skin}
       {...restProps}
       ref={scrollRef}
       id={id}

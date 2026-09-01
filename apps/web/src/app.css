@@ -1,3 +1,24 @@
+/*
+  The sync-status vocabulary from branding/DESIGN.md. These are reserved
+  colours with one meaning each, so they live here rather than being spelled
+  out at the call site — and they have to flip with the theme, because the
+  light values (a #0369a1 blue, a #b45309 amber) land at under 3.6:1 on the
+  dark status bar, which is where they are drawn.
+*/
+:root {
+  --on-syncing: #0369a1;
+  --on-offline: #6b645f;
+  --on-pending: #6b645f;
+  --on-conflict: #b45309;
+}
+
+html[data-theme="dark"] {
+  --on-syncing: #38bdf8;
+  --on-offline: #a8a29e;
+  --on-pending: #a8a29e;
+  --on-conflict: #fbbf24;
+}
+
 .tabsScroll,
 .titlebarLogo,
 .theme-scope-titleBar,

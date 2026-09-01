@@ -42,29 +42,29 @@
         "backdrop": "#1c191733"
       },
       "disabled": {
-        "accent": "#8fb7b3",
+        "accent": "#7aa8a3",
         "accentForeground": "#ffffff",
-        "paragraph": "#a8a29e",
+        "paragraph": "#7d7873",
         "background": "#f5f5f4",
         "border": "#dcd8d5",
-        "heading": "#a8a29e",
-        "icon": "#a8a29e",
+        "heading": "#7d7873",
+        "icon": "#7d7873",
         "separator": "#dcd8d5",
-        "placeholder": "#a8a29e",
+        "placeholder": "#7d7873",
         "hover": "#1c191708",
-        "backdrop": "#1c191733"
+        "backdrop": "#1c191740"
       },
       "selected": {
         "accent": "#0f766e",
         "accentForeground": "#ffffff",
         "paragraph": "#1c1917",
-        "background": "#ccfbf1",
+        "background": "#a7f3e4",
         "border": "#0f766e",
         "heading": "#1c1917",
         "icon": "#0d6660",
-        "separator": "#8ad8c7",
+        "separator": "#6fcdb9",
         "placeholder": "#4c7a74",
-        "hover": "#99f6e4",
+        "hover": "#8fe9d8",
         "backdrop": "#1c191733"
       },
       "error": {
@@ -125,13 +125,13 @@
         "paragraph": "#6b645f"
       },
       "selected": {
-        "background": "#ccfbf1",
+        "background": "#a7f3e4",
         "paragraph": "#1c1917",
         "heading": "#1c1917",
         "icon": "#0d6660",
         "border": "#0f766e",
-        "separator": "#8ad8c7",
-        "hover": "#99f6e4"
+        "separator": "#6fcdb9",
+        "hover": "#8fe9d8"
       }
     },
     "editor": {
@@ -141,10 +141,10 @@
         "heading": "#1c1917"
       },
       "selected": {
-        "background": "#ccfbf1",
+        "background": "#a7f3e4",
         "paragraph": "#1c1917",
         "heading": "#1c1917",
-        "separator": "#8ad8c7"
+        "separator": "#6fcdb9"
       }
     },
     "editorToolbar": {
@@ -155,10 +155,10 @@
         "hover": "#e7e5e4"
       },
       "selected": {
-        "background": "#ccfbf1",
+        "background": "#a7f3e4",
         "paragraph": "#1c1917",
         "icon": "#0d6660",
-        "separator": "#8ad8c7"
+        "separator": "#6fcdb9"
       }
     },
     "editorSidebar": {
@@ -200,13 +200,13 @@
         "separator": "#cbc6c2"
       },
       "selected": {
-        "background": "#ccfbf1",
+        "background": "#a7f3e4",
         "paragraph": "#1c1917",
         "heading": "#1c1917",
         "icon": "#0d6660",
         "border": "#0f766e",
-        "separator": "#8ad8c7",
-        "hover": "#99f6e4"
+        "separator": "#6fcdb9",
+        "hover": "#8fe9d8"
       }
     },
     "contextMenu": {
@@ -225,8 +225,8 @@
       },
       "selected": {
         "paragraph": "#0d6660",
-        "background": "#ccfbf1",
-        "separator": "#8ad8c7"
+        "background": "#a7f3e4",
+        "separator": "#6fcdb9"
       }
     }
   },

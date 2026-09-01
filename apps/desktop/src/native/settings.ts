@@ -80,6 +80,23 @@ export interface BackupSettings {
   lastBackupAt?: number;
 }
 
+/**
+ * The built-in MCP endpoint (Settings -> AI assistant). Device-local like
+ * everything else here: which machine an assistant may reach is not a
+ * preference that should roam to another machine.
+ */
+export interface McpSettings {
+  /** Nothing listens until this is on. */
+  enabled: boolean;
+  /**
+   * 0 asks the OS for any free port, which is fine for a trial but changes
+   * the URL every launch. A fixed port keeps a written client config valid.
+   */
+  port: number;
+  /** Read-only until the user allows editing; write tools are not even listed. */
+  allowWrites: boolean;
+}
+
 export interface DesktopSettings {
   autoStart: boolean;
   startMinimized: boolean;
@@ -94,6 +111,7 @@ export interface AppSettings {
   desktop: DesktopSettings;
   webdav: WebDavSettings;
   backup: BackupSettings;
+  mcp: McpSettings;
   zoomFactor: number;
   theme: "light" | "dark" | "system";
   privacyMode: boolean;
@@ -138,6 +156,11 @@ export function defaultSettings(): AppSettings {
       allowInsecureHttp: false,
       storeCredentialsWithMachineKey: false,
       passwordSaved: false,
+    },
+    mcp: {
+      enabled: false,
+      port: 4747,
+      allowWrites: false,
     },
     backup: {
       localEnabled: true,
@@ -224,6 +247,11 @@ export class SettingsStore {
       ...this.state,
       backup: { ...this.state.backup, ...partial },
     };
+    await this.persist();
+  }
+
+  async patchMcp(partial: Partial<McpSettings>): Promise<void> {
+    this.state = { ...this.state, mcp: { ...this.state.mcp, ...partial } };
     await this.persist();
   }
 

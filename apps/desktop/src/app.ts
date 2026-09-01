@@ -24,6 +24,7 @@ import {
   appDataDir,
   attachmentsDir,
   cacheDir,
+  configDir,
   documentsDir,
   ensureDir,
 } from "./native/paths.ts";
@@ -46,6 +47,8 @@ import { DatabaseSyncStore } from "./sync/store-adapter.ts";
 import { SyncService } from "./sync/service.ts";
 import { BackupService } from "./backup/service.ts";
 import { UpdateService } from "./updates/updater.ts";
+import { NoteRepository } from "./mcp/notes.ts";
+import { McpServer, readOrCreateToken, rotateToken } from "./mcp/server.ts";
 import type { EventName } from "./rpc/protocol.ts";
 
 const log = logger.scope("app");
@@ -79,6 +82,8 @@ export interface AppContext {
   sync: SyncService;
   backups: BackupService;
   updater: UpdateService;
+  notes: NoteRepository;
+  mcp: McpServer;
   shell: Shell;
   dialogs: Dialogs;
   notifications: Notifications;
@@ -95,6 +100,10 @@ export interface AppContext {
   allowedRoots(): string[];
   refreshAllowedRoots(): void;
   hasStoredWebDavPassword(): boolean;
+  /** Apply the current mcp settings: start, stop or restart the endpoint. */
+  applyMcpSettings(): Promise<void>;
+  /** Replace the assistant token; every existing client config stops working. */
+  regenerateMcpToken(): Promise<string>;
   tailLogs(lines: number): Promise<string[]>;
   restart(): void;
   shutdown(): Promise<void>;
@@ -181,6 +190,8 @@ export async function createApp(
     sync: undefined as unknown as SyncService,
     backups: undefined as unknown as BackupService,
     updater: undefined as unknown as UpdateService,
+    notes: undefined as unknown as NoteRepository,
+    mcp: undefined as unknown as McpServer,
 
     emit,
 
@@ -223,6 +234,28 @@ export async function createApp(
     // store may be locked when the settings form asks (see settings.ts).
     hasStoredWebDavPassword: () => settings.get("webdav").passwordSaved,
 
+    async applyMcpSettings() {
+      const config = settings.get("mcp");
+      if (!config.enabled) {
+        await context.mcp.stop();
+        emit("mcp.status", context.mcp.status());
+        return;
+      }
+      const token = await readOrCreateToken(configDir());
+      await context.mcp.start({
+        port: config.port,
+        allowWrites: config.allowWrites,
+        token,
+      });
+      emit("mcp.status", context.mcp.status());
+    },
+
+    async regenerateMcpToken() {
+      const token = await rotateToken(configDir());
+      if (settings.get("mcp").enabled) await context.applyMcpSettings();
+      return token;
+    },
+
     tailLogs: (lines) => logger.tail(lines),
 
     restart() {
@@ -242,6 +275,7 @@ export async function createApp(
         });
       }
       context.sync?.stop();
+      await context.mcp?.stop();
       exports.closeAll();
       await storage.flush();
       sqlite.closeAll();
@@ -303,9 +337,28 @@ export async function createApp(
     openExternal: (url) => shell.openExternal(url),
   });
 
+  const notes = new NoteRepository({
+    sqlite,
+    databaseHandle: () => databaseHandle,
+  });
+
+  const mcp = new McpServer({
+    repository: notes,
+    configDirectory: configDir(),
+    onChanged: () => {
+      // An assistant just wrote to the vault behind the interface's back.
+      // Sync has to ship it, and the interface has to reload — it caches
+      // every list it renders.
+      context.notifyLocalChange();
+      emit("mcp.notesChanged", {});
+    },
+  });
+
   context.sync = sync;
   context.backups = backups;
   context.updater = updater;
+  context.notes = notes;
+  context.mcp = mcp;
 
   /**
    * The renderer opens the vault through sqlite.open; wrap the service so
@@ -332,6 +385,14 @@ export async function createApp(
           error: error instanceof Error ? error.message : String(error),
         });
       }
+      // The assistant endpoint answers questions about the vault, so it
+      // only makes sense once the vault is open — and it stays off unless
+      // the user turned it on.
+      void context.applyMcpSettings().catch((error) => {
+        log.warn("Could not start the assistant endpoint", {
+          error: error instanceof Error ? error.message : String(error),
+        });
+      });
       void backups.runIfDue();
     }
     return handle;
