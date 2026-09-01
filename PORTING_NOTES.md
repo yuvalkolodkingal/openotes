@@ -7,7 +7,7 @@ working tree on 2026-08-31.
 **Repo state (verified, supersedes the audits):** the audits were taken against
 upstream v3.4.7 (`09a0c30`) with untracked scaffolding. Since then, commit
 `d4c495a` ("Add encrypted WebDAV sync engine and Deno workspace bootstrap")
-landed: `packages/sync-webdav/` is now a complete committed package
+landed: `packages/sync-remote/` is now a complete committed package
 (`src/{client,crypto,conflicts,repository,queue,engine,backup,http,xml,types,index}.ts`,
 `tests/{client_test,sync_test,fake-server,harness,memory-store}.ts`, 36 passing
 tests, own `deno.json`), plus root `deno.json`/`deno.lock` and
@@ -44,7 +44,7 @@ web-API-clean or already platform-abstracted:
 | `packages/editor` | **Keep** | Zero Electron/Node imports; host integration is `editor.storage` callbacks (`src/index.ts:395-411`: openLink, downloadAttachment, openAttachmentPicker, previewAttachment, getAttachmentData, …). Pro-gating is an injected claims system, not baked in (§6). Build-time gotcha: gitignored generated `src/extensions/code-block/languages/index.ts` from `scripts/langen.mjs` (§11). |
 | `packages/theme` | **Keep** | Bundled default themes; applied themes persist in localStorage. Gotcha: `default-{light,dark}.json` are gitignored and fetched at prebuild from raw.githubusercontent.com — **vendor them** (`packages/theme/scripts/prebuild.mjs` already skips-if-exists). |
 | `packages/ui`, `packages/intl`, `packages/logger` | **Keep** | Pure UI/i18n/logging leaves of the web closure. |
-| `packages/sync-webdav` | **Keep (new, the point of the fork)** | Committed WebDAV engine: verb-complete client with compatibility fallbacks, namespace-tolerant PROPFIND parsing, append-only per-device journal protocol, keyed subkey hierarchy, durable queue, conflict policy, backup subsystem (§7–§9). |
+| `packages/sync-remote` | **Keep (new, the point of the fork)** | Committed WebDAV engine: verb-complete client with compatibility fallbacks, namespace-tolerant PROPFIND parsing, append-only per-device journal protocol, keyed subkey hierarchy, durable queue, conflict policy, backup subsystem (§7–§9). |
 | `apps/web` | **Keep** | Becomes the embedded UI; the desktop seams are two files (§2). |
 | `apps/desktop` | **Rewrite** | Electron shell replaced by the Deno host; `src/rpc/protocol.ts`, `src/native/*`, `src/constants.ts` are the beginnings. |
 
@@ -203,7 +203,7 @@ overrides + user `serverUrls` config).
 
 | Host / endpoint | Used by | Disposition |
 |---|---|---|
-| `API_HOST` api.notesnook.com — `/users*`, `/devices`, `/hubs/sync/v2` (SignalR WS, `packages/core/src/api/sync/index.ts:483-596`), `/s3?name=` + `/s3/bulk-delete` (`packages/core/src/database/fs.ts:126,190,242,321,335`), `/version`, `/announcements/active` | sync, attachments, account | **Remove.** Sync → `packages/sync-webdav` engine (§7). Attachments → WebDAV-backed `IFileStorage` (§7). Announcements deleted (phones home with userId). |
+| `API_HOST` api.notesnook.com — `/users*`, `/devices`, `/hubs/sync/v2` (SignalR WS, `packages/core/src/api/sync/index.ts:483-596`), `/s3?name=` + `/s3/bulk-delete` (`packages/core/src/database/fs.ts:126,190,242,321,335`), `/version`, `/announcements/active` | sync, attachments, account | **Remove.** Sync → `packages/sync-remote` engine (§7). Attachments → WebDAV-backed `IFileStorage` (§7). Announcements deleted (phones home with userId). |
 | `AUTH_HOST` auth.streetwriters.co — `/connect/*`, `/account/*`, `/mfa*` (`api/user-manager.ts:37-48`, `token-manager.ts`, `mfa-manager.ts`) | login/MFA/recovery | **Remove** with accounts; keep a local key provider replacing `user-manager` key material (§9). |
 | `SSE_HOST` events.streetwriters.co `/sse` (`api/index.ts:369-453 connectSSE`) | push events | **Remove** (`connectSSE`, `eventsource` option). |
 | `SUBSCRIPTIONS_HOST` — `api/subscriptions.ts`, `offers.ts`, `circle.ts`, `activateTrial` (`user-manager.ts:255-264`) | billing | **Delete files** (§6). |
@@ -342,7 +342,7 @@ Plan, in priority order:
   (`api/sync/devices.ts` — keep local deviceId generation), TokenManager
   auth, `connectSSE`.
 
-### 7.2 The WebDAV engine (now committed: `packages/sync-webdav/`)
+### 7.2 The WebDAV engine (now committed: `packages/sync-remote/`)
 
 - `src/client.ts` — WebDAV verbs OPTIONS/PROPFIND/MKCOL/GET/PUT/DELETE/
   MOVE/HEAD with conditional requests, retries, server-compat fallbacks;
@@ -392,7 +392,7 @@ and so the origin, changes every launch and origin storage is orphaned.
 The browser backends remain for the pure-web build. Chunk boundaries are
 one secretstream frame each; the sync engine encrypts each stored chunk as
 one wire frame and its download path emits one chunk per frame
-(`packages/sync-webdav/src/engine.ts`), so the boundaries the renderer's
+(`packages/sync-remote/src/engine.ts`), so the boundaries the renderer's
 decryption depends on survive replication. The S3 seam is dead on desktop:
 `uploadFile` reports true once content is in the local store (the WebDAV
 engine owns replication), `downloadFile` answers from the local store and
@@ -437,7 +437,7 @@ false ("not available"), and sync delivers the content later.
   `db.user.getMasterKey()`). The port supplies a locally-derived key
   (backup subkey from the sync passphrase, §9, or a user backup password) —
   the format then works verbatim.
-- **Fork engine**: `packages/sync-webdav/src/backup.ts` implements encrypted,
+- **Fork engine**: `packages/sync-remote/src/backup.ts` implements encrypted,
   integrity-verified snapshots to local and WebDAV targets with retention;
   exposed via the `backup.*` bindings (§2.2, incl. `backup.restore` and
   `backup.importFile`).
@@ -467,7 +467,7 @@ false ("not available"), and sync delivers the content later.
   base64; set `format:"base64"` after JSON deserialization before decrypting.
 
 **Exact call map for the engine** (implemented in
-`packages/sync-webdav/src/crypto.ts`):
+`packages/sync-remote/src/crypto.ts`):
 
 1. **Key derivation**: `new NNCrypto().exportKey(passphrase, salt)` →
    `SerializedKey {key, salt}`; fresh salt =
@@ -560,18 +560,18 @@ false ("not available"), and sync delivers the content later.
 
 ### 11.2 Deno workspace (committed in `deno.json`, verified)
 
-- Workspace: `./apps/desktop`, `./packages/sync-webdav`;
+- Workspace: `./apps/desktop`, `./packages/sync-remote`;
   `nodeModulesDir: "auto"`, `unstable: ["sloppy-imports"]`.
 - Import map does the sodium/browser-condition fix:
   `@notesnook/crypto → packages/crypto/src/index.ts`,
   `@notesnook/sodium → packages/sodium/src/browser.ts`,
   `libsodium-wrappers-sumo → packages/sodium/src/libsodium.ts` (the new Deno
   libsodium entry, typed by `packages/sodium/types/libsodium-wrappers-sumo.d.ts`),
-  `@notesnook/sync-webdav → packages/sync-webdav/src/index.ts`, plus
+  `@notesnook/sync-remote → packages/sync-remote/src/index.ts`, plus
   `@std/{assert,path,fs,encoding,testing}`.
 - Tasks (verified list): `dev`, `fmt`, `lint`,
   `check` (`apps/desktop/main.ts` + sync-webdav index), `test`,
-  `test:webdav` (`packages/sync-webdav/tests/run-integration.ts`),
+  `test:webdav` (`packages/sync-remote/tests/run-integration.ts`),
   `test:ui`, `bench`, `build:ui`, `build` (+ per-target
   `build:{windows,linux,appimage,deb,rpm,msi}`), `checksums`,
   `verify:no-electron` (`apps/desktop/scripts/verify-dependencies.ts` — CI

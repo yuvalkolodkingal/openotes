@@ -23,7 +23,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
  * Backups are deliberately *not* sync. Sync propagates every change,
  * deletions included; a backup is an immutable, encrypted, integrity-checked
  * snapshot that a later deletion cannot reach. The engine lives in the Deno
- * runtime (packages/sync-webdav/src/backup.ts, driven by
+ * runtime (packages/sync-remote/src/backup.ts, driven by
  * apps/desktop/src/backup/service.ts) and is reached only through the
  * `backup.*` procedures.
  *

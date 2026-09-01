@@ -197,7 +197,7 @@ application will not quietly fall back to an unencrypted database.
 
 Fully specified in [WEBDAV.md](WEBDAV.md). The shape:
 
-- `packages/sync-webdav` is transport- and database-agnostic: a WebDAV
+- `packages/sync-remote` is transport- and database-agnostic: a WebDAV
   client, the protocol, the crypto, conflict policy, a durable queue and a
   scheduler. It has no knowledge of SQLite or of Notesnook's schema.
 - `apps/desktop/src/sync/store-adapter.ts` is the only place that does. It
@@ -276,11 +276,11 @@ packaging/            flatpak manifest, PKGBUILD, .desktop, man page
 
 | Suite | What it covers |
 |---|---|
-| `packages/sync-webdav/tests/client_test.ts` | Every WebDAV verb, conditional requests, each HTTP error, timeouts, malformed PROPFIND, truncated uploads, path traversal, and parser tolerance for Nextcloud/Apache/absolute-href responses. |
-| `packages/sync-webdav/tests/sync_test.ts` | Protocol behaviour: initialization, version refusal, the mandatory multi-device scenario, stale-delete resurrection, corrupt and duplicate records, sequence collisions, attachment round-trips, remote rebuild. |
-| `packages/sync-webdav/tests/backup_test.ts` | The mandatory backup scenario, corruption, tampering, wrong keys, retention, scheduling, and that deleting a synced note leaves backups untouched. |
+| `packages/sync-remote/tests/client_test.ts` | Every WebDAV verb, conditional requests, each HTTP error, timeouts, malformed PROPFIND, truncated uploads, path traversal, and parser tolerance for Nextcloud/Apache/absolute-href responses. |
+| `packages/sync-remote/tests/sync_test.ts` | Protocol behaviour: initialization, version refusal, the mandatory multi-device scenario, stale-delete resurrection, corrupt and duplicate records, sequence collisions, attachment round-trips, remote rebuild. |
+| `packages/sync-remote/tests/backup_test.ts` | The mandatory backup scenario, corruption, tampering, wrong keys, retention, scheduling, and that deleting a synced note leaves backups untouched. |
 | `apps/desktop/tests/attachment_store_test.ts` | The chunked attachment store: the exact chunk keys streamable-fs uses, frame-boundary preservation through the sync-facing views, traversal rejection, crash cleanup, and a renderer-shaped round trip through the real RPC handlers. |
-| `packages/sync-webdav/tests/integration_test.ts` | The same protocol scenarios against a **real** third-party WebDAV server, run by `deno task test:webdav`. Required in CI, not skippable. |
+| `packages/sync-remote/tests/integration_test.ts` | The same protocol scenarios against a **real** third-party WebDAV server, run by `deno task test:webdav`. Required in CI, not skippable. |
 
 The unit suite runs against an in-process WebDAV server that can inject
 failures a hosted server will not produce on demand. The integration suite

@@ -45,7 +45,7 @@ export const PATHS = {
   logsDirectory: "logs/",
 } as const;
 
-/** Sync status, mirrored from @notesnook/sync-webdav for the status indicator. */
+/** Sync status, mirrored from @notesnook/sync-remote for the status indicator. */
 export type SyncStatusType =
   | "synced"
   | "syncing"

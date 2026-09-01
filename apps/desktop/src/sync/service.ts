@@ -30,7 +30,7 @@ import {
   type SyncTrigger,
   toBasicAuth,
   WebDavClient,
-} from "@notesnook/sync-webdav";
+} from "@notesnook/sync-remote";
 import type { SerializedKey } from "@notesnook/crypto";
 import { join } from "@std/path";
 import { appDataDir, ensureDir } from "../native/paths.ts";

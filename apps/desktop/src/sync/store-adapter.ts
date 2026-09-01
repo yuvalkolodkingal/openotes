@@ -22,8 +22,8 @@ import type {
   CursorMap,
   SyncDataStore,
   SyncRecord,
-} from "@notesnook/sync-webdav";
-import { contentHashOf, resolveConflict } from "@notesnook/sync-webdav";
+} from "@notesnook/sync-remote";
+import { contentHashOf, resolveConflict } from "@notesnook/sync-remote";
 import type { SettingsStore } from "../native/settings.ts";
 import type { SqliteService } from "../native/sqlite.ts";
 import { logger } from "../native/logger.ts";

@@ -30,7 +30,7 @@ import {
   toBasicAuth,
   WebDavBackupTarget,
   WebDavClient,
-} from "@notesnook/sync-webdav";
+} from "@notesnook/sync-remote";
 import type { SerializedKey } from "@notesnook/crypto";
 import { join } from "@std/path";
 import { appDataDir, assertInside, ensureDir } from "../native/paths.ts";

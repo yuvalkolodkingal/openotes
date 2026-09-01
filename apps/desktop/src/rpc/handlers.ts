@@ -17,7 +17,7 @@ You should have received a copy of the GNU General Public License
 along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
-import { SyncError } from "@notesnook/sync-webdav";
+import { SyncError } from "@notesnook/sync-remote";
 import type { AppContext } from "../app.ts";
 import {
   isKnownProcedure,

@@ -44,7 +44,7 @@ import { showToast } from "../utils/toast";
 import BaseStore from "./index";
 
 /**
- * Mirrors `SyncStatus` in packages/sync-webdav/src/types.ts (and the
+ * Mirrors `SyncStatus` in packages/sync-remote/src/types.ts (and the
  * `SyncStatusType` alias re-exported from @notesnook/desktop). The runtime
  * sends this verbatim over the `webdav.status` event.
  */
@@ -93,7 +93,7 @@ export type BackupConfig = {
   lastBackupAt?: number;
 };
 
-/** Mirrors `BackupEntry` in packages/sync-webdav/src/backup.ts. */
+/** Mirrors `BackupEntry` in packages/sync-remote/src/backup.ts. */
 export type BackupSnapshot = {
   name: string;
   createdAt: number;
@@ -297,7 +297,7 @@ class WebDavStore extends BaseStore<WebDavStore> {
   /**
    * Requires the literal confirmation the handler checks for. The generation
    * is the engine's identifier for the new repository (`<deviceId>-<n>`, see
-   * `newGeneration` in packages/sync-webdav), not a counter.
+   * `newGeneration` in packages/sync-remote), not a counter.
    */
   rebuildRemote = async () => {
     const result = await this.withBusy(() =>

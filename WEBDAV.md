@@ -5,7 +5,7 @@ between devices over an ordinary WebDAV server, and the separate format it
 uses for backups. It is the reference for anyone implementing a compatible
 client, auditing the encryption, or debugging a sync problem.
 
-Implementation: [`packages/sync-webdav`](packages/sync-webdav).
+Implementation: [`packages/sync-remote`](packages/sync-remote).
 
 ---
 

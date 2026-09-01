@@ -18,7 +18,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
 import { join } from "@std/path";
-import type { SyncStatus } from "@notesnook/sync-webdav";
+import type { SyncStatus } from "@notesnook/sync-remote";
 import { APP_NAME, APP_VERSION } from "./constants.ts";
 import {
   appDataDir,

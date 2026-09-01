@@ -69,7 +69,7 @@ improvements there remain mergeable.
 
 ## Packages added
 
-`packages/sync-webdav` — the encrypted WebDAV synchronization and backup
+`packages/sync-remote` — the encrypted WebDAV synchronization and backup
 engine. Entirely new; no upstream counterpart.
 
 ---
@@ -116,7 +116,7 @@ migrations merge normally.
 Upstream: `packages/core/src/api/sync` against Notesnook Cloud (SignalR,
 S3 attachments, account keys).
 
-Here: `packages/sync-webdav` against a user's WebDAV server. The fork reuses
+Here: `packages/sync-remote` against a user's WebDAV server. The fork reuses
 core's dirty-flag and tombstone bookkeeping rather than replacing it, so
 core's collections are untouched. Upstream changes to the cloud sync
 transport do not apply; upstream changes to how items are marked dirty do.

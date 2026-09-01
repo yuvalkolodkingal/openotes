@@ -265,7 +265,7 @@ async function benchmarkDatabase(noteCount: number) {
 
 async function benchmarkCrypto() {
   console.log("\nCryptography");
-  const { SyncCrypto } = await import("@notesnook/sync-webdav");
+  const { SyncCrypto } = await import("@notesnook/sync-remote");
   const crypto_ = new SyncCrypto();
 
   const deriveMs = await time(() =>
@@ -315,10 +315,10 @@ async function benchmarkSync() {
   console.log("\nSynchronization (against a local WebDAV server)");
 
   const { FakeWebDavServer } = await import(
-    "../../../packages/sync-webdav/tests/fake-server.ts"
+    "../../../packages/sync-remote/tests/fake-server.ts"
   );
   const { createDevice } = await import(
-    "../../../packages/sync-webdav/tests/harness.ts"
+    "../../../packages/sync-remote/tests/harness.ts"
   );
 
   const server = new FakeWebDavServer();
