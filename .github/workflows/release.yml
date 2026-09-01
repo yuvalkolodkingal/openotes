@@ -345,8 +345,10 @@ jobs:
             echo "end-to-end encrypted if you turn that on."
             echo
             echo "It can also host an AI agent you already have, over the Agent"
-            echo "Client Protocol. No model ships with Openotes and no model"
-            echo "credential is stored."
+            echo "Client Protocol, and answer the Model Context Protocol so an"
+            echo "assistant you already run can search, read and edit your"
+            echo "notes. Both are off until you turn them on. No model ships"
+            echo "with Openotes and no model credential is stored."
             echo
             echo "### Downloads"
             echo
