@@ -357,8 +357,13 @@ async function probeInterfacePort(origin: string): Promise<string> {
  * answers, and that can simply be asked.
  */
 async function checkBootResources(
-  origin: string,
+  reportedOrigin: string,
 ): Promise<{ ok: boolean; detail: string }> {
+  // What the runtime reports can carry a trailing slash; an Origin header
+  // never does, and the server compares them literally — as it should, so
+  // normalise here rather than loosening the guard.
+  const origin = new URL(reportedOrigin).origin;
+
   const request = async (path: string, headers: Record<string, string>) => {
     const url = new URL(path, origin);
     const response = await fetch(url, { headers });
@@ -371,7 +376,8 @@ async function checkBootResources(
     if (document.status !== 200) {
       return {
         ok: false,
-        detail: `the document itself answered ${document.status}`,
+        detail: `the document itself answered ${document.status} at ` +
+          `${origin}/ (${document.body.trim().slice(0, 80)})`,
       };
     }
 
