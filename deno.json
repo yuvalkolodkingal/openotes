@@ -164,7 +164,17 @@
         "wl-copy",
         "wl-paste",
         "xclip",
-        "dbus-send"
+        "dbus-send",
+        "node",
+        "npx",
+        "deno",
+        "bun",
+        "claude-code-acp",
+        "gemini",
+        "opencode",
+        "codex",
+        "codex-acp",
+        "antigravity"
       ],
       "read": true,
       "write": true,

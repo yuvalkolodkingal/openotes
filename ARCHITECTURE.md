@@ -100,12 +100,47 @@ side:
 | Filesystem paths | `native/paths.ts` | Every renderer-supplied path is resolved (symlinks included) and asserted to be inside a directory the user chose. |
 | Export writes | `native/filesystem.ts` | Confined to the app data directory, the chosen backup directory and Documents. |
 | Opening links | `native/shell.ts` | Only `http`, `https` and `mailto`. A note cannot launch a `file://` or custom-scheme handler. |
-| Subprocesses | `native/shell.ts` | Fixed argv, never a shell string; only for file-manager, notification and clipboard fallbacks. |
+| Subprocesses | `native/shell.ts`, `acp/service.ts` | Fixed argv, never a shell string. Two callers: OS integration (file manager, notifications, clipboard) and AI agents — see below. |
 | Database keys | `native/sqlite.ts` | Keyed at connection time; `PRAGMA key`/`rekey` from the renderer is rejected. |
 | Secrets | `security/credentials.ts` | AES-256-GCM at rest; the WebDAV password is never returned to the renderer, not even to its own settings form. |
 
 The UI is served from a loopback origin with `nosniff`, `COOP` and `COEP`,
 and static serving is confined to the built UI directory.
+
+### Running an AI agent, and what that costs
+
+Hosting an agent (see [AI.md](AI.md)) means running one, so the runtime's
+subprocess allowlist grew from twelve OS-integration binaries to also include
+agent launchers: `node`, `npx`, `deno`, `bun`, and the named agent commands.
+That is a real reduction in what this application guarantees, and it is stated
+here rather than buried.
+
+What is preserved:
+
+- **The renderer still cannot spawn anything.** It names a catalog id; the
+  command line comes from `acp/catalog.ts`. There is no procedure that accepts
+  a command, and a test asserts that connecting refuses any id not in the
+  catalog.
+- **The allowlist is still a fixed list of names**, not `run: true`. A second
+  copy lives in `acp/catalog.ts` purely so a drift between it and `deno.json`
+  fails a test rather than a user's launch.
+- **argv is always an array**, never a shell string.
+- **A first launch needs explicit consent**, recorded against the resolved
+  absolute path. If the binary at that path is replaced, consent is asked for
+  again — an agent that was swapped out is not the agent that was approved.
+- **No terminal.** The client advertises `terminal: false`, so a well-behaved
+  agent will not attempt to run commands through us.
+
+What is genuinely given up: an approved agent is a program running with the
+user's privileges. Openotes cannot constrain what it does once started, beyond
+refusing to grant it a terminal and answering its file requests from the note
+database rather than from the disk. Approving an agent is as consequential as
+installing one, and the interface says so before the first launch.
+
+Two things an agent never gets: a locked (vault) note, because the export path
+already refuses to render one without an unlocked vault; and a real directory
+of notes — its workspace is created empty and stays empty, with note reads
+answered from the database.
 
 ### Why nothing durable lives in webview storage
 

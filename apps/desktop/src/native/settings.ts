@@ -88,12 +88,31 @@ export interface DesktopSettings {
   nativeTitlebar: boolean;
 }
 
+/**
+ * Which agents the user has agreed to let Openotes launch.
+ *
+ * Consent is recorded against the *resolved absolute path*, not the agent id.
+ * If the binary at that path is replaced, this no longer matches and the user
+ * is asked again — an agent that was swapped out is not the agent they
+ * approved.
+ */
+export interface AiSettings {
+  approvedAgents: {
+    agentId: string;
+    resolvedPath: string;
+    approvedAt: number;
+  }[];
+  /** Last agent the user connected, so the panel can reopen it. */
+  lastAgentId?: string;
+}
+
 export interface AppSettings {
   version: 1;
   window: WindowState;
   desktop: DesktopSettings;
   webdav: WebDavSettings;
   backup: BackupSettings;
+  ai: AiSettings;
   zoomFactor: number;
   theme: "light" | "dark" | "system";
   privacyMode: boolean;
@@ -149,6 +168,7 @@ export function defaultSettings(): AppSettings {
       backupBeforeRestore: true,
       backupBeforeMaintenance: true,
     },
+    ai: { approvedAgents: [] },
     zoomFactor: 1,
     theme: "system",
     privacyMode: false,
@@ -224,6 +244,11 @@ export class SettingsStore {
       ...this.state,
       backup: { ...this.state.backup, ...partial },
     };
+    await this.persist();
+  }
+
+  async patchAi(partial: Partial<AiSettings>): Promise<void> {
+    this.state = { ...this.state, ai: { ...this.state.ai, ...partial } };
     await this.persist();
   }
 

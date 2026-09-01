@@ -37,6 +37,7 @@ import { startUiServer } from "./src/native/server.ts";
 import { createApp, type WindowController } from "./src/app.ts";
 import { createHandlers, dispatch } from "./src/rpc/handlers.ts";
 import type { EventName } from "./src/rpc/protocol.ts";
+import { requestFromRenderer } from "./src/rpc/renderer-requests.ts";
 import { parseArguments } from "./src/cli.ts";
 import { cacheDir } from "./src/native/paths.ts";
 
@@ -114,6 +115,11 @@ function createWindowController(
         .catch(() => {});
     },
     requestClose: () => window.close(),
+    request<T>(name: string, payload: unknown): Promise<T> {
+      return requestFromRenderer<T>(name, payload, (request) => {
+        this.emit("bridge.request", request);
+      });
+    },
     emit(event: EventName, payload: unknown) {
       // Pushed into the renderer's event bus (see the web-side bridge).
       const script =

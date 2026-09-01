@@ -46,6 +46,7 @@ import { DatabaseSyncStore } from "./sync/store-adapter.ts";
 import { SyncService } from "./sync/service.ts";
 import { BackupService } from "./backup/service.ts";
 import { UpdateService } from "./updates/updater.ts";
+import { AcpService } from "./acp/service.ts";
 import type { EventName } from "./rpc/protocol.ts";
 
 const log = logger.scope("app");
@@ -62,6 +63,11 @@ export interface WindowController {
   requestClose(): void;
   /** Push an event into the renderer. */
   emit(event: EventName, payload: unknown): void;
+  /**
+   * Ask the interface something and wait for its answer. Needed because only
+   * the renderer can render a note; see rpc/renderer-requests.ts.
+   */
+  request<T>(name: string, payload: unknown): Promise<T>;
 }
 
 /**
@@ -78,6 +84,7 @@ export interface AppContext {
   safeStorage: SafeStorage;
   sync: SyncService;
   backups: BackupService;
+  acp: AcpService;
   updater: UpdateService;
   shell: Shell;
   dialogs: Dialogs;
@@ -181,6 +188,7 @@ export async function createApp(
     sync: undefined as unknown as SyncService,
     backups: undefined as unknown as BackupService,
     updater: undefined as unknown as UpdateService,
+    acp: undefined as unknown as AcpService,
 
     emit,
 
@@ -242,6 +250,7 @@ export async function createApp(
         });
       }
       context.sync?.stop();
+      await context.acp?.stop();
       exports.closeAll();
       await storage.flush();
       sqlite.closeAll();
@@ -249,6 +258,33 @@ export async function createApp(
       logger.close();
     },
   };
+
+  /**
+   * Notes reach an agent through these two callbacks and nowhere else. Both
+   * are answered by the interface, because rendering a note to Markdown needs
+   * the renderer's database — so nothing is ever written to the agent's
+   * workspace directory on disk.
+   */
+  const acp = new AcpService({
+    emit,
+    readNote: (sessionId, path) =>
+      options.window.request<string>("acp.readNote", { sessionId, path }),
+    writeNote: (sessionId, path, content) =>
+      options.window.request<void>("acp.writeNote", {
+        sessionId,
+        path,
+        content,
+      }),
+    isApproved: (agentId, resolvedPath) =>
+      settings.get("ai").approvedAgents.some(
+        (approved) =>
+          approved.agentId === agentId &&
+          approved.resolvedPath === resolvedPath,
+      ),
+    approve: () => {
+      // Persisted by the acp.approve handler, which owns the settings write.
+    },
+  });
 
   const sync = new SyncService({
     settings,
@@ -306,6 +342,7 @@ export async function createApp(
   context.sync = sync;
   context.backups = backups;
   context.updater = updater;
+  context.acp = acp;
 
   /**
    * The renderer opens the vault through sqlite.open; wrap the service so
