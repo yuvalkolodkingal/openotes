@@ -171,6 +171,7 @@ export const PROCEDURE_NAMES = [
   "webdav.fetchAttachment",
   // Choosing and signing in to a drive (new in 2.1). 2.0 shipped the
   // providers with nothing to reach them.
+  "webdav.presets",
   "webdav.driveSetup",
   "webdav.connectDrive",
   "webdav.disconnectDrive",

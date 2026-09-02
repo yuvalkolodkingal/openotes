@@ -181,6 +181,16 @@ function readStoredConflicts(): SyncConflict[] {
   return Array.isArray(stored) ? stored : [];
 }
 
+/** A known WebDAV provider, offered as a shortcut in the connection form. */
+export type WebDavPreset = {
+  id: string;
+  label: string;
+  serverUrl: string;
+  usernameHint: string;
+  passwordHint: string;
+  setupUrl?: string;
+};
+
 class WebDavStore extends BaseStore<WebDavStore> {
   status: WebDavSyncStatus = { type: "disabled" };
   pending = 0;
@@ -265,6 +275,11 @@ class WebDavStore extends BaseStore<WebDavStore> {
 
   testConnection = (input: TestConnectionInput) =>
     rpc<TestConnectionResult>("webdav.testConnection", input);
+
+  /** Known providers that speak WebDAV, for filling the form in. */
+  presets = async (): Promise<WebDavPreset[]> => {
+    return await rpc<WebDavPreset[]>("webdav.presets");
+  };
 
   connect = async () => {
     const status = await this.withBusy(() =>

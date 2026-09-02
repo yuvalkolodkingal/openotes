@@ -23,6 +23,7 @@ import {
   type ContentBlock,
   type RequestPermissionRequest,
   type RequestPermissionResponse,
+  type SessionMode,
   type SessionNotification,
   StreamTransport,
 } from "@notesnook/acp";
@@ -57,6 +58,12 @@ export interface AgentStatusReport {
   authMethods: { id: string; name: string; description?: string }[];
   install?: { npm?: string; docs: string };
   authHint: string;
+  /** Models this agent can be asked for; empty means no choice is offered. */
+  models: { id: string; name: string }[];
+  /** Whether a free-typed model name can be passed to this agent. */
+  acceptsCustomModel: boolean;
+  /** The model this connection was started with, if any. */
+  modelId?: string;
   /** Last launch failure, if any. */
   error?: string;
 }
@@ -79,6 +86,8 @@ export interface AcpServiceOptions {
 
 interface Connection {
   agentId: string;
+  /** The model this process was started with; fixed for its lifetime. */
+  modelId?: string;
   client: AcpClient;
   child: Deno.ChildProcess;
   workspace: string;
@@ -118,20 +127,46 @@ export class AcpService {
   async listAgents(): Promise<AgentStatusReport[]> {
     const reports: AgentStatusReport[] = [];
     for (const entry of AGENT_CATALOG) {
+      // "Installed" means one of this agent's own binaries is present. The
+      // launcher may still be `npx`, which resolves everywhere Node does and
+      // would otherwise report every agent as installed.
+      const detected = await resolveDetected(entry);
       const resolved = await resolveLauncher(entry);
       const connection = this.connections.get(entry.id);
       reports.push({
         id: entry.id,
         name: entry.name,
         summary: entry.summary,
-        installed: resolved !== undefined,
-        resolvedPath: resolved?.path,
+        installed: detected?.launchable === true,
+        resolvedPath: detected?.path ?? resolved?.path,
         connected: connection !== undefined,
         agentTitle: connection?.client.agentInfo?.title,
         agentVersion: connection?.client.agentInfo?.version,
-        authMethods: [],
+        // Read from the live connection rather than hardcoded empty: the
+        // interface refreshes this list right after connecting, so an empty
+        // array here erased the sign-in methods the handshake had just
+        // reported and left every agent claiming it was already signed in.
+        authMethods: (connection?.client.authMethods ?? []).map((method) => ({
+          id: method.id,
+          name: method.name,
+          description: method.description,
+        })),
         install: entry.install,
         authHint: entry.authHint,
+        models: (entry.models ?? []).map((model) => ({
+          id: model.id,
+          name: model.name,
+        })),
+        acceptsCustomModel: entry.modelEnvVar !== undefined,
+        modelId: connection?.modelId,
+        // Present but unreachable is its own state, and the only one the user
+        // can act on: telling them to install what they already installed
+        // would be worse than saying nothing.
+        error: detected && !detected.launchable
+          ? `Found at ${detected.path}, but Openotes can only launch programs ` +
+            `on its own PATH. Add that directory to your PATH and restart ` +
+            `Openotes, or start Openotes from a terminal.`
+          : undefined,
       });
     }
     return reports;
@@ -144,14 +179,27 @@ export class AcpService {
    * in and the interface should go straight to a session rather than inventing
    * a login step.
    */
-  async connect(agentId: string): Promise<AgentStatusReport> {
+  /**
+   * Start an agent, optionally asking it for a particular model.
+   *
+   * The model is fixed when the process starts -- ACP has no way to change it
+   * mid-session -- so switching means reconnecting, and an already-running
+   * connection with a different model is replaced rather than reused.
+   */
+  async connect(
+    agentId: string,
+    modelId?: string,
+  ): Promise<AgentStatusReport> {
     const existing = this.connections.get(agentId);
     if (existing) {
-      return (await this.listAgents()).find((a) => a.id === agentId)!;
+      if (existing.modelId === modelId) {
+        return (await this.listAgents()).find((a) => a.id === agentId)!;
+      }
+      await this.disconnect(agentId);
     }
 
     const entry = catalogEntry(agentId);
-    if (!entry || entry.id === "custom") {
+    if (!entry) {
       throw new Error(`Unknown agent: ${agentId}`);
     }
 
@@ -189,16 +237,29 @@ export class AcpService {
       workspace,
     });
 
+    // A listed model contributes arguments, an environment variable, or both;
+    // an unlisted one is passed through the agent's own variable when it has
+    // one. Anything unrecognised is ignored rather than guessed at.
+    const chosen = entry.models?.find((model) => model.id === modelId);
+    const custom = !chosen && modelId && entry.modelEnvVar
+      ? { [entry.modelEnvVar]: modelId }
+      : undefined;
+    const modelEnv = { ...(chosen?.env ?? {}), ...(custom ?? {}) };
+
     const child = new Deno.Command(launcher.command, {
-      args: launcher.args,
+      args: [...launcher.args, ...(chosen?.args ?? [])],
       stdin: "piped",
       stdout: "piped",
       stderr: "piped",
       cwd: workspace,
+      // Merged with the inherited environment, not replacing it: the agent
+      // still needs its own credentials, PATH and config directory.
+      ...(Object.keys(modelEnv).length > 0 ? { env: modelEnv } : {}),
     }).spawn();
 
     const connection: Connection = {
       agentId,
+      modelId,
       client: undefined as unknown as AcpClient,
       child,
       workspace,
@@ -237,13 +298,10 @@ export class AcpService {
     this.connections.set(agentId, connection);
 
     try {
-      const info = await client.initialize();
+      await client.initialize();
+      // listAgents() now reads the auth methods off the live connection, so
+      // the report is already correct and does not need patching afterwards.
       const report = (await this.listAgents()).find((a) => a.id === agentId)!;
-      report.authMethods = (info.authMethods ?? []).map((method) => ({
-        id: method.id,
-        name: method.name,
-        description: method.description,
-      }));
       this.options.emit("acp.status", { agentId, connected: true });
       return report;
     } catch (e) {
@@ -264,14 +322,32 @@ export class AcpService {
     await this.connectionFor(agentId).client.authenticate(methodId);
   }
 
-  async newSession(agentId: string): Promise<string> {
+  async newSession(
+    agentId: string,
+  ): Promise<
+    {
+      sessionId: string;
+      workspace: string;
+      modes?: { currentModeId: string; availableModes: SessionMode[] };
+    }
+  > {
     const connection = this.connectionFor(agentId);
     // cwd must be a real absolute path — a real agent rejects a URI here.
     // The directory stays empty: notes are answered from the database through
     // the fs handlers, never written to disk.
     const session = await connection.client.newSession(connection.workspace);
     connection.sessions.add(session.sessionId);
-    return session.sessionId;
+    // The workspace goes back with the id because the interface has to name
+    // notes as paths inside it; without it there is no way to tell the agent
+    // where a note lives, which is why nothing could be read.
+    // The agent's modes travel with the session rather than being dropped:
+    // "ask" and "code" behave differently enough that hiding the switch made
+    // the agent look inconsistent.
+    return {
+      sessionId: session.sessionId,
+      workspace: connection.workspace,
+      modes: session.modes,
+    };
   }
 
   async prompt(
@@ -402,6 +478,70 @@ export function resolvePermission(
   return true;
 }
 
+/**
+ * Places agents get installed that a desktop launcher's PATH will not have.
+ *
+ * An application started from a dock, a .desktop file or an AppImage inherits
+ * a minimal PATH, not the one a login shell builds. An agent installed with
+ * npm -g under nvm, or with Homebrew, is invisible to it -- which reads to the
+ * user as "not installed" when it plainly is.
+ */
+function extraDirs(): string[] {
+  let home: string | undefined;
+  try {
+    home = Deno.env.get("HOME") ?? Deno.env.get("USERPROFILE");
+  } catch {
+    return [];
+  }
+  if (!home) return [];
+
+  const dirs = [
+    join(home, ".local", "bin"),
+    join(home, ".npm-global", "bin"),
+    join(home, ".bun", "bin"),
+    join(home, ".deno", "bin"),
+    "/usr/local/bin",
+    "/opt/homebrew/bin",
+  ];
+
+  // nvm keeps a directory per installed Node version; any of them may hold a
+  // globally installed adapter.
+  const nvm = join(home, ".nvm", "versions", "node");
+  try {
+    for (const entry of Deno.readDirSync(nvm)) {
+      if (entry.isDirectory) dirs.push(join(nvm, entry.name, "bin"));
+    }
+  } catch {
+    // No nvm here.
+  }
+  return dirs;
+}
+
+/**
+ * Where this agent's own binary is, and whether it can actually be launched.
+ *
+ * The distinction is forced by how the permission set works. Deno resolves
+ * `--allow-run=gemini` to the binary on PATH when the process starts, and
+ * refuses any other path afterwards -- verified: an allowlisted name at an
+ * unusual path is denied, and extending PATH later does not help. So a binary
+ * found outside PATH is real, and is also unlaunchable, and saying "not
+ * installed" would send the user to reinstall something they already have.
+ */
+async function resolveDetected(
+  entry: AgentCatalogEntry,
+): Promise<{ path: string; launchable: boolean } | undefined> {
+  for (const candidate of entry.detect) {
+    const onPath = await which(candidate);
+    if (onPath) return { path: onPath, launchable: true };
+  }
+  const extra = extraDirs();
+  for (const candidate of entry.detect) {
+    const elsewhere = await which(candidate, extra);
+    if (elsewhere) return { path: elsewhere, launchable: false };
+  }
+  return undefined;
+}
+
 /** First launcher whose binary is on PATH, with the path it resolved to. */
 async function resolveLauncher(
   entry: AgentCatalogEntry,
@@ -420,14 +560,26 @@ async function resolveLauncher(
  * spawning a shell to find out what we are allowed to spawn is the wrong shape
  * — and `which` is not on the permitted list, correctly.
  */
-async function which(command: string): Promise<string | undefined> {
-  const path = Deno.env.get("PATH");
-  if (!path) return undefined;
+async function which(
+  command: string,
+  dirs?: string[],
+): Promise<string | undefined> {
   const isWindows = Deno.build.os === "windows";
   const separator = isWindows ? ";" : ":";
   const extensions = isWindows ? ["", ".exe", ".cmd", ".bat"] : [""];
 
-  for (const directory of path.split(separator)) {
+  // Reading an unlisted variable throws NotCapable rather than returning
+  // undefined, and this is the only PATH read in the application; letting it
+  // escape would reject acp.listAgents outright and show no agents at all,
+  // with no clue why.
+  let path: string | undefined;
+  try {
+    path = Deno.env.get("PATH");
+  } catch {
+    path = undefined;
+  }
+
+  for (const directory of dirs ?? path?.split(separator) ?? []) {
     if (!directory) continue;
     for (const extension of extensions) {
       const candidate = join(directory, command + extension);

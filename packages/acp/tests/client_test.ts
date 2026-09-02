@@ -26,6 +26,7 @@ import {
   PROTOCOL_VERSION,
   type RequestPermissionRequest,
   type SessionNotification,
+  type Transport,
   transportPair,
 } from "../src/index.ts";
 
@@ -432,4 +433,140 @@ Deno.test("a stray non-JSON line does not end the session", async () => {
   assert(errors[0].message.includes("unparseable"));
   assertEquals(updates.length, 1);
   await client.close();
+});
+
+/**
+ * A transport whose `onError` slot holds exactly one handler, replacing on a
+ * second registration -- the same semantics as `StreamTransport`, which is
+ * where this bit.
+ */
+class SingleSlotTransport implements Transport {
+  sent: JsonRpcMessage[] = [];
+  private messageHandler?: (message: JsonRpcMessage) => void;
+  private errorHandler?: (error: Error) => void;
+  private closeHandler?: () => void;
+
+  send(message: JsonRpcMessage): Promise<void> {
+    this.sent.push(message);
+    return Promise.resolve();
+  }
+  onMessage(handler: (message: JsonRpcMessage) => void): void {
+    this.messageHandler = handler;
+  }
+  onError(handler: (error: Error) => void): void {
+    this.errorHandler = handler;
+  }
+  onClose(handler: () => void): void {
+    this.closeHandler = handler;
+  }
+  close(): Promise<void> {
+    this.closeHandler?.();
+    return Promise.resolve();
+  }
+
+  /** Pretend the pipe failed mid-read. */
+  fail(error: Error): void {
+    this.errorHandler?.(error);
+  }
+  deliver(message: JsonRpcMessage): void {
+    this.messageHandler?.(message);
+  }
+}
+
+Deno.test("a transport read error rejects the pending turn", async () => {
+  // A stream that errors without reaching EOF never fires onClose, so this is
+  // the only thing standing between the user and a turn that hangs forever.
+  const transport = new SingleSlotTransport();
+  const seen: Error[] = [];
+  const client = new AcpClient({
+    transport,
+    clientInfo: { name: "openotes", title: "Openotes", version: "0" },
+    handlers: {
+      onUpdate: () => {},
+      onPermission: () =>
+        Promise.resolve({ outcome: { outcome: "cancelled" } }),
+      onError: (error) => seen.push(error),
+    },
+  });
+
+  const initialize = client.initialize();
+  // Answer whatever id the peer actually used rather than assuming one: ids
+  // start at 0, and hardcoding 1 here left initialize unresolved and made
+  // this test hang for a reason that had nothing to do with what it tests.
+  const handshake = transport.sent.at(-1) as { id: number | string };
+  transport.deliver({
+    jsonrpc: "2.0",
+    id: handshake.id,
+    result: { protocolVersion: PROTOCOL_VERSION, agentCapabilities: {} },
+  });
+  await initialize;
+
+  const turn = client.prompt({
+    sessionId: "s1",
+    prompt: [{ type: "text", text: "hi" }],
+  });
+  transport.fail(new Error("pipe died"));
+
+  await assertRejects(() => turn, Error, "pipe died");
+  // The client's own observer must still be told, not displaced by the fix.
+  assertEquals(seen.length, 1);
+});
+
+Deno.test("a handshake that never answers gives up instead of hanging", async () => {
+  const transport = new SingleSlotTransport();
+  const client = new AcpClient({
+    transport,
+    clientInfo: { name: "openotes", title: "Openotes", version: "0" },
+    handshakeTimeoutMs: 30,
+    handlers: {
+      onUpdate: () => {},
+      onPermission: () =>
+        Promise.resolve({ outcome: { outcome: "cancelled" } }),
+    },
+  });
+
+  // Nothing is ever delivered: the binary started but does not speak ACP.
+  await assertRejects(
+    () => client.initialize(),
+    Error,
+    "initialize did not answer",
+  );
+});
+
+Deno.test("a long turn is not cut short by the handshake deadline", async () => {
+  const transport = new SingleSlotTransport();
+  const client = new AcpClient({
+    transport,
+    clientInfo: { name: "openotes", title: "Openotes", version: "0" },
+    handshakeTimeoutMs: 30,
+    handlers: {
+      onUpdate: () => {},
+      onPermission: () =>
+        Promise.resolve({ outcome: { outcome: "cancelled" } }),
+    },
+  });
+
+  const initialize = client.initialize();
+  const handshake = transport.sent.at(-1) as { id: number | string };
+  transport.deliver({
+    jsonrpc: "2.0",
+    id: handshake.id,
+    result: { protocolVersion: PROTOCOL_VERSION, agentCapabilities: {} },
+  });
+  await initialize;
+
+  // An agent thinking for longer than the handshake bound must not be
+  // cancelled: only calls with a known bound carry a deadline.
+  const turn = client.prompt({
+    sessionId: "s1",
+    prompt: [{ type: "text", text: "think hard" }],
+  });
+  await new Promise((resolve) => setTimeout(resolve, 60));
+  const asked = transport.sent.at(-1) as { id: number | string };
+  transport.deliver({
+    jsonrpc: "2.0",
+    id: asked.id,
+    result: { stopReason: "end_turn" },
+  });
+  assertEquals((await turn).stopReason, "end_turn");
 });

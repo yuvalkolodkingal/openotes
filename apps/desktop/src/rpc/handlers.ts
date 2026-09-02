@@ -50,6 +50,7 @@ import {
   driveClient,
   isDriveProvider,
 } from "../sync/drive-providers.ts";
+import { WEBDAV_PRESETS } from "../sync/webdav-presets.ts";
 import { driveSecretKey, driveTokenKey } from "../sync/service.ts";
 import { beginAuthorization } from "../security/oauth.ts";
 import type { SyncProvider } from "../native/settings.ts";
@@ -97,8 +98,16 @@ export function createHandlers(): Record<string, Handler> {
 
     "acp.connect": async (input, context) => {
       const agentId = asString(input, "agentId", 64);
+      // A model name is either a catalog id or a name the user typed, so it
+      // is length-capped like every other string crossing this boundary.
+      const modelId = isPlainObject(input)
+        ? optionalString(input.modelId)?.slice(0, 128)
+        : undefined;
       try {
-        return { ok: true as const, agent: await context.acp.connect(agentId) };
+        return {
+          ok: true as const,
+          agent: await context.acp.connect(agentId, modelId),
+        };
       } catch (e) {
         // Needing approval is not a failure — it is a question for the user,
         // so it comes back as an answerable result rather than an error toast.
@@ -805,6 +814,10 @@ export function createHandlers(): Record<string, Handler> {
      * registers no OAuth application, so every user brings their own —
      * which is also why a drive can only ever see files Openotes created.
      */
+    // Server presets for the drives that speak WebDAV rather than having an
+    // API of their own. Static data; no account is touched by asking.
+    "webdav.presets": () => WEBDAV_PRESETS,
+
     "webdav.driveSetup": (input) => {
       if (!isDriveProvider(input?.provider)) {
         throw new Error("Unknown drive provider.");

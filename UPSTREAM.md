@@ -16,7 +16,7 @@ be mechanical.
 | Upstream repository      | `streetwriters/notesnook`          |
 | Base revision            | `09a0c30` (merge of release/3.4.7) |
 | Base version             | 3.4.7                              |
-| Fork version             | 2.1.1                              |
+| Fork version             | 2.2.0                              |
 | Fork repository          | `yuvalkolodkingal/openotes`        |
 | Last merge from upstream | Initial fork point                 |
 
@@ -195,6 +195,30 @@ diff smaller.** A smaller diff is not worth a worse application.
 ---
 
 ## Fork changelog
+
+### 2.2.0 — the assistant actually works
+
+- Fixed the AI assistant, which had never worked in a released build. Five
+  defects: a transport error left the turn hanging forever, the handshake had
+  no deadline, sign-in was unreachable so an unauthenticated agent failed with
+  a raw protocol error, the agent could not read a single note, and Claude
+  Code was launched under the wrong binary name.
+- Made the permission manifest real. It was documented as a subprocess
+  sandbox and never applied: the binary was compiled with `-A`, and Deno binds
+  a config permission set only with `--permission-set`. Every release from
+  2.0.0 to 2.1.2 could run any program.
+- Added a model picker. ACP has no model selection, so the choice is made when
+  the agent process starts, from the catalog; agents whose mechanism could not
+  be confirmed get no picker rather than one that does nothing.
+- Surfaced session modes, which were plumbed through four layers with no
+  control bound to them.
+- Added S3 (and every S3-compatible service) and Box as sync backends, and
+  Koofr, pCloud and Nextcloud as WebDAV presets rather than as new API
+  clients.
+- Added two guards against the class of bug behind most of the above: a test
+  that the manifest covers what the code reads and runs, and a CI check that
+  drives the whole agent path under the shipped permission set rather than
+  under `-A`.
 
 ### 2.1.2
 

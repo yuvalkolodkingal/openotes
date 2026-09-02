@@ -39,9 +39,9 @@ export function AgentsPanel() {
   const error = useAiStore((store) => store.error);
 
   useEffect(() => {
-    void aiStore.refresh().catch(() => {
-      // The list renders its own empty state; a failed probe is not a toast.
-    });
+    // refresh() records its own failure into `error`, which renders above
+    // the list; nothing is swallowed here.
+    void aiStore.refresh();
   }, []);
 
   if (!IS_DESKTOP_APP) {
@@ -166,6 +166,43 @@ export function AgentsPanel() {
                   ))}
                 </Flex>
               ) : null}
+              {agent.models.length > 0 ? (
+                <Flex sx={{ alignItems: "center", gap: 1, mt: 1 }}>
+                  <Text variant="subBody" sx={{ color: "paragraph-secondary" }}>
+                    Model
+                  </Text>
+                  <select
+                    value={aiStore.modelFor(agent.id) ?? ""}
+                    onChange={(e) =>
+                      void aiStore.setModel(
+                        agent.id,
+                        e.target.value || undefined
+                      )
+                    }
+                    style={{
+                      fontSize: "inherit",
+                      fontFamily: "inherit",
+                      padding: "2px 4px"
+                    }}
+                  >
+                    <option value="">Agent's default</option>
+                    {agent.models.map((model) => (
+                      <option key={model.id} value={model.id}>
+                        {model.name}
+                      </option>
+                    ))}
+                  </select>
+                  {isConnected ? (
+                    <Text
+                      variant="subBody"
+                      sx={{ color: "paragraph-secondary" }}
+                    >
+                      changing this restarts {agent.name}
+                    </Text>
+                  ) : null}
+                </Flex>
+              ) : null}
+
               {isConnected && agent.authMethods.length === 0 ? (
                 // An agent whose own CLI is already signed in needs no login
                 // step, and inventing one would be a lie about what happened.
@@ -176,8 +213,15 @@ export function AgentsPanel() {
             </Flex>
 
             {!agent.installed ? (
-              <Text variant="subBody" sx={{ color: "paragraph-secondary" }}>
-                Not installed
+              <Text
+                variant="subBody"
+                sx={{
+                  color: agent.error ? "accent" : "paragraph-secondary",
+                  maxWidth: 220,
+                  textAlign: "right"
+                }}
+              >
+                {agent.error ?? "Not installed"}
               </Text>
             ) : isConnected ? (
               <Button

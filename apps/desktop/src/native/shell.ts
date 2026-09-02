@@ -365,6 +365,10 @@ export class ThemeWatcher {
   }
 
   apply(mode: "light" | "dark" | "system"): void {
+    // Choosing "system" is the one moment a stale probe is worth redoing: the
+    // usual reason someone picks it is that the desktop has changed and they
+    // want the window to follow. Every other path keeps the cache.
+    if (mode === "system" && this.mode !== "system") this.refresh();
     this.mode = mode;
   }
 

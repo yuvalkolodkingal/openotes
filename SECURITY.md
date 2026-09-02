@@ -291,6 +291,19 @@ OS-integration binaries (`xdg-open`, `notify-send`, and the like) to also
 include agent launchers: `node`, `npx`, `deno`, `bun`, and the named agent
 commands. It is still a fixed list in `deno.json`, never `run: true`.
 
+**How it is enforced.** The application is compiled with
+`--permission-set=app`, which is what binds the `permissions.app` block in
+`deno.json` to the shipped binary. This is load-bearing and easy to lose:
+2.0 and 2.1 were built with `-A` instead, so the list below described a
+boundary that did not exist and the released application could run anything.
+If that flag is ever dropped from `apps/desktop/scripts/build.ts`, this
+section stops being true. Deno still calls config-file permissions
+experimental, so the flag is worth re-checking on a runtime upgrade.
+
+Two tests keep the manifest honest about what the code actually needs: every
+environment variable read and every program spawned by application code must
+appear in it, or `deno task test` fails.
+
 **What is preserved.**
 
 - The renderer still cannot spawn anything. It names a catalog id; the command

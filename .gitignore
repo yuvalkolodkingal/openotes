@@ -24,3 +24,8 @@ dist/
 
 # Vite writes a timestamped copy of a .mts config next to it while loading.
 *.timestamp-*.mjs
+
+# TypeScript's incremental build cache. Machine-specific, rewritten on
+# every build, and 436 KB of it was committed in 2.1 — enough to bury a
+# real diff.
+*.tsbuildinfo

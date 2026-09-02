@@ -1,6 +1,7 @@
 # Syncing to a cloud drive
 
-Openotes syncs to Google Drive, Dropbox and OneDrive, as well as to a WebDAV
+Openotes syncs to Google Drive, Dropbox and OneDrive directly, to Koofr,
+pCloud and Nextcloud through WebDAV, as well as to any other WebDAV
 server. This describes what it writes, what it can promise, and what it cannot.
 
 ---
@@ -106,6 +107,62 @@ does not exist, and overwriting only if nobody else changed it first.
 | **OneDrive**     | yes, native                        | yes, native (`if-match`) | delta link               |
 | **WebDAV**       | emulated (probe + `If-None-Match`) | yes (`If-Match`)         | listing                  |
 | **Google Drive** | **no**                             | **no**                   | change feed              |
+| **S3** and compatible | yes (`If-None-Match: *`)      | yes (`If-Match`)         | none — listing           |
+| **Box**          | yes (409 on a taken name)          | yes (`If-Match`)         | none — listing           |
+
+### S3, and the many services that speak it
+
+S3 is the only one of these with both primitives as real features, so it is
+the best-behaved backend after Dropbox. It authenticates by signing each
+request with an access key rather than by OAuth, so there is no browser
+hand-off and no token to expire. The same provider reaches MinIO, Backblaze
+B2, Cloudflare R2, Wasabi and anything else with an S3-compatible endpoint —
+set the endpoint host and, for most of them, path-style addressing.
+
+Two honest caveats. `If-None-Match` and `If-Match` are recent additions to the
+S3 API and not every compatible implementation honours them; one that accepts
+a conditional header and ignores it is caught by the upload verification
+rather than silently clobbering, the same defence the WebDAV backend needed.
+And the request signing has been tested for its structure but not yet against
+a live endpoint — a signing fault appears as a 403 on the first request, not
+as lost data.
+
+### Box
+
+Box has both primitives too: it refuses an upload whose name is already taken
+rather than renaming it, and it honours `If-Match` on a new version. It
+addresses everything by id rather than by path, so a path is resolved through
+the folder tree and the result cached — the same shape as Google Drive, but
+without Drive's weakness, because the refusals are real.
+
+It also renames and reparents in a single call, so retitling a note is one
+request rather than a copy and a delete.
+
+Box publishes an events feed, but it reports on the whole account rather than
+one folder and carries its own stream-position handling; it is deliberately
+not used, so change detection is a listing rather than a half-used feed. As
+with S3, the implementation is tested against a fake Box rather than a live
+account.
+
+### Koofr, pCloud and Nextcloud go through WebDAV
+
+These publish a WebDAV endpoint rather than an API of their own, so they use
+the WebDAV row above — the same code path, with the same real-server
+integration suite behind it, rather than a second implementation of
+create-if-absent and compare-and-swap for each. The connection form offers
+them as presets: picking one fills in the server URL and says which account
+details that provider actually wants.
+
+| Provider | Server | Account |
+|---|---|---|
+| Koofr | `https://app.koofr.net/dav/Koofr` | Email address, and an **app password** — the account password is refused |
+| pCloud (US) | `https://webdav.pcloud.com` | Email address and account password |
+| pCloud (EU) | `https://ewebdav.pcloud.com` | As above; EU accounts are rejected by the US host rather than redirected |
+| Nextcloud / ownCloud | `https://<server>/remote.php/dav/files/<user>` | Username, and an app password if two-factor is on |
+
+A preset only fills the server URL in. Any WebDAV server still works by typing
+its URL, and nothing here is required.
+
 
 ### Google Drive is the weakest, and here is exactly why
 

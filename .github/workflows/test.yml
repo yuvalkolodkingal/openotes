@@ -84,6 +84,7 @@ jobs:
           apps/desktop/scripts/checksums.ts
           apps/desktop/scripts/smoke-test.ts
           apps/desktop/scripts/mcp-check.ts
+          apps/desktop/scripts/acp-check.ts
           apps/desktop/scripts/update-manifest.ts
           apps/desktop/scripts/verify-dependencies.ts
 
@@ -252,6 +253,12 @@ jobs:
       # handshake a client can find, and refuses everything it should.
       - name: MCP endpoint check
         run: deno run -A apps/desktop/scripts/mcp-check.ts --port 47470
+
+      # The unit tests run with -A, which is how the assistant stayed broken
+      # in every release from 2.0.0 to 2.1.2 while passing them. This drives
+      # the same path under the permission set the shipped binary uses.
+      - name: ACP agent check
+        run: deno run -A apps/desktop/scripts/acp-check.ts
 
       - name: Upload the smoke-tested build
         if: failure()

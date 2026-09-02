@@ -25,6 +25,7 @@ import {
   PERMITTED_COMMANDS,
 } from "../src/acp/catalog.ts";
 import { PROCEDURE_NAMES } from "../src/rpc/protocol.ts";
+import { readPermissionManifest } from "./manifest.ts";
 import { AcpService } from "../src/acp/service.ts";
 
 /**
@@ -38,10 +39,8 @@ Deno.test("every launcher the catalog can run is permitted by the manifest", asy
   // The manifest is the real enforcement; the constant in catalog.ts is a
   // second copy. Drift between them would mean a launch failing at runtime
   // with a permission error no user could interpret, so it fails here first.
-  const manifest = JSON.parse(
-    await Deno.readTextFile(new URL("../../../deno.json", import.meta.url)),
-  ) as { permissions: { app: { run: string[] } } };
-  const allowed = new Set(manifest.permissions.app.run);
+  const manifest = await readPermissionManifest();
+  const allowed = new Set(manifest.run);
 
   for (const command of PERMITTED_COMMANDS) {
     assert(
@@ -135,5 +134,42 @@ Deno.test("connecting refuses anything that is not a catalog entry", async () =>
       error.message.includes("Unknown agent"),
       `connect("${id}") failed for the wrong reason: ${error.message}`,
     );
+  }
+});
+
+Deno.test("every offered model actually changes how the agent starts", () => {
+  // A picker entry that contributes neither an argument nor an environment
+  // variable would look like it works and do nothing at all -- the failure
+  // mode this catalog is meant to avoid, since ACP has no model selection of
+  // its own to fall back on.
+  for (const entry of AGENT_CATALOG) {
+    for (const model of entry.models ?? []) {
+      const args = model.args?.length ?? 0;
+      const env = Object.keys(model.env ?? {}).length;
+      assert(
+        args > 0 || env > 0,
+        `${entry.name} offers model "${model.id}" but passes nothing to the agent`,
+      );
+    }
+    // Free-typed names need somewhere to go.
+    if (entry.modelEnvVar !== undefined) {
+      assert(
+        entry.modelEnvVar.length > 0,
+        `${entry.name} declares an empty model variable`,
+      );
+    }
+  }
+});
+
+Deno.test("a model id is unique within its agent", () => {
+  for (const entry of AGENT_CATALOG) {
+    const seen = new Set<string>();
+    for (const model of entry.models ?? []) {
+      assert(
+        !seen.has(model.id),
+        `${entry.name} lists model id "${model.id}" twice`,
+      );
+      seen.add(model.id);
+    }
   }
 });
