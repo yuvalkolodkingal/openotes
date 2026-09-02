@@ -13,8 +13,11 @@
     },
     "android": {
       "package": "org.openotes.mobile",
-      "edgeToEdgeEnabled": true
+      "versionCode": 20201
     },
-    "plugins": ["expo-sqlite", "expo-secure-store"]
+    "plugins": [
+      "expo-sqlite",
+      "expo-secure-store"
+    ]
   }
 }

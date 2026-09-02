@@ -78,6 +78,7 @@ Being clear about this matters more than a feature list:
 | Fedora/RHEL     | `.rpm`          |
 | Arch/Manjaro    | `.pkg.tar.zst`  |
 | Generic Linux   | `.tar.gz`       |
+| Android         | `.apk`          |
 
 Download from the
 [releases page](https://github.com/yuvalkolodkingal/notesnook/releases) and
@@ -116,6 +117,13 @@ flatpak install Openotes-2.2.1-linux-x86_64.flatpak
 Linux needs **WebKitGTK** (`libwebkit2gtk-4.1-0` on Debian and Ubuntu,
 `webkit2gtk-4.1` on Arch). The distribution packages pull it in; the AppImage
 expects it to be present.
+
+### Android
+
+Download `Openotes-2.2.1-android.apk` to the phone and open it; Android asks
+once to allow installs from your browser or file manager. The app is not on a
+store. It connects to the Neon or Supabase database the desktop syncs to —
+see [DATABASE.md](DATABASE.md).
 
 ---
 

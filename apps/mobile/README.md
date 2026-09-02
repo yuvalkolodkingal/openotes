@@ -32,6 +32,19 @@ npx expo run:android   # or run:ios — a native build
 
 Requires Node 22. See the Expo documentation for the native toolchains.
 
+### The APK
+
+```sh
+npm run build:apk    # dist/Openotes-<version>-android.apk
+```
+
+Needs a JDK (17 or newer) and the Android SDK (`ANDROID_HOME`). The script
+generates the native project with `expo prebuild`, builds the release variant
+with Gradle and signs the result with `apksigner` -- with the keystore named
+by `ANDROID_KEYSTORE` (plus `ANDROID_KEYSTORE_PASSWORD`, `ANDROID_KEY_ALIAS`,
+`ANDROID_KEY_PASSWORD`), or with a throwaway key when none is given. CI
+builds the same APK for every release; see PACKAGING.md at the root.
+
 ## What it does not do
 
 - Attachments are not synced (their streaming cipher needs libsodium).

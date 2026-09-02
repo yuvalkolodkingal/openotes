@@ -51,8 +51,8 @@ export interface UpdateManifest {
 }
 
 export interface UpdateAsset {
-  platform: "windows" | "linux" | "darwin";
-  arch: "x86_64" | "aarch64";
+  platform: "windows" | "linux" | "darwin" | "android";
+  arch: "x86_64" | "aarch64" | "universal";
   format: string;
   url: string;
   sha256: string;

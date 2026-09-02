@@ -134,7 +134,8 @@ suite. What it does not do:
 - **Rich formatting.** Notes are edited as Markdown. Formatting Markdown cannot
   express is what a replace loses, exactly as for the assistant endpoint.
 
-See [apps/mobile/README.md](apps/mobile/README.md) for building it.
+Every release ships it as `Openotes-<version>-android.apk`; see
+[apps/mobile/README.md](apps/mobile/README.md) for building it yourself.
 
 ---
 

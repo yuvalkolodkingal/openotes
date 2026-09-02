@@ -31,8 +31,9 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 import { join } from "@std/path";
 
 interface UpdateAsset {
-  platform: "windows" | "linux" | "darwin";
-  arch: "x86_64" | "aarch64";
+  platform: "windows" | "linux" | "darwin" | "android";
+  /** "universal" for an APK that carries every ABI. */
+  arch: "x86_64" | "aarch64" | "universal";
   format: string;
   url: string;
   sha256: string;
@@ -59,6 +60,12 @@ function classify(
     if (match) {
       return { platform, arch: match[1] as UpdateAsset["arch"], format };
     }
+  }
+  // The phone app: one APK for every ABI. Listed so a download page built
+  // from the manifest sees it; the desktop updater filters by its own
+  // platform and never picks it.
+  if (/^Openotes-.+-android\.apk$/.test(name)) {
+    return { platform: "android", arch: "universal", format: "apk" };
   }
   return undefined;
 }

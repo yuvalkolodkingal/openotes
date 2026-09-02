@@ -45,6 +45,18 @@ exception: it is exactly what `makepkg` names `pkgname-pkgver-pkgrel-arch`,
 because pacman tooling expects that shape. There is no `.pacman` extension
 and nothing here invents one.
 
+### Android
+
+| Artifact | Purpose |
+|---|---|
+| `Openotes-VERSION-android.apk` | The phone app (`apps/mobile`), one APK for every ABI. Sideload it; it is not on a store. |
+
+Built by `apps/mobile/scripts/build-apk.sh`: `expo prebuild` generates the
+native project from `app.json` (nothing under `android/` is checked in),
+Gradle builds the release variant, and `apksigner` signs it. The
+`versionCode` is derived from the version (`2.2.1` → `20201`) so each release
+installs over the last.
+
 ### Alongside them
 
 | | |
@@ -219,6 +231,21 @@ Signing secrets are never exposed to pull requests from forks.
 
 An unsigned Windows build shows a SmartScreen warning on first run. That is
 expected for an unsigned application and not a defect in the build.
+
+Android is different in one way: an APK cannot be unsigned at all, so the
+build always signs. With `ANDROID_SIGNING_KEYSTORE` (a base64-encoded `.jks`
+or `.p12`), `ANDROID_SIGNING_KEYSTORE_PASSWORD`, `ANDROID_SIGNING_KEY_ALIAS`
+and `ANDROID_SIGNING_KEY_PASSWORD` configured, it signs with that key and
+each release installs over the previous one. Without them it signs with a
+key generated for that build and thrown away; the APK installs, but Android
+treats the next release as a different app until the old one is removed. The
+release notes say which of the two happened. To make a keystore:
+
+```sh
+keytool -genkeypair -keystore openotes-release.jks -alias openotes \
+  -keyalg RSA -keysize 4096 -validity 10000
+base64 -w0 openotes-release.jks   # the value of ANDROID_SIGNING_KEYSTORE
+```
 
 ---
 

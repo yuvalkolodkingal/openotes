@@ -231,7 +231,8 @@ jobs:
             -type f \
             \( -name '*.AppImage' -o -name '*.deb' -o -name '*.rpm' \
                -o -name '*.tar.gz' -o -name '*.exe' -o -name '*.msi' \
-               -o -name '*.zip' -o -name '*.flatpak' -o -name '*.pkg.tar.zst' \) \
+               -o -name '*.zip' -o -name '*.flatpak' -o -name '*.pkg.tar.zst' \
+               -o -name '*.apk' \) \
             -exec cp -v {} dist/ \;
           ls -la dist
 
@@ -248,7 +249,8 @@ jobs:
             "Openotes-$VERSION-windows-x86_64.msi" \
             "Openotes-$VERSION-windows-x86_64.zip" \
             "openotes-$VERSION-1-x86_64.pkg.tar.zst" \
-            "Openotes-$VERSION-linux-x86_64.flatpak"; do
+            "Openotes-$VERSION-linux-x86_64.flatpak" \
+            "Openotes-$VERSION-android.apk"; do
             if [ ! -f "dist/$artifact" ]; then
               echo "missing: $artifact" >&2
               missing=1
@@ -278,6 +280,19 @@ jobs:
             echo "SIGN_WINDOWS=false" >> "$GITHUB_ENV"
             echo "No signing certificate configured; publishing unsigned" \
                  "Windows installers. This is expected in a fork."
+          fi
+
+      # The APK was signed in the build job (Android refuses an unsigned
+      # one); this only decides what the release notes say about the key.
+      - name: Is Android signing configured?
+        env:
+          KEYSTORE: ${{ secrets.ANDROID_SIGNING_KEYSTORE }}
+        run: |
+          set -euo pipefail
+          if [ -n "${KEYSTORE:-}" ]; then
+            echo "SIGN_ANDROID=true" >> "$GITHUB_ENV"
+          else
+            echo "SIGN_ANDROID=false" >> "$GITHUB_ENV"
           fi
 
       - name: Install osslsigncode
@@ -353,12 +368,13 @@ jobs:
           {
             echo "## Openotes $VERSION"
             echo
-            echo "A desktop-only, Deno-based fork of Notesnook: no account and"
-            echo "no subscription. Notes live in an encrypted SQLite database on"
-            echo "your machine, and sync either through a WebDAV server you run"
-            echo "or through a cloud drive you already have — Google Drive,"
-            echo "Dropbox or OneDrive — as readable Markdown by default, or"
-            echo "end-to-end encrypted if you turn that on."
+            echo "A Deno-based desktop fork of Notesnook, with a phone app: no"
+            echo "account and no subscription. Notes live in an encrypted SQLite"
+            echo "database on your machine, and sync through a WebDAV server you"
+            echo "run, a Postgres database (Neon and Supabase can create one for"
+            echo "you, and the phone syncs to the same one), or a cloud drive you"
+            echo "already have — Google Drive, Dropbox or OneDrive — as readable"
+            echo "Markdown by default, or end-to-end encrypted if you turn that on."
             echo
             echo "It can also host an AI agent you already have, over the Agent"
             echo "Client Protocol, and answer the Model Context Protocol so an"
@@ -379,6 +395,7 @@ jobs:
             echo "| Windows (installer) | \`Openotes-$VERSION-windows-x86_64.exe\` |"
             echo "| Windows (MSI) | \`Openotes-$VERSION-windows-x86_64.msi\` |"
             echo "| Windows (portable) | \`Openotes-$VERSION-windows-x86_64.zip\` |"
+            echo "| Android (phone app) | \`Openotes-$VERSION-android.apk\` |"
             if [ -f "dist/Openotes-$VERSION-linux-aarch64.AppImage" ]; then
               echo "| Linux arm64 | \`Openotes-$VERSION-linux-aarch64.AppImage\`, \`.deb\`, \`.rpm\`, \`.tar.gz\` |"
             fi
@@ -396,6 +413,17 @@ jobs:
               echo "> code signed: this build had no signing certificate"
               echo "> configured. Windows SmartScreen will warn about them."
               echo "> Check \`SHA256SUMS\` against your download."
+            fi
+            echo
+            if [ "${SIGN_ANDROID:-false}" = "true" ]; then
+              echo "The Android APK is signed with the project's release key, so"
+              echo "it installs over the previous release."
+            else
+              echo "> The Android APK is signed with a key generated for this"
+              echo "> build alone: no release keystore was configured. It"
+              echo "> installs, but a later release will not install over it —"
+              echo "> uninstall this one first. Check \`SHA256SUMS\` against"
+              echo "> your download."
             fi
             echo
             echo "An SPDX SBOM for this build is attached as"

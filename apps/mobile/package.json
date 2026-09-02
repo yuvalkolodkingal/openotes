@@ -9,7 +9,8 @@
     "start": "expo start",
     "android": "expo run:android",
     "ios": "expo run:ios",
-    "typecheck": "tsc --noEmit -p tsconfig.json"
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "build:apk": "bash scripts/build-apk.sh"
   },
   "dependencies": {
     "@noble/ciphers": "^2.3.0",
@@ -18,6 +19,7 @@
     "expo-secure-store": "~57.0.3",
     "expo-sqlite": "~57.0.2",
     "expo-status-bar": "~57.0.1",
+    "expo-system-ui": "~57.0.3",
     "react": "19.2.3",
     "react-native": "0.86.3",
     "react-native-get-random-values": "~1.11.0",
