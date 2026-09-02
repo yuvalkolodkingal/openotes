@@ -21,7 +21,12 @@ import { Button, Flex, Text, Textarea } from "@theme-ui/components";
 import React, { useEffect, useRef, useState } from "react";
 import { ScopedThemeProvider } from "../theme-provider";
 import { TITLE_BAR_HEIGHT } from "../title-bar";
-import { store as aiStore, useStore as useAiStore, Turn } from "../../stores/ai-store";
+import {
+  AgentStatus,
+  store as aiStore,
+  useStore as useAiStore,
+  Turn
+} from "../../stores/ai-store";
 
 /**
  * The AI assistant panel.
@@ -41,6 +46,10 @@ function AiAssistant() {
   const approval = useAiStore((store) => store.approval);
   const modes = useAiStore((store) => store.modes);
   const currentModeId = useAiStore((store) => store.currentModeId);
+  const sessionModels = useAiStore((store) => store.sessionModels);
+  const currentModelId = useAiStore((store) => store.currentModelId);
+  const sessionId = useAiStore((store) => store.sessionId);
+  const signingIn = useAiStore((store) => store.signingIn);
   const error = useAiStore((store) => store.error);
 
   const [draft, setDraft] = useState("");
@@ -104,6 +113,14 @@ function AiAssistant() {
                 ))}
               </select>
             ) : null}
+            {connected ? (
+              <ModelPicker
+                agent={connected}
+                sessionModels={sessionModels}
+                currentModelId={currentModelId}
+                hasSession={!!sessionId}
+              />
+            ) : null}
           </Flex>
           {agentId ? (
             <Button
@@ -134,6 +151,8 @@ function AiAssistant() {
 
         {!agentId && !approval ? (
           <AgentPicker connecting={connecting} />
+        ) : connected && !sessionId && connected.authMethods.length > 0 ? (
+          <SignInPrompt agent={connected} signingIn={signingIn} />
         ) : (
           <>
             <Flex sx={{ flex: 1, flexDirection: "column", overflowY: "auto", p: 2 }}>
@@ -195,6 +214,151 @@ function AiAssistant() {
           </>
         )}
       </ScopedThemeProvider>
+    </Flex>
+  );
+}
+
+/**
+ * Which model the agent runs on.
+ *
+ * Two sources, and they behave differently. A model the agent offered with
+ * the session (`session/new` → `models`) switches live, so choosing one is
+ * immediate. A catalog model is passed when the agent starts, so choosing one
+ * restarts it -- the control says so rather than pretending. When the agent
+ * offers neither there is no control, because a picker that does nothing is
+ * worse than none.
+ */
+function ModelPicker(props: {
+  agent: AgentStatus;
+  sessionModels: { modelId: string; name: string; description?: string }[];
+  currentModelId?: string;
+  hasSession: boolean;
+}) {
+  const { agent, sessionModels, currentModelId, hasSession } = props;
+  const style = {
+    fontSize: "inherit",
+    fontFamily: "inherit",
+    maxWidth: 160
+  } as const;
+
+  if (hasSession && sessionModels.length > 0) {
+    return (
+      <select
+        value={currentModelId ?? ""}
+        onChange={(e) => void aiStore.setSessionModel(e.target.value)}
+        title="The model this session runs on. Switches immediately."
+        style={style}
+      >
+        {sessionModels.map((model) => (
+          <option
+            key={model.modelId}
+            value={model.modelId}
+            title={model.description}
+          >
+            {model.name}
+          </option>
+        ))}
+      </select>
+    );
+  }
+
+  if (agent.models.length === 0 && !agent.acceptsCustomModel) return null;
+
+  const chosen = aiStore.modelFor(agent.id) ?? "";
+  const listed = agent.models.some((model) => model.id === chosen);
+  return (
+    <select
+      value={chosen}
+      onChange={(e) => {
+        const value = e.target.value;
+        if (value === CUSTOM_MODEL) {
+          const typed = window.prompt(
+            `Model name to pass to ${agent.name}`,
+            listed ? "" : chosen
+          );
+          if (typed && typed.trim())
+            void aiStore.setModel(agent.id, typed.trim());
+          return;
+        }
+        void aiStore.setModel(agent.id, value || undefined);
+      }}
+      title={`The model ${agent.name} starts with. Changing it restarts the agent.`}
+      style={style}
+    >
+      <option value="">Default model</option>
+      {agent.models.map((model) => (
+        <option key={model.id} value={model.id}>
+          {model.name}
+        </option>
+      ))}
+      {chosen && !listed ? <option value={chosen}>{chosen}</option> : null}
+      {agent.acceptsCustomModel ? (
+        <option value={CUSTOM_MODEL}>Other…</option>
+      ) : null}
+    </select>
+  );
+}
+
+const CUSTOM_MODEL = "__custom__";
+
+/**
+ * The agent wants a sign-in before it will open a session.
+ *
+ * Some methods it completes itself. The ones it can only describe -- Claude's
+ * subscription login is one -- are run by Openotes when the program is one it
+ * may launch, with the page they print opened in the browser; otherwise the
+ * command is shown to be run by hand. Either way the wait is visible, because
+ * a login takes as long as the user takes.
+ */
+function SignInPrompt(props: {
+  agent: AgentStatus;
+  signingIn?: { methodId: string; name: string };
+}) {
+  const { agent, signingIn } = props;
+  return (
+    <Flex sx={{ flexDirection: "column", m: 2, p: 2, gap: 1, borderRadius: "default", bg: "background-secondary" }}>
+      <Text variant="body">
+        {agent.agentTitle ?? agent.name} needs you to sign in first.
+      </Text>
+      <Text variant="subBody" sx={{ color: "paragraph-secondary" }}>
+        {agent.authHint}
+      </Text>
+      {signingIn ? (
+        <Text variant="subBody" sx={{ color: "accent" }}>
+          Waiting for you to finish {signingIn.name} in your browser…
+        </Text>
+      ) : (
+        <Flex sx={{ flexDirection: "column", gap: 1, mt: 1 }}>
+          {agent.authMethods.map((method) => (
+            <Flex key={method.id} sx={{ flexDirection: "column", gap: "2px" }}>
+              <Flex sx={{ alignItems: "center", gap: 1 }}>
+                <Button
+                  variant="accent"
+                  sx={{ py: "2px", px: 1, fontSize: "subBody" }}
+                  onClick={() => void aiStore.authenticate(method.id)}
+                >
+                  {method.name}
+                </Button>
+                {method.description ? (
+                  <Text variant="subBody" sx={{ color: "paragraph-secondary" }}>
+                    {method.description}
+                  </Text>
+                ) : null}
+              </Flex>
+              {method.type === "terminal" && method.command ? (
+                <Text
+                  variant="subBody"
+                  sx={{ color: "paragraph-secondary", fontFamily: "monospace", wordBreak: "break-all" }}
+                >
+                  {method.runnable
+                    ? `Runs: ${method.command}`
+                    : `Run this in a terminal, then connect again: ${method.command}`}
+                </Text>
+              ) : null}
+            </Flex>
+          ))}
+        </Flex>
+      )}
     </Flex>
   );
 }

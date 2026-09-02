@@ -37,7 +37,12 @@ import { showToast } from "../../utils/toast";
 import { strings } from "@notesnook/intl";
 import { WebDavConnectionPanel } from "./components/webdav-connection";
 import { DriveConnectionPanel } from "./components/drive-connection";
-import type { SyncProvider } from "../../stores/webdav-store";
+import { SqlConnectionPanel } from "./components/sql-connection";
+import {
+  DRIVE_PROVIDERS,
+  SQL_PROVIDERS,
+  type SyncProvider
+} from "../../stores/webdav-store";
 
 /** Re-renders a setting whenever the WebDAV config or status changes. */
 const onWebDavChange = (listener: (state: unknown, prev: unknown) => void) =>
@@ -74,13 +79,20 @@ export const SyncSettings: SettingsGroup[] = [
           "Openotes has no cloud account and no server of its own. Notes are " +
           "encrypted on this device before they go anywhere, so whichever of " +
           "these you pick only ever holds ciphertext — even the filenames are " +
-          "keyed digests.",
+          "keyed digests. A Postgres database is the best-behaved choice: " +
+          "Neon and Supabase both have a free tier, and Openotes can create " +
+          "the database for you.",
         keywords: [
           "provider",
           "webdav",
           "google drive",
           "dropbox",
           "onedrive",
+          "postgres",
+          "neon",
+          "supabase",
+          "database",
+          "sql",
           "sync"
         ],
         onStateChange: onWebDavChange,
@@ -89,6 +101,9 @@ export const SyncSettings: SettingsGroup[] = [
             type: "dropdown",
             options: [
               { value: "webdav", title: "A WebDAV server you control" },
+              { value: "neon", title: "Neon (Postgres, free tier)" },
+              { value: "supabase", title: "Supabase (Postgres, free tier)" },
+              { value: "postgres", title: "A Postgres database you control" },
               { value: "googledrive", title: "Google Drive" },
               { value: "dropbox", title: "Dropbox" },
               { value: "onedrive", title: "OneDrive" }
@@ -140,9 +155,33 @@ export const SyncSettings: SettingsGroup[] = [
           "client id"
         ],
         isHidden: () =>
-          (webDavStore.get().config?.provider ?? "webdav") === "webdav",
+          !DRIVE_PROVIDERS.includes(
+            webDavStore.get().config?.provider ?? "webdav"
+          ),
         onStateChange: onWebDavChange,
         components: [{ type: "custom", component: DriveConnectionPanel }]
+      },
+      {
+        key: "sync-sql",
+        title: "Your database",
+        description:
+          "One table, created for you. The database holds ciphertext under " +
+          "opaque names; the passphrase never leaves this device. A phone " +
+          "running the Openotes mobile app can sync to the same table.",
+        keywords: [
+          "postgres",
+          "neon",
+          "supabase",
+          "database",
+          "sql",
+          "connection string",
+          "api key",
+          "mobile"
+        ],
+        isHidden: () =>
+          !SQL_PROVIDERS.includes(webDavStore.get().config?.provider ?? "webdav"),
+        onStateChange: onWebDavChange,
+        components: [{ type: "custom", component: SqlConnectionPanel }]
       },
       {
         key: "sync-now",

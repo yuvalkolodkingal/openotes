@@ -570,3 +570,68 @@ Deno.test("a long turn is not cut short by the handshake deadline", async () => 
   });
   assertEquals((await turn).stopReason, "end_turn");
 });
+
+Deno.test("the client asks the agent to describe terminal sign-ins", async () => {
+  // The Claude adapter lists its subscription logins only for a client that
+  // says it understands the terminal-auth extension. Without this line there
+  // were no auth methods at all, and the first prompt failed with "run
+  // /login" and nowhere to run it.
+  const { client, agent } = connect();
+  await client.initialize();
+
+  const init = agent.received.find((r) => r.method === "initialize");
+  const params = init?.params as {
+    clientCapabilities: { terminal: boolean; _meta?: Record<string, unknown> };
+  };
+  assertEquals(params.clientCapabilities.terminal, false);
+  assertEquals(params.clientCapabilities._meta?.["terminal-auth"], true);
+  await client.close();
+});
+
+Deno.test("a session carries the models the agent offers", async () => {
+  const { client, agent } = connect();
+  await client.initialize();
+  agent.responders["session/new"] = () => ({
+    sessionId: "s1",
+    models: {
+      currentModelId: "sonnet",
+      availableModels: [
+        { modelId: "opus", name: "Opus" },
+        { modelId: "sonnet", name: "Sonnet", description: "fast" },
+      ],
+    },
+  });
+
+  const session = await client.newSession("/tmp/ws");
+  assertEquals(session.models?.currentModelId, "sonnet");
+  assertEquals(session.models?.availableModels.length, 2);
+  await client.close();
+});
+
+Deno.test("switching the model is a session/set_model request", async () => {
+  const { client, agent } = connect();
+  await client.initialize();
+  agent.responders["session/set_model"] = () => ({});
+
+  await client.setModel("s1", "opus");
+
+  const request = agent.received.find((r) => r.method === "session/set_model");
+  assertEquals(request?.params, { sessionId: "s1", modelId: "opus" });
+  await client.close();
+});
+
+Deno.test("a rejected model switch is an error the caller can revert on", async () => {
+  const { client, agent } = connect();
+  await client.initialize();
+  agent.errors["session/set_model"] = {
+    code: -32602,
+    message: "no such model",
+  };
+
+  await assertRejects(
+    () => client.setModel("s1", "nope"),
+    Error,
+    "no such model",
+  );
+  await client.close();
+});

@@ -64,11 +64,38 @@ export type WebDavSyncStatus =
  * `hasPassword` flag the handler adds. The password itself is never sent to
  * the renderer, so there is no field for it.
  */
-export type SyncProvider = "webdav" | "googledrive" | "dropbox" | "onedrive";
+export type SyncProvider =
+  | "webdav"
+  | "googledrive"
+  | "dropbox"
+  | "onedrive"
+  | "postgres"
+  | "neon"
+  | "supabase";
+
+export const SQL_PROVIDERS: SyncProvider[] = ["postgres", "neon", "supabase"];
+export const DRIVE_PROVIDERS: SyncProvider[] = [
+  "googledrive",
+  "dropbox",
+  "onedrive"
+];
 
 export type WebDavConfig = {
   enabled: boolean;
   provider: SyncProvider;
+  /** Host, database and user of a SQL provider; never the password. */
+  sqlHost: string;
+  sqlDatabase: string;
+  sqlUser: string;
+  sqlTransport: "socket" | "http";
+  supabaseUrl: string;
+  /** Set when Openotes created the project on Neon or Supabase. */
+  sqlProvenance?: {
+    projectId: string;
+    projectName: string;
+    region?: string;
+    createdAt: number;
+  };
   /** The OAuth client id of the application the user registered. */
   clientId: string;
   /** Whether tokens for the current provider are stored. */

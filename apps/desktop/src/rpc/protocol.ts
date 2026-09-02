@@ -175,6 +175,17 @@ export const PROCEDURE_NAMES = [
   "webdav.driveSetup",
   "webdav.connectDrive",
   "webdav.disconnectDrive",
+  // A Postgres database as the backend (new in 2.2.1): the user's own, or
+  // one Neon or Supabase creates on request.
+  "webdav.sqlSetup",
+  "webdav.testSql",
+  "webdav.connectSql",
+  "webdav.disconnectSql",
+  "webdav.neonAccount",
+  "webdav.provisionNeon",
+  "webdav.connectSupabaseAccount",
+  "webdav.supabaseAccount",
+  "webdav.provisionSupabase",
 
   // --- backup engine (new in this fork) ---
   "backup.getSettings",
@@ -211,6 +222,8 @@ export const PROCEDURE_NAMES = [
   "acp.prompt",
   "acp.cancel",
   "acp.setMode",
+  // A model the agent offers inside a session, switched live (new in 2.2.1).
+  "acp.setModel",
   "acp.respondPermission",
   "acp.diagnostics",
 

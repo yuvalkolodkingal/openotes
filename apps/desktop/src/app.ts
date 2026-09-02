@@ -315,6 +315,9 @@ export async function createApp(
           approved.agentId === agentId &&
           approved.resolvedPath === resolvedPath,
       ),
+    // The page a terminal sign-in prints, opened in the user's own browser
+    // -- the same rule as the drive providers: never a webview.
+    openUrl: (url) => shell.openExternal(url),
   });
 
   const sync = new SyncService({

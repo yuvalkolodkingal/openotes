@@ -177,6 +177,54 @@ jobs:
         run: deno task test:webdav --require-server --no-download
 
   # -------------------------------------------------------------------------
+  # The SQL backend against a real Postgres, not the recording fakes. The
+  # unit suite proves the request shapes; this proves the statements -- the
+  # ON CONFLICT create, the version-filtered UPDATE, the LIKE listings -- do
+  # what the contract says on the database people will actually point it at.
+  # Neon and Supabase are Postgres underneath, so this covers their SQL too;
+  # their HTTP transports are checked against fakes read from their own
+  # drivers.
+  # -------------------------------------------------------------------------
+  sql-integration:
+    name: SQL backend (real Postgres)
+    runs-on: ubuntu-24.04
+
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+
+    env:
+      POSTGRES_TEST_URL: postgresql://postgres:postgres@127.0.0.1:5432/postgres
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: ${{ env.DENO_VERSION }}
+
+      - name: Cache the Deno module cache
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.DENO_DIR }}
+          key: deno-${{ runner.os }}-${{ hashFiles('deno.lock') }}
+          restore-keys: deno-${{ runner.os }}-
+
+      # --require-server: a missing server must fail here, never pass as a
+      # skip.
+      - name: SQL integration suite
+        run: deno task test:sql --require-server
+
+  # -------------------------------------------------------------------------
   # Does the thing we ship actually start? Builds the application directory
   # for this host and runs the start-up assertions against it.
   # -------------------------------------------------------------------------

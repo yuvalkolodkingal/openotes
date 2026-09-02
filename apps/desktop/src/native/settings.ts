@@ -49,11 +49,45 @@ export interface WindowState {
  * mergeSettings fills a missing field from the defaults, so an installation
  * that predates `provider` reads back as WebDAV — which is what it was.
  */
-export type SyncProvider = "webdav" | "googledrive" | "dropbox" | "onedrive";
+export type SyncProvider =
+  | "webdav"
+  | "googledrive"
+  | "dropbox"
+  | "onedrive"
+  // A Postgres database (new in 2.2.1): one the user runs, or one Neon or
+  // Supabase created for them. The secrets -- connection string, service
+  // key, management tokens -- are in the credential store; these settings
+  // hold only the non-secret summary the settings screen shows.
+  | "postgres"
+  | "neon"
+  | "supabase";
+
+/** Where a SQL provider's database came from, for the settings screen. */
+export interface SqlProvenance {
+  /** "neon" or "supabase", and which project. */
+  projectId: string;
+  projectName: string;
+  region?: string;
+  createdAt: number;
+}
 
 export interface WebDavSettings {
   enabled: boolean;
   provider: SyncProvider;
+  /** Host and database of a SQL provider, shown but never secret. */
+  sqlHost: string;
+  sqlDatabase: string;
+  sqlUser: string;
+  /**
+   * How a SQL provider is reached. Neon offers SQL over HTTPS, which works
+   * from anywhere a browser does and is the default there; every other
+   * Postgres is a socket.
+   */
+  sqlTransport: "socket" | "http";
+  /** https://<ref>.supabase.co -- the project URL, not a secret. */
+  supabaseUrl: string;
+  /** Set when Openotes created the project through a management API. */
+  sqlProvenance?: SqlProvenance;
   /**
    * The OAuth client id for a drive provider. Openotes registers no
    * application of its own, so each user brings their own — which is also
@@ -186,6 +220,11 @@ export function defaultSettings(): AppSettings {
     webdav: {
       enabled: false,
       provider: "webdav",
+      sqlHost: "",
+      sqlDatabase: "",
+      sqlUser: "",
+      sqlTransport: "socket",
+      supabaseUrl: "",
       clientId: "",
       connected: false,
       serverUrl: "",

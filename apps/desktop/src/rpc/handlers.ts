@@ -51,9 +51,25 @@ import {
   isDriveProvider,
 } from "../sync/drive-providers.ts";
 import { WEBDAV_PRESETS } from "../sync/webdav-presets.ts";
+import {
+  describeSqlProvider,
+  isSqlProvider,
+  NeonAccount,
+  provenanceOf,
+  provisionSupabaseProject,
+  SQL_CREDENTIALS,
+  sqlSummary,
+  SUPABASE_REGISTRATION_NOTES,
+  type SupabaseAccount,
+  SupabaseManagement,
+  supabaseOAuthClient,
+  supabaseProjectUrl,
+} from "../sync/sql-providers.ts";
+import { describeConnection, supabaseProjectRef } from "@notesnook/sync-sql";
+import { isExpired, refreshTokens } from "../security/oauth.ts";
 import { driveSecretKey, driveTokenKey } from "../sync/service.ts";
 import { beginAuthorization } from "../security/oauth.ts";
-import type { SyncProvider } from "../native/settings.ts";
+import type { SqlProvenance, SyncProvider } from "../native/settings.ts";
 
 const log = logger.scope("rpc");
 
@@ -151,8 +167,11 @@ export function createHandlers(): Record<string, Handler> {
     "acp.disconnect": (input, context) =>
       context.acp.disconnect(asString(input, "agentId", 64)),
 
+    // A sign-in the agent completes itself, or -- for the methods it can only
+    // describe -- a command run here with its output returned, so the user
+    // sees what happened when it did not work.
     "acp.authenticate": (input, context) =>
-      context.acp.authenticate(
+      context.acp.signIn(
         asString(input, "agentId", 64),
         asString(input, "methodId", 128),
       ),
@@ -184,6 +203,13 @@ export function createHandlers(): Record<string, Handler> {
         asString(input, "agentId", 64),
         asString(input, "sessionId", 256),
         asString(input, "modeId", 128),
+      ),
+
+    "acp.setModel": (input, context) =>
+      context.acp.setModel(
+        asString(input, "agentId", 64),
+        asString(input, "sessionId", 256),
+        asString(input, "modelId", 256),
       ),
 
     "acp.respondPermission": (input) => {
@@ -654,6 +680,23 @@ export function createHandlers(): Record<string, Handler> {
           input?.storeCredentialsWithMachineKey,
           current.storeCredentialsWithMachineKey,
         ),
+        sqlTransport: asTransport(
+          input?.sqlTransport,
+          providerChanged
+            ? (provider === "neon" ? "http" : "socket")
+            : current.sqlTransport,
+        ),
+        // The SQL summary describes one provider's database; like the drive
+        // registration above it does not survive a change of provider.
+        ...(providerChanged
+          ? {
+            sqlHost: "",
+            sqlDatabase: "",
+            sqlUser: "",
+            supabaseUrl: "",
+            sqlProvenance: undefined,
+          }
+          : {}),
       });
       await context.reconfigureSync();
       return {
@@ -882,6 +925,195 @@ export function createHandlers(): Record<string, Handler> {
       return { provider };
     },
 
+    // ---------------- a Postgres database as the backend ----------------
+
+    "webdav.sqlSetup": (input) => {
+      const provider = asSqlProvider(input?.provider);
+      return {
+        ...describeSqlProvider(provider),
+        supabaseRegistrationNotes: SUPABASE_REGISTRATION_NOTES,
+      };
+    },
+
+    /**
+     * Prove a connection before anything is saved. The secrets arrive in
+     * the call and are used once; nothing here writes them.
+     */
+    "webdav.testSql": async (input, context) => {
+      const provider = asSqlProvider(input?.provider);
+      const current = context.settings.get("webdav");
+      const secrets = await sqlSecretsFrom(input, provider, context);
+      return await context.sync.testSqlConnection({
+        provider,
+        ...secrets,
+        directory: optionalString(input?.directory) ?? current.directory,
+        sqlTransport: asTransport(
+          input?.sqlTransport,
+          provider === "neon" ? "http" : "socket",
+        ),
+        passphrase: optionalString(input?.passphrase),
+        timeoutSeconds: current.timeoutSeconds,
+      });
+    },
+
+    "webdav.connectSql": (input, context) => connectSql(input, context),
+
+    "webdav.disconnectSql": async (_input, context) => {
+      await context.sync.disconnectSql();
+      return context.sync.currentStatus;
+    },
+
+    /**
+     * What a Neon API key can see: the regions a project may be created in
+     * and the projects that already exist. The key is kept when asked to,
+     * so the next visit needs no paste.
+     */
+    "webdav.neonAccount": async (input, context) => {
+      const apiKey = await neonKeyFrom(input, context);
+      const account = new NeonAccount(apiKey);
+      const [regions, projects] = await Promise.all([
+        account.regions().catch(() => []),
+        account.projects(),
+      ]);
+      if (input?.remember !== false) {
+        await context.credentials.set(SQL_CREDENTIALS.neonApiKey, apiKey);
+      }
+      return { regions, projects, hasKey: true };
+    },
+
+    /**
+     * Create a Neon project, or take an existing one, and connect to it.
+     * The connection string Neon hands back is the whole secret and goes
+     * straight to the credential store through connectSql.
+     */
+    "webdav.provisionNeon": async (input, context) => {
+      const apiKey = await neonKeyFrom(input, context);
+      const account = new NeonAccount(apiKey);
+      const existing = optionalString(input?.projectId);
+      let project: { id: string; name: string; regionId: string };
+      let connectionString: string;
+      if (existing) {
+        const projects = await account.projects();
+        const found = projects.find((p) => p.id === existing);
+        if (!found) throw new Error("That Neon project was not found.");
+        project = found;
+        connectionString = await account.connectionString(existing);
+      } else {
+        const created = await account.createProject({
+          name: optionalString(input?.name)?.trim() || "openotes",
+          regionId: optionalString(input?.regionId) || undefined,
+        });
+        project = created.project;
+        connectionString = created.connectionString;
+      }
+      await context.credentials.set(SQL_CREDENTIALS.neonApiKey, apiKey);
+      return await connectSql({
+        provider: "neon",
+        connectionString,
+        directory: optionalString(input?.directory),
+        sqlTransport: asTransport(input?.sqlTransport, "http"),
+        passphrase: optionalString(input?.passphrase),
+        provenance: provenanceOf("neon", {
+          id: project.id,
+          name: project.name,
+          region: project.regionId,
+        }),
+      }, context);
+    },
+
+    /**
+     * Sign in to Supabase with the OAuth application the user registered --
+     * the same shape as the drives: their client id, their consent screen,
+     * their browser.
+     */
+    "webdav.connectSupabaseAccount": async (input, context) => {
+      const clientId = asString(input, "clientId", 512).trim();
+      const clientSecret = asString(input, "clientSecret", 1024).trim();
+      if (!clientId || !clientSecret) {
+        throw new Error(
+          "Supabase needs both the client ID and the client secret of your " +
+            "OAuth application.",
+        );
+      }
+      const request = await beginAuthorization(
+        supabaseOAuthClient({ clientId, clientSecret }),
+      );
+      await context.shell.openExternal(request.url);
+      const tokens = await request.completion;
+      const account: SupabaseAccount = { kind: "oauth", tokens };
+      await context.credentials.set(
+        SQL_CREDENTIALS.supabaseAccount,
+        JSON.stringify(account),
+      );
+      await context.credentials.set(
+        SQL_CREDENTIALS.supabaseClientSecret,
+        clientSecret,
+      );
+      await context.settings.patchWebDav({ clientId });
+      return { ok: true };
+    },
+
+    /**
+     * What the Supabase account can see: organisations to create in and
+     * projects that exist. A personal access token in the call is kept for
+     * next time; otherwise the stored sign-in is used.
+     */
+    "webdav.supabaseAccount": async (input, context) => {
+      const token = await supabaseTokenFrom(input, context);
+      const management = new SupabaseManagement(token);
+      const [organizations, projects] = await Promise.all([
+        management.organizations(),
+        management.projects(),
+      ]);
+      return { organizations, projects, hasAccount: true };
+    },
+
+    /**
+     * Create a Supabase project, or take an existing one, set the table up
+     * through the management API, fetch the service key and connect. A new
+     * project takes a minute or two to come up; the call waits.
+     */
+    "webdav.provisionSupabase": async (input, context) => {
+      const token = await supabaseTokenFrom(input, context);
+      const management = new SupabaseManagement(token);
+      let project: { id: string; ref: string; name: string; region: string };
+      const existing = optionalString(input?.ref);
+      if (existing) {
+        project = await management.project(existing);
+      } else {
+        const organizationSlug = optionalString(input?.organizationSlug) ||
+          (await management.organizations())[0]?.slug;
+        if (!organizationSlug) {
+          throw new Error(
+            "This Supabase account has no organisation to create a project in.",
+          );
+        }
+        const created = await management.createProject({
+          name: optionalString(input?.name)?.trim() || "openotes",
+          organizationSlug,
+          region: optionalString(input?.region) || undefined,
+        });
+        project = created.project;
+      }
+      await management.waitUntilReady(project.ref);
+      const { url, serviceKey } = await provisionSupabaseProject(
+        management,
+        project.ref,
+      );
+      return await connectSql({
+        provider: "supabase",
+        supabaseUrl: url,
+        supabaseServiceKey: serviceKey,
+        directory: optionalString(input?.directory),
+        passphrase: optionalString(input?.passphrase),
+        provenance: provenanceOf("supabase", {
+          id: project.ref,
+          name: project.name,
+          region: project.region,
+        }),
+      }, context);
+    },
+
     // ---------------- the assistant endpoint (MCP) ----------------
 
     "mcp.getSettings": (_input, context) => context.settings.get("mcp"),
@@ -972,8 +1204,22 @@ function asSyncProvider(value: unknown): SyncProvider | undefined {
     "googledrive",
     "dropbox",
     "onedrive",
+    "postgres",
+    "neon",
+    "supabase",
   ];
   return providers.find((provider) => provider === value);
+}
+
+function asSqlProvider(value: unknown): "postgres" | "neon" | "supabase" {
+  if (!isSqlProvider(value)) {
+    throw new Error("Unknown database provider.");
+  }
+  return value;
+}
+
+function asTransport(value: unknown, fallback: "socket" | "http") {
+  return value === "socket" || value === "http" ? value : fallback;
 }
 
 /**
@@ -1047,6 +1293,199 @@ export async function dispatch(
 }
 
 // ---------------- input validation helpers ----------------
+
+/**
+ * The secrets for a SQL provider, from the call when given and from the
+ * credential store otherwise -- so "Test connection" works on a saved
+ * connection without the user re-pasting a connection string.
+ */
+async function sqlSecretsFrom(
+  input: any,
+  provider: "postgres" | "neon" | "supabase",
+  context: AppContext,
+): Promise<{
+  connectionString?: string;
+  supabaseUrl?: string;
+  supabaseServiceKey?: string;
+}> {
+  const read = (key: string) =>
+    context.credentials.get(key).catch(() => undefined);
+  if (provider === "supabase") {
+    const supabaseUrl = optionalString(input?.supabaseUrl)?.trim() ||
+      context.settings.get("webdav").supabaseUrl;
+    if (!supabaseUrl || !supabaseProjectRef(supabaseUrl)) {
+      throw new Error(
+        "Enter the project URL, which looks like https://<ref>.supabase.co.",
+      );
+    }
+    const supabaseServiceKey = optionalString(input?.supabaseServiceKey)
+      ?.trim() || (await read(SQL_CREDENTIALS.supabaseServiceKey));
+    if (!supabaseServiceKey) {
+      throw new Error("Enter the project's service key.");
+    }
+    return {
+      supabaseUrl: supabaseProjectUrl(supabaseProjectRef(supabaseUrl)!),
+      supabaseServiceKey,
+    };
+  }
+  const connectionString = optionalString(input?.connectionString)?.trim() ||
+    (await read(SQL_CREDENTIALS.connectionString));
+  if (!connectionString) {
+    throw new Error("Enter the database connection string.");
+  }
+  // Validates the shape and refuses anything that is not Postgres.
+  describeConnection(connectionString);
+  return { connectionString };
+}
+
+/** Only ever produced by this process (provisionNeon/provisionSupabase). */
+function asProvenance(value: Record<string, unknown>): SqlProvenance {
+  return {
+    projectId: String(value.projectId ?? ""),
+    projectName: String(value.projectName ?? ""),
+    region: optionalString(value.region),
+    createdAt: Number(value.createdAt) || Date.now(),
+  };
+}
+
+/**
+ * Save a SQL connection and start syncing through it.
+ *
+ * Order matters: the connection is tested with the candidate secrets first,
+ * then the secrets go to the credential store, then the non-secret summary
+ * to settings. A connection that fails saves nothing, so the settings
+ * screen never describes a database that does not work. Shared by the
+ * manual connect and both provisioners.
+ */
+async function connectSql(input: any, context: AppContext) {
+  const provider = asSqlProvider(input?.provider);
+  const current = context.settings.get("webdav");
+  const passphrase = optionalString(input?.passphrase);
+  if (passphrase) {
+    await context.sync.setCredentials({ passphrase });
+  }
+  const secrets = await sqlSecretsFrom(input, provider, context);
+  const directory = optionalString(input?.directory) ?? current.directory;
+  const sqlTransport = asTransport(
+    input?.sqlTransport,
+    provider === "neon" ? "http" : "socket",
+  );
+
+  const test = await context.sync.testSqlConnection({
+    provider,
+    ...secrets,
+    directory,
+    sqlTransport,
+    timeoutSeconds: current.timeoutSeconds,
+  });
+  if (!test.ok) throw new Error(test.message);
+
+  if (secrets.connectionString) {
+    await context.credentials.set(
+      SQL_CREDENTIALS.connectionString,
+      secrets.connectionString,
+    );
+  }
+  if (secrets.supabaseServiceKey) {
+    await context.credentials.set(
+      SQL_CREDENTIALS.supabaseServiceKey,
+      secrets.supabaseServiceKey,
+    );
+  }
+  await context.settings.patchWebDav({
+    provider,
+    directory,
+    sqlTransport,
+    connected: true,
+    enabled: true,
+    ...(secrets.connectionString
+      ? sqlSummary(secrets.connectionString)
+      : { sqlHost: "", sqlDatabase: "", sqlUser: "" }),
+    supabaseUrl: secrets.supabaseUrl ?? "",
+    sqlProvenance: isPlainObject(input?.provenance)
+      ? asProvenance(input.provenance)
+      : current.provider === provider
+      ? current.sqlProvenance
+      : undefined,
+  });
+  context.reconfigureSync();
+  await context.sync.syncNow();
+  return {
+    status: context.sync.currentStatus,
+    config: {
+      ...context.settings.get("webdav"),
+      hasPassword: context.hasStoredWebDavPassword(),
+    },
+  };
+}
+
+async function neonKeyFrom(input: any, context: AppContext): Promise<string> {
+  const given = optionalString(input?.apiKey)?.trim();
+  if (given) return given;
+  const stored = await context.credentials
+    .get(SQL_CREDENTIALS.neonApiKey)
+    .catch(() => undefined);
+  if (!stored) throw new Error("Paste a Neon API key first.");
+  return stored;
+}
+
+/**
+ * A usable Supabase access token: the personal token from the call (kept
+ * for next time), or the stored sign-in, refreshed when it has expired.
+ */
+async function supabaseTokenFrom(
+  input: any,
+  context: AppContext,
+): Promise<string> {
+  const given = optionalString(input?.token)?.trim();
+  if (given) {
+    const account: SupabaseAccount = { kind: "token", token: given };
+    await context.credentials.set(
+      SQL_CREDENTIALS.supabaseAccount,
+      JSON.stringify(account),
+    );
+    return given;
+  }
+  const raw = await context.credentials
+    .get(SQL_CREDENTIALS.supabaseAccount)
+    .catch(() => undefined);
+  if (!raw) {
+    throw new Error(
+      "Sign in to Supabase or paste a personal access token first.",
+    );
+  }
+  let account: SupabaseAccount;
+  try {
+    account = JSON.parse(raw) as SupabaseAccount;
+  } catch {
+    throw new Error(
+      "The stored Supabase sign-in is unreadable. Sign in again.",
+    );
+  }
+  if (account.kind === "token") return account.token;
+  if (!isExpired(account.tokens)) return account.tokens.accessToken;
+  if (!account.tokens.refreshToken) {
+    throw new Error("The Supabase sign-in has expired. Sign in again.");
+  }
+  const clientSecret = await context.credentials
+    .get(SQL_CREDENTIALS.supabaseClientSecret)
+    .catch(() => undefined);
+  const clientId = context.settings.get("webdav").clientId;
+  if (!clientId || !clientSecret) {
+    throw new Error("The Supabase sign-in has expired. Sign in again.");
+  }
+  const refreshed = await refreshTokens(
+    supabaseOAuthClient({ clientId, clientSecret }),
+    account.tokens.refreshToken,
+  );
+  await context.credentials.set(
+    SQL_CREDENTIALS.supabaseAccount,
+    JSON.stringify(
+      { kind: "oauth", tokens: refreshed } satisfies SupabaseAccount,
+    ),
+  );
+  return refreshed.accessToken;
+}
 
 function asString(input: any, key: string, maxLength: number): string {
   const value = typeof input === "string" ? input : input?.[key];

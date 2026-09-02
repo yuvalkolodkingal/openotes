@@ -11,6 +11,7 @@
     "./packages/sync-webdav",
     "./packages/sync-core",
     "./packages/sync-files",
+    "./packages/sync-sql",
     "./packages/acp"
   ],
   "imports": {
@@ -20,6 +21,9 @@
     "@notesnook/sync-core": "./packages/sync-core/src/index.ts",
     "@notesnook/sync-files": "./packages/sync-files/src/index.ts",
     "@notesnook/sync-webdav": "./packages/sync-webdav/src/index.ts",
+    "@notesnook/sync-sql": "./packages/sync-sql/src/index.ts",
+    "@notesnook/sync-sql/postgres": "./packages/sync-sql/src/postgres.ts",
+    "postgres": "npm:postgres@^3.4.9",
     "@std/assert": "jsr:@std/assert@^1.0.10",
     "@std/path": "jsr:@std/path@^1.0.8",
     "@std/fs": "jsr:@std/fs@^1.0.9",
@@ -33,8 +37,9 @@
     "dev": "deno run -A apps/desktop/scripts/dev.ts",
     "fmt": "deno fmt",
     "lint": "deno lint",
-    "check": "deno check apps/desktop/main.ts packages/sync-webdav/src/index.ts packages/sync-core/src/index.ts packages/sync-files/src/index.ts packages/acp/src/index.ts",
-    "test": "deno test -A packages/sync-webdav/tests/ packages/sync-core/tests/ packages/sync-files/tests/ packages/acp/tests/ packages/theme/tests/ apps/desktop/tests/ --ignore=packages/sync-webdav/tests/integration",
+    "check": "deno check apps/desktop/main.ts packages/sync-webdav/src/index.ts packages/sync-core/src/index.ts packages/sync-files/src/index.ts packages/sync-sql/src/index.ts packages/sync-sql/src/postgres.ts packages/acp/src/index.ts",
+    "test": "deno test -A packages/sync-webdav/tests/ packages/sync-core/tests/ packages/sync-files/tests/ packages/sync-sql/tests/ packages/acp/tests/ packages/theme/tests/ apps/desktop/tests/ --ignore=packages/sync-webdav/tests/integration",
+    "test:sql": "deno run -A packages/sync-sql/tests/run-integration.ts",
     "test:webdav": "deno run -A packages/sync-webdav/tests/run-integration.ts",
     "test:ui": "deno run -A --node-modules-dir=auto npm:vitest@3.2.4 run --root apps/web",
     "bench": "deno run -A apps/desktop/scripts/benchmark.ts",
@@ -73,6 +78,8 @@
       "packages/sync-core/tests",
       "packages/sync-files/src",
       "packages/sync-files/tests",
+      "packages/sync-sql/src",
+      "packages/sync-sql/tests",
       "packages/acp/src",
       "packages/acp/tests",
       "packages/theme/tests"
@@ -97,6 +104,8 @@
       "packages/sync-core/tests",
       "packages/sync-files/src",
       "packages/sync-files/tests",
+      "packages/sync-sql/src",
+      "packages/sync-sql/tests",
       "packages/acp/src",
       "packages/acp/tests",
       "packages/theme/tests"
@@ -197,9 +206,10 @@
         "claude-code-acp",
         "gemini",
         "opencode",
-        "codex",
+        // Codex has no ACP mode of its own; the adapter is a separate binary.
         "codex-acp",
-        "antigravity"
+        // Antigravity's command-line agent. `antigravity` is the editor.
+        "agy"
       ],
       "read": true,
       "write": true,

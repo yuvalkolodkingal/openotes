@@ -70,7 +70,15 @@ Deno.test("a command with a path separator cannot smuggle in something else", ()
 
 Deno.test("the catalog covers the agents the interface offers", () => {
   const ids = AGENT_CATALOG.map((entry) => entry.id);
-  for (const expected of ["claude-code", "gemini", "opencode", "codex", "antigravity"]) {
+  for (
+    const expected of [
+      "claude-code",
+      "gemini",
+      "opencode",
+      "codex",
+      "antigravity",
+    ]
+  ) {
     assert(ids.includes(expected as typeof ids[number]), `missing ${expected}`);
   }
 });
@@ -98,20 +106,22 @@ Deno.test("the acp procedures are on the allowlist", () => {
   // A procedure missing here is rejected before handler lookup, so the
   // feature would fail with a confusing "unknown procedure" instead.
   const names = new Set<string>(PROCEDURE_NAMES);
-  for (const required of [
-    "acp.listAgents",
-    "acp.connect",
-    "acp.approve",
-    "acp.disconnect",
-    "acp.authenticate",
-    "acp.newSession",
-    "acp.prompt",
-    "acp.cancel",
-    "acp.setMode",
-    "acp.respondPermission",
-    "acp.diagnostics",
-    "bridge.respond",
-  ]) {
+  for (
+    const required of [
+      "acp.listAgents",
+      "acp.connect",
+      "acp.approve",
+      "acp.disconnect",
+      "acp.authenticate",
+      "acp.newSession",
+      "acp.prompt",
+      "acp.cancel",
+      "acp.setMode",
+      "acp.respondPermission",
+      "acp.diagnostics",
+      "bridge.respond",
+    ]
+  ) {
     assert(names.has(required), `${required} is not on the allowlist`);
   }
 });
@@ -128,7 +138,9 @@ Deno.test("connecting refuses anything that is not a catalog entry", async () =>
     isApproved: () => true,
   });
 
-  for (const id of ["custom", "sh", "definitely-not-an-agent", "../../bin/sh"]) {
+  for (
+    const id of ["custom", "sh", "definitely-not-an-agent", "../../bin/sh"]
+  ) {
     const error = await assertRejects(() => service.connect(id), Error);
     assert(
       error.message.includes("Unknown agent"),
@@ -172,4 +184,125 @@ Deno.test("a model id is unique within its agent", () => {
       seen.add(model.id);
     }
   }
+});
+
+// ---------------------------------------------------------------------------
+// Launching on Windows, where a name is not enough
+// ---------------------------------------------------------------------------
+
+import {
+  npmShimEntry,
+  spawnPlan,
+  windowsExtensions,
+} from "../src/acp/service.ts";
+
+const NPM_SHIM = [
+  "@ECHO off",
+  "GOTO start",
+  ":find_dp0",
+  "SET dp0=%~dp0",
+  "EXIT /b",
+  ":start",
+  "SETLOCAL",
+  "CALL :find_dp0",
+  "",
+  'IF EXIST "%dp0%\\node.exe" (',
+  '  SET "_prog=%dp0%\\node.exe"',
+  ") ELSE (",
+  '  SET "_prog=node"',
+  "  SET PATHEXT=%PATHEXT:;.JS;=;%",
+  ")",
+  "",
+  'endLocal & goto #_undefined_# 2>NUL || title %COMSPEC% & "%_prog%"  "%dp0%\\node_modules\\@agentclientprotocol\\claude-agent-acp\\dist\\index.js" %*',
+].join("\r\n");
+
+Deno.test("on Windows an npm shim is run as node plus its script", async () => {
+  // The runtime resolves a bare name by appending .exe, so spawning
+  // "claude-agent-acp" found nothing even though claude-agent-acp.cmd was
+  // right there. Every npm-installed agent failed this way on Windows.
+  const plan = await spawnPlan(
+    "claude-agent-acp",
+    [],
+    "C:\\Users\\me\\AppData\\Roaming\\npm\\claude-agent-acp.cmd",
+    "windows",
+    () => Promise.resolve(NPM_SHIM),
+  );
+  assertEquals(plan.command, "node");
+  assertEquals(plan.args.length, 1);
+  assert(
+    plan.args[0].replace(/\\/g, "/").endsWith(
+      "npm/node_modules/@agentclientprotocol/claude-agent-acp/dist/index.js",
+    ),
+    `unexpected script path ${plan.args[0]}`,
+  );
+  assert(isPermittedCommand(plan.command));
+});
+
+Deno.test("on Windows a .cmd that is not an npm shim goes through cmd.exe", async () => {
+  const plan = await spawnPlan(
+    "gemini",
+    ["--experimental-acp"],
+    "C:\\tools\\gemini.cmd",
+    "windows",
+    () => Promise.resolve("@echo off\r\nsomething-else.exe %*\r\n"),
+  );
+  assertEquals(plan.command, "cmd");
+  assertEquals(plan.args, [
+    "/d",
+    "/c",
+    "C:\\tools\\gemini.cmd",
+    "--experimental-acp",
+  ]);
+  assert(isPermittedCommand(plan.command));
+});
+
+Deno.test("on Windows a real executable is spawned by name", async () => {
+  const plan = await spawnPlan(
+    "opencode",
+    ["acp"],
+    "C:\\tools\\opencode.exe",
+    "windows",
+    () => Promise.reject(new Error("must not read an .exe")),
+  );
+  assertEquals(plan, { command: "opencode", args: ["acp"] });
+});
+
+Deno.test("elsewhere the catalog command is spawned unchanged", async () => {
+  const plan = await spawnPlan(
+    "gemini",
+    ["--experimental-acp"],
+    "/usr/local/bin/gemini",
+    "linux",
+    () => Promise.reject(new Error("must not read the binary")),
+  );
+  assertEquals(plan, { command: "gemini", args: ["--experimental-acp"] });
+});
+
+Deno.test("a shim whose script cannot be found is not guessed at", async () => {
+  assertEquals(
+    await npmShimEntry(
+      "C:\\x\\a.cmd",
+      () => Promise.resolve("@echo off\r\nnode %*"),
+    ),
+    undefined,
+  );
+  assertEquals(
+    await npmShimEntry("C:\\x\\a.cmd", () => Promise.reject(new Error("gone"))),
+    undefined,
+  );
+});
+
+Deno.test("Windows never looks for an extensionless file", () => {
+  // npm leaves a POSIX shim named `gemini` beside `gemini.cmd`; finding the
+  // former first produced a path nothing on Windows could start.
+  const extensions = windowsExtensions(".COM;.EXE;.BAT;.CMD;.VBS;.JS");
+  assert(!extensions.includes(""));
+  assertEquals(extensions.slice(0, 3), [".exe", ".cmd", ".bat"]);
+  assert(extensions.includes(".vbs"));
+  assertEquals(windowsExtensions(undefined).slice(0, 2), [".exe", ".cmd"]);
+});
+
+Deno.test("the model procedure is on the allowlist alongside the mode one", () => {
+  const names = new Set<string>(PROCEDURE_NAMES);
+  assert(names.has("acp.setModel"));
 });

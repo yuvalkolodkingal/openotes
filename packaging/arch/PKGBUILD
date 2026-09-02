@@ -84,17 +84,17 @@ package() {
   cp -r "${_src}/native" "${_libdir}/native"
   chmod -R u=rwX,go=rX "${_libdir}"
 
-  # /usr/bin/openotes. Both resolvers check their environment override first,
-  # so the launcher pins the two directories instead of relying on where the
+  # /usr/bin/openotes is the shared launcher from the tarball
+  # (packaging/linux/openotes-launcher.sh), which extends PATH the way a login
+  # shell would before the runtime binds its subprocess allowlist -- without
+  # it an AI agent installed under nvm or ~/.local/bin is unlaunchable from a
+  # desktop launcher. Both resolvers check their environment override first,
+  # so the prelude pins the two directories instead of relying on where the
   # binary happens to sit. A user-set value still wins.
   install -d "${pkgdir}/usr/bin"
-  cat > "${pkgdir}/usr/bin/${pkgname}" <<'LAUNCHER'
-#!/bin/sh
-OPENOTES_UI_ROOT="${OPENOTES_UI_ROOT:-/usr/lib/openotes/ui}"
-OPENOTES_NATIVE_DIR="${OPENOTES_NATIVE_DIR:-/usr/lib/openotes/native}"
-export OPENOTES_UI_ROOT OPENOTES_NATIVE_DIR
-exec /usr/lib/openotes/openotes "$@"
-LAUNCHER
+  sed -e 's|@PRELUDE@|OPENOTES_UI_ROOT="${OPENOTES_UI_ROOT:-/usr/lib/openotes/ui}"\nOPENOTES_NATIVE_DIR="${OPENOTES_NATIVE_DIR:-/usr/lib/openotes/native}"\nexport OPENOTES_UI_ROOT OPENOTES_NATIVE_DIR|' \
+      -e 's|@TARGET@|/usr/lib/openotes/openotes|' \
+      "${_src}/openotes-launcher.sh" > "${pkgdir}/usr/bin/${pkgname}"
   chmod 755 "${pkgdir}/usr/bin/${pkgname}"
 
   install -Dm644 "${_src}/openotes.desktop" \

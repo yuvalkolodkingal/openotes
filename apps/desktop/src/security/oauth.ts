@@ -67,6 +67,11 @@ export interface OAuthClient {
   scopes: string[];
   /** Extra parameters the provider needs on the authorize request. */
   authorizeParams?: Record<string, string>;
+  /**
+   * How the client authenticates to the token endpoint. Most providers read
+   * the id and secret from the form body; Supabase wants them as HTTP Basic.
+   */
+  tokenAuth?: "body" | "basic";
 }
 
 export interface OAuthTokens {
@@ -115,7 +120,10 @@ export async function beginAuthorization(
   url.searchParams.set("client_id", client.clientId);
   url.searchParams.set("response_type", "code");
   url.searchParams.set("redirect_uri", redirectUri);
-  url.searchParams.set("scope", client.scopes.join(" "));
+  // A provider with no scopes (Supabase) rejects an empty scope parameter.
+  if (client.scopes.length > 0) {
+    url.searchParams.set("scope", client.scopes.join(" "));
+  }
   url.searchParams.set("state", state);
   url.searchParams.set("code_challenge", challenge);
   url.searchParams.set("code_challenge_method", "S256");
@@ -241,14 +249,11 @@ async function exchangeCode(
     grant_type: "authorization_code",
     code,
     redirect_uri: redirectUri,
-    client_id: client.clientId,
     code_verifier: verifier,
   });
-  if (client.clientSecret) body.set("client_secret", client.clientSecret);
-
   const response = await fetchFn(client.tokenUrl, {
     method: "POST",
-    headers: { "content-type": "application/x-www-form-urlencoded" },
+    headers: tokenHeaders(client, body),
     body,
   });
   if (!response.ok) {
@@ -274,13 +279,10 @@ export async function refreshTokens(
   const body = new URLSearchParams({
     grant_type: "refresh_token",
     refresh_token: refreshToken,
-    client_id: client.clientId,
   });
-  if (client.clientSecret) body.set("client_secret", client.clientSecret);
-
   const response = await fetchFn(client.tokenUrl, {
     method: "POST",
-    headers: { "content-type": "application/x-www-form-urlencoded" },
+    headers: tokenHeaders(client, body),
     body,
   });
   if (!response.ok) {
@@ -291,6 +293,29 @@ export async function refreshTokens(
   }
   const tokens = toTokens(await response.json());
   return { ...tokens, refreshToken: tokens.refreshToken ?? refreshToken };
+}
+
+/**
+ * Client credentials on a token request: in the body (the common form) or
+ * as HTTP Basic, which is what Supabase's token endpoint expects. The body
+ * form is also what every provider test asserts on, so it stays the default.
+ */
+function tokenHeaders(
+  client: OAuthClient,
+  body: URLSearchParams,
+): Record<string, string> {
+  const headers: Record<string, string> = {
+    "content-type": "application/x-www-form-urlencoded",
+  };
+  if (client.tokenAuth === "basic") {
+    headers.authorization = `Basic ${
+      btoa(`${client.clientId}:${client.clientSecret ?? ""}`)
+    }`;
+  } else {
+    body.set("client_id", client.clientId);
+    if (client.clientSecret) body.set("client_secret", client.clientSecret);
+  }
+  return headers;
 }
 
 function toTokens(payload: unknown): OAuthTokens {

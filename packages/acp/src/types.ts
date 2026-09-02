@@ -100,6 +100,14 @@ export interface AuthMethod {
   id: string;
   name: string;
   description?: string;
+  /**
+   * "terminal" means the agent cannot complete this sign-in over the
+   * protocol: `authenticate` is refused, and the user has to run a command.
+   * The Claude adapter reports its two subscription logins this way, and
+   * describes the command in `_meta["terminal-auth"]` when the client says
+   * (at initialize) that it understands that extension.
+   */
+  type?: string;
   _meta?: Meta;
 }
 
@@ -162,6 +170,33 @@ export interface NewSessionRequest {
 export interface NewSessionResponse {
   sessionId: string;
   modes?: SessionModeState;
+  /**
+   * The models this agent can run the session on, when it offers a choice.
+   * Added to the protocol after version 1 shipped; an agent that predates it
+   * simply omits the field, which is why every consumer treats it as
+   * optional rather than as a version bump.
+   */
+  models?: SessionModelState;
+  _meta?: Meta;
+}
+
+/** One model an agent can be switched to, live, with `session/set_model`. */
+export interface ModelInfo {
+  modelId: string;
+  name: string;
+  description?: string;
+  _meta?: Meta;
+}
+
+export interface SessionModelState {
+  currentModelId: string;
+  availableModels: ModelInfo[];
+  _meta?: Meta;
+}
+
+export interface SetSessionModelRequest {
+  sessionId: string;
+  modelId: string;
   _meta?: Meta;
 }
 
@@ -267,7 +302,8 @@ export type SessionUpdate =
   })
   | { sessionUpdate: "plan"; entries: PlanEntry[] }
   | { sessionUpdate: "available_commands_update"; availableCommands: unknown[] }
-  | { sessionUpdate: "current_mode_update"; currentModeId: string };
+  | { sessionUpdate: "current_mode_update"; currentModeId: string }
+  | { sessionUpdate: "current_model_update"; currentModelId: string };
 
 export interface SessionNotification {
   sessionId: string;

@@ -507,6 +507,10 @@ async function addResources(
     }
     const desktopEntry = join(PACKAGING_DIR, "linux", `${APP_ID}.desktop`);
     const manPage = join(PACKAGING_DIR, "linux", `${APP_ID}.1`);
+    // The launcher template travels with the tarball so the Arch and flatpak
+    // recipes install the same wrapper the .deb, .rpm and AppImage start
+    // through (see packaging/README.md).
+    await copy(LAUNCHER_TEMPLATE, join(destination, LAUNCHER_NAME), overwrite);
     if (await exists(desktopEntry)) {
       await copy(
         desktopEntry,
@@ -520,6 +524,69 @@ async function addResources(
   }
   // Windows needs no extra icon copy: deno desktop already drops the --icon
   // file into the application directory as AppIcon.ico.
+}
+
+const LAUNCHER_NAME = `${APP_ID}-launcher.sh`;
+const LAUNCHER_TEMPLATE = join(PACKAGING_DIR, "linux", LAUNCHER_NAME);
+
+/**
+ * The shell wrapper every packaged Linux build starts through.
+ *
+ * It extends PATH the way a login shell would before the runtime binds its
+ * subprocess allowlist to what is on PATH -- the only moment that can be
+ * done. Without it, an agent installed under nvm, volta or ~/.local/bin was
+ * "found, but not launchable" from every desktop launcher, and the AI
+ * assistant only worked when Openotes was started from a terminal. The
+ * template explains itself; this fills in what to exec and, for the distro
+ * packages, where the UI and native libraries were installed.
+ */
+async function renderLauncher(
+  options: { target: string; prelude?: string },
+): Promise<string> {
+  const template = await Deno.readTextFile(LAUNCHER_TEMPLATE);
+  for (const placeholder of ["@PRELUDE@", "@TARGET@"]) {
+    if (!template.includes(placeholder)) {
+      throw new Error(`${LAUNCHER_TEMPLATE} has no ${placeholder} placeholder`);
+    }
+  }
+  return template
+    .replace("@PRELUDE@", options.prelude ?? "")
+    .replace("@TARGET@", options.target);
+}
+
+/** The prelude pinning the resource directories under a lib directory. */
+function pinnedResources(libDir: string): string {
+  return [
+    `OPENOTES_UI_ROOT="\${OPENOTES_UI_ROOT:-${libDir}/ui}"`,
+    `OPENOTES_NATIVE_DIR="\${OPENOTES_NATIVE_DIR:-${libDir}/native}"`,
+    "export OPENOTES_UI_ROOT OPENOTES_NATIVE_DIR",
+  ].join("\n");
+}
+
+/**
+ * Replace the package's /usr/bin entry -- deno desktop's symlink to the
+ * binary -- with the wrapper. Both resolvers check the environment override
+ * first, so pinning the two directories means an installed copy can never
+ * load a stale UI from beside a different binary.
+ */
+async function installLinuxLauncher(tree: string): Promise<void> {
+  const binDir = join(tree, "usr", "bin");
+  await ensureDir(binDir);
+  const entry = join(binDir, APP_ID);
+  try {
+    await Deno.remove(entry);
+  } catch {
+    // Nothing there yet.
+  }
+  const libDir = `/usr/lib/${APP_ID}`;
+  await Deno.writeTextFile(
+    entry,
+    await renderLauncher({
+      target: `${libDir}/${APP_ID}`,
+      prelude: pinnedResources(libDir),
+    }),
+  );
+  await Deno.chmod(entry, 0o755);
 }
 
 /** Copies only the artifacts belonging to `target` into a staging directory. */
@@ -634,6 +701,22 @@ async function produceAppImage(
   // `Name=Openotes`, claims the openotes:// scheme and sets the WM class.
   await addResources(extracted, target, nativeStage);
 
+  // The AppImage runtime execs AppRun. Deno's own AppRun stays, renamed, and
+  // the wrapper in front of it extends PATH first -- an AppImage started from
+  // a file manager has the barest PATH of all.
+  const appRun = join(extracted, "AppRun");
+  const wrapped = join(extracted, "AppRun.wrapped");
+  await Deno.rename(appRun, wrapped);
+  await Deno.writeTextFile(
+    appRun,
+    await renderLauncher({
+      prelude:
+        'HERE="$(dirname "$(readlink -f "$0" 2>/dev/null || printf %s "$0")")"',
+      target: '"$HERE/AppRun.wrapped"',
+    }),
+  );
+  await Deno.chmod(appRun, 0o755);
+
   const image = join(work, "payload.squashfs");
   await run("mksquashfs", [
     extracted,
@@ -729,6 +812,7 @@ async function produceDeb(
   }
   await addResources(libDir, target, nativeStage);
   await installSharedLinuxFiles(tree, prepared);
+  await installLinuxLauncher(tree);
   await rewriteDebianControl(join(tree, "DEBIAN", "control"), version, target);
 
   await run("dpkg-deb", ["--build", "--root-owner-group", tree, output]);
@@ -889,6 +973,7 @@ async function produceRpm(
   }
   await addResources(libDir, target, nativeStage);
   await installSharedLinuxFiles(tree, prepared);
+  await installLinuxLauncher(tree);
 
   const topDir = join(work, "rpmbuild");
   for (const sub of ["BUILD", "RPMS", "SOURCES", "SPECS", "BUILDROOT"]) {

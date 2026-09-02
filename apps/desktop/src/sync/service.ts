@@ -48,6 +48,12 @@ import {
 import type { OAuthTokens } from "../security/oauth.ts";
 import type { WebDavSettings } from "../native/settings.ts";
 import type { RemoteStorage } from "@notesnook/sync-core";
+import {
+  isSqlProvider,
+  prepareSqlDatabase,
+  SQL_CREDENTIALS,
+  sqlStorage,
+} from "./sql-providers.ts";
 import { APP_VERSION, USER_AGENT } from "../constants.ts";
 import type { SettingsStore } from "../native/settings.ts";
 import type { CredentialStore } from "../security/credentials.ts";
@@ -132,6 +138,8 @@ export class SyncService {
   private status: SyncStatus = { type: "disabled" };
   private readonly crypto = new SyncCrypto();
   private masterKey?: SerializedKey;
+  /** Releases a SQL socket when the engine is rebuilt; a no-op otherwise. */
+  private closeStorage: () => Promise<void> = () => Promise.resolve();
 
   constructor(private readonly options: SyncServiceOptions) {}
 
@@ -151,13 +159,18 @@ export class SyncService {
   private async buildEngine(): Promise<SyncEngine | undefined> {
     const config = this.options.settings.get("webdav");
     const isWebDav = config.provider === "webdav";
+    const isSql = isSqlProvider(config.provider);
     const unconfigured = isWebDav
       ? !config.serverUrl || !config.username
+      : isSql
+      ? !config.connected
       : !config.clientId || !config.connected;
     if (!config.enabled || unconfigured) {
       this.setStatus({ type: "disabled" });
       return undefined;
     }
+    await this.closeStorage().catch(() => {});
+    this.closeStorage = () => Promise.resolve();
 
     const password = isWebDav
       ? await this.options.credentials
@@ -185,6 +198,8 @@ export class SyncService {
 
     const storage = isWebDav
       ? this.webDavStorage(config, password!)
+      : isSql
+      ? await this.sqlStorage(config)
       : await this.driveStorage(config);
 
     // The salt lives in the remote protocol.json so a second device with
@@ -249,6 +264,149 @@ export class SyncService {
         allowInsecureHttp: config.allowInsecureHttp,
       }),
     );
+  }
+
+  /**
+   * A Postgres database -- the user's own, Neon's or Supabase's -- through
+   * the secrets the connect step stored. The table is created here when the
+   * transport allows it, so a database that was set up by hand needs no
+   * further step.
+   */
+  private async sqlStorage(config: WebDavSettings): Promise<RemoteStorage> {
+    const secrets = await this.sqlSecrets();
+    const { storage, close } = sqlStorage(config, secrets);
+    this.closeStorage = close;
+    if (config.provider !== "supabase" && secrets.connectionString) {
+      await prepareSqlDatabase(
+        config.provider as "postgres" | "neon",
+        secrets.connectionString,
+        config.sqlTransport,
+      );
+    }
+    return storage;
+  }
+
+  private async sqlSecrets() {
+    const credentials = this.options.credentials;
+    return {
+      connectionString: await credentials
+        .get(SQL_CREDENTIALS.connectionString)
+        .catch(() => undefined),
+      supabaseServiceKey: await credentials
+        .get(SQL_CREDENTIALS.supabaseServiceKey)
+        .catch(() => undefined),
+    };
+  }
+
+  /**
+   * Prove a SQL connection works and the passphrase opens whatever is there,
+   * writing nothing. The connect step runs this before it saves anything,
+   * and "Test connection" runs it on demand.
+   */
+  async testSqlConnection(candidate: {
+    provider: "postgres" | "neon" | "supabase";
+    connectionString?: string;
+    supabaseUrl?: string;
+    supabaseServiceKey?: string;
+    directory: string;
+    sqlTransport: "socket" | "http";
+    passphrase?: string;
+    timeoutSeconds?: number;
+  }): Promise<{
+    ok: boolean;
+    message: string;
+    initialized?: boolean;
+    devices?: number;
+    protocolVersion?: number;
+  }> {
+    let close: () => Promise<void> = () => Promise.resolve();
+    try {
+      const passphrase = candidate.passphrase ||
+        (await this.options.credentials
+          .get(CREDENTIAL_KEY_PASSPHRASE)
+          .catch(() => undefined));
+      if (!passphrase) {
+        throw new SyncError(
+          "Set a sync passphrase first. It is what encrypts your notes " +
+            "before they reach the database.",
+          "bad-key",
+        );
+      }
+      if (candidate.provider !== "supabase" && candidate.connectionString) {
+        await prepareSqlDatabase(
+          candidate.provider,
+          candidate.connectionString,
+          candidate.sqlTransport,
+        );
+      }
+      const built = sqlStorage({
+        provider: candidate.provider,
+        directory: candidate.directory,
+        sqlTransport: candidate.sqlTransport,
+        supabaseUrl: candidate.supabaseUrl ?? "",
+        timeoutSeconds: candidate.timeoutSeconds ?? 30,
+      }, {
+        connectionString: candidate.connectionString,
+        supabaseServiceKey: candidate.supabaseServiceKey,
+      });
+      close = built.close;
+
+      const knownSalt = await this.options.store.getMeta("webdav.salt");
+      const salt = knownSalt ?? (await this.crypto.generateSalt());
+      const masterKey = await this.crypto.deriveMasterKey(passphrase, salt);
+      const probe = new SyncEngine({
+        storage: built.storage,
+        crypto: this.crypto,
+        store: this.options.store,
+        queue: new OutgoingQueue(
+          new FileQueueStorage(join(appDataDir(), "sync-queue.probe.json")),
+        ),
+        masterKey,
+        syncAttachments: false,
+      });
+      const result = await probe.testConnection();
+      return {
+        ok: true,
+        initialized: result.initialized,
+        devices: result.devices,
+        protocolVersion: result.protocolVersion,
+        message: result.initialized
+          ? `Connected. The database holds a repository at protocol version ` +
+            `${result.protocolVersion} with ${result.devices} device(s) registered.`
+          : "Connected. The table is ready and will be set up on the first sync.",
+      };
+    } catch (error) {
+      return { ok: false, message: describeError(error) };
+    } finally {
+      await close().catch(() => {});
+    }
+  }
+
+  /** Forget a SQL provider's secrets and stop syncing. */
+  async disconnectSql(): Promise<void> {
+    this.stop();
+    await this.closeStorage().catch(() => {});
+    this.closeStorage = () => Promise.resolve();
+    for (
+      const key of [
+        SQL_CREDENTIALS.connectionString,
+        SQL_CREDENTIALS.supabaseServiceKey,
+      ]
+    ) {
+      await this.options.credentials.set(key, undefined);
+    }
+    await this.options.settings.patchWebDav({
+      enabled: false,
+      connected: false,
+      sqlHost: "",
+      sqlDatabase: "",
+      sqlUser: "",
+      supabaseUrl: "",
+      sqlProvenance: undefined,
+    });
+    this.engine = undefined;
+    await this.resetRemoteState();
+    this.setStatus({ type: "disabled" });
   }
 
   /**

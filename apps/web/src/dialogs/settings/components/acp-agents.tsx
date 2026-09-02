@@ -36,6 +36,7 @@ export function AgentsPanel() {
   const connecting = useAiStore((store) => store.connecting);
   const connectedId = useAiStore((store) => store.agentId);
   const approval = useAiStore((store) => store.approval);
+  const signingIn = useAiStore((store) => store.signingIn);
   const error = useAiStore((store) => store.error);
 
   useEffect(() => {
@@ -153,17 +154,42 @@ export function AgentsPanel() {
                 </Text>
               )}
               {isConnected && agent.authMethods.length > 0 ? (
-                <Flex sx={{ gap: 1, mt: 1, flexWrap: "wrap" }}>
-                  {agent.authMethods.map((method) => (
-                    <Button
-                      key={method.id}
-                      variant="secondary"
-                      sx={{ py: "2px", px: 1, fontSize: "subBody" }}
-                      onClick={() => void aiStore.authenticate(method.id)}
-                    >
-                      {method.name}
-                    </Button>
-                  ))}
+                <Flex sx={{ flexDirection: "column", gap: 1, mt: 1 }}>
+                  {signingIn ? (
+                    <Text variant="subBody" sx={{ color: "accent" }}>
+                      Waiting for you to finish {signingIn.name} in your
+                      browser…
+                    </Text>
+                  ) : (
+                    agent.authMethods.map((method) => (
+                      <Flex
+                        key={method.id}
+                        sx={{ alignItems: "center", gap: 1, flexWrap: "wrap" }}
+                      >
+                        <Button
+                          variant="secondary"
+                          sx={{ py: "2px", px: 1, fontSize: "subBody" }}
+                          onClick={() => void aiStore.authenticate(method.id)}
+                        >
+                          {method.name}
+                        </Button>
+                        {method.type === "terminal" && method.command ? (
+                          <Text
+                            variant="subBody"
+                            sx={{
+                              color: "paragraph-secondary",
+                              fontFamily: "monospace",
+                              wordBreak: "break-all"
+                            }}
+                          >
+                            {method.runnable
+                              ? `runs ${method.command}`
+                              : `run in a terminal: ${method.command}`}
+                          </Text>
+                        ) : null}
+                      </Flex>
+                    ))
+                  )}
                 </Flex>
               ) : null}
               {agent.models.length > 0 ? (

@@ -99,6 +99,12 @@ export function describeProvider(provider?: SyncProvider): string {
       return "OneDrive";
     case "dropbox":
       return "Dropbox";
+    case "neon":
+      return "Neon";
+    case "supabase":
+      return "Supabase";
+    case "postgres":
+      return "your database";
     default:
       return "your WebDAV server";
   }

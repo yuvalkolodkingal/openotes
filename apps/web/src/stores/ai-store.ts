@@ -53,7 +53,17 @@ export type AgentStatus = {
   connected: boolean;
   agentTitle?: string;
   agentVersion?: string;
-  authMethods: { id: string; name: string; description?: string }[];
+  authMethods: {
+    id: string;
+    name: string;
+    description?: string;
+    /** "terminal": the agent can only describe this sign-in as a command. */
+    type?: string;
+    /** That command, in the form the user would type it. */
+    command?: string;
+    /** Whether Openotes can run it for the user. */
+    runnable: boolean;
+  }[];
   install?: { npm?: string; docs: string };
   authHint: string;
   /** Models this agent can be asked for; empty means no choice is offered. */
@@ -217,7 +227,16 @@ class AiStore extends BaseStore<AiStore> {
   /** What the agent calls its operating modes, if it has any. */
   modes: { id: string; name: string; description?: string }[] = [];
   currentModeId?: string;
+  /**
+   * The models the agent offered for this session, switchable live. Distinct
+   * from the catalog's launch-time models, which need a restart.
+   */
+  sessionModels: { modelId: string; name: string; description?: string }[] =
+    [];
+  currentModelId?: string;
   connecting = false;
+  /** Set while a terminal sign-in is running for the user. */
+  signingIn?: { methodId: string; name: string };
   /** True while a turn is in flight. */
   busy = false;
   turns: Turn[] = [];
@@ -312,6 +331,14 @@ class AiStore extends BaseStore<AiStore> {
           currentModeId: string;
           availableModes: { id: string; name: string; description?: string }[];
         };
+        models?: {
+          currentModelId: string;
+          availableModels: {
+            modelId: string;
+            name: string;
+            description?: string;
+          }[];
+        };
       }>("acp.newSession", { agentId });
       this.set((state) => {
         state.agentId = agentId;
@@ -319,6 +346,8 @@ class AiStore extends BaseStore<AiStore> {
         state.workspace = session.workspace;
         state.modes = session.modes?.availableModes ?? [];
         state.currentModeId = session.modes?.currentModeId;
+        state.sessionModels = session.models?.availableModels ?? [];
+        state.currentModelId = session.models?.currentModelId;
         state.turns = [];
       });
       await this.refresh();
@@ -354,9 +383,25 @@ class AiStore extends BaseStore<AiStore> {
     });
   };
 
+  /**
+   * Complete a sign-in method.
+   *
+   * A terminal method is run by the runtime, which opens the page it prints
+   * in the browser and restarts the agent once it exits; this can take as
+   * long as the user takes, so the panel shows that it is waiting rather than
+   * looking stuck. A method the runtime cannot run comes back as an error
+   * carrying the command to type.
+   */
   authenticate = async (methodId: string) => {
     const agentId = this.get().agentId ?? this.get().approval?.agentId;
     if (!agentId) return;
+    const method = this.get()
+      .agents.find((agent) => agent.id === agentId)
+      ?.authMethods.find((candidate) => candidate.id === methodId);
+    this.set((state) => {
+      state.error = undefined;
+      state.signingIn = { methodId, name: method?.name ?? methodId };
+    });
     try {
       await rpc("acp.authenticate", { agentId, methodId });
       await this.connect(agentId);
@@ -364,6 +409,34 @@ class AiStore extends BaseStore<AiStore> {
       const message = e instanceof Error ? e.message : String(e);
       this.set((state) => {
         state.error = message;
+      });
+    } finally {
+      this.set((state) => {
+        state.signingIn = undefined;
+      });
+    }
+  };
+
+  /**
+   * Switch the session's model, live.
+   *
+   * Only for a model the agent offered with the session. A catalog model --
+   * one passed at launch -- goes through `setModel`, which restarts the
+   * agent, because that is the only way such a choice can take effect.
+   */
+  setSessionModel = async (modelId: string) => {
+    const { agentId, sessionId } = this.get();
+    if (!agentId || !sessionId) return;
+    const previous = this.get().currentModelId;
+    this.set((state) => {
+      state.currentModelId = modelId;
+    });
+    try {
+      await rpc("acp.setModel", { agentId, sessionId, modelId });
+    } catch (e) {
+      this.set((state) => {
+        state.currentModelId = previous;
+        state.error = e instanceof Error ? e.message : String(e);
       });
     }
   };
@@ -377,6 +450,8 @@ class AiStore extends BaseStore<AiStore> {
       state.workspace = undefined;
       state.modes = [];
       state.currentModeId = undefined;
+      state.sessionModels = [];
+      state.currentModelId = undefined;
       state.turns = [];
       state.busy = false;
     });
@@ -504,6 +579,22 @@ function applyUpdate(payload: unknown) {
   const update = notification?.update;
   if (!update) return;
 
+  // Session-level changes apply whether or not a turn is open: an agent may
+  // switch its own mode or model between turns, and dropping that because no
+  // agent turn existed left the header describing the wrong state.
+  if (update.sessionUpdate === "current_mode_update") {
+    store.set((draft) => {
+      draft.currentModeId = String(update.currentModeId ?? "");
+    });
+    return;
+  }
+  if (update.sessionUpdate === "current_model_update") {
+    store.set((draft) => {
+      draft.currentModelId = String(update.currentModelId ?? "");
+    });
+    return;
+  }
+
   store.set((state) => {
     const turn = state.turns[state.turns.length - 1];
     if (!turn || turn.role !== "agent") return;
@@ -533,12 +624,6 @@ function applyUpdate(payload: unknown) {
         }
         break;
       }
-      case "current_mode_update":
-        // The agent switched modes itself, which it is allowed to do.
-        store.set((draft) => {
-          draft.currentModeId = String(update.currentModeId ?? "");
-        });
-        break;
       case "plan":
         turn.plan = ((update.entries as PlanEntryView[]) ?? []).map((entry) => ({
           content: String(entry.content ?? ""),

@@ -160,23 +160,30 @@ export const AGENT_CATALOG: readonly AgentCatalogEntry[] = [
     id: "codex",
     name: "Codex",
     summary: "OpenAI's agent. Uses your ChatGPT subscription.",
-    launchers: [
-      { command: "codex-acp", args: [] },
-      { command: "codex", args: ["acp"] },
-    ],
-    detect: ["codex-acp", "codex"],
-    install: { docs: "https://developers.openai.com/codex/" },
+    // Codex itself has no ACP mode: `codex acp` is not a subcommand, and
+    // launching it that way printed a usage error and exited, which the
+    // interface reported as "did not start". The adapter Zed maintains is the
+    // ACP surface, and it is a separate binary.
+    launchers: [{ command: "codex-acp", args: [] }],
+    detect: ["codex-acp"],
+    install: {
+      npm: "@zed-industries/codex-acp",
+      docs: "https://github.com/zed-industries/codex-acp",
+    },
     authHint: "Codex signs in with your ChatGPT account through its own CLI. " +
       "Openotes never sees the credentials.",
   },
   {
     id: "antigravity",
     name: "Antigravity",
-    summary: "Google's agentic development platform.",
-    launchers: [{ command: "antigravity", args: ["--acp"] }],
-    detect: ["antigravity"],
+    summary: "Google's agent. Uses your Google account.",
+    // The command-line agent is `agy`; `antigravity` is the editor, and
+    // launching the editor with --acp opened a window rather than a protocol.
+    launchers: [{ command: "agy", args: ["--acp"] }],
+    detect: ["agy"],
     install: { docs: "https://antigravity.google" },
-    authHint: "Antigravity signs in through its own CLI.",
+    authHint: "Antigravity signs in with your Google account through its own " +
+      "CLI. Openotes never sees the credentials.",
   },
 ];
 
@@ -198,13 +205,15 @@ export const PERMITTED_COMMANDS: readonly string[] = [
   "npx",
   "deno",
   "bun",
+  // Windows only: an npm-installed agent is a .cmd shim, which nothing but
+  // cmd.exe can start. See spawnPlan() in service.ts for when it is used.
+  "cmd",
   "claude-agent-acp",
   "claude-code-acp",
   "gemini",
   "opencode",
-  "codex",
   "codex-acp",
-  "antigravity",
+  "agy",
 ];
 
 export function isPermittedCommand(command: string): boolean {

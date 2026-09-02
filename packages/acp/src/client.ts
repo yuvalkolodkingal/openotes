@@ -30,6 +30,7 @@ import {
   type RequestPermissionRequest,
   type RequestPermissionResponse,
   type SessionNotification,
+  type SetSessionModelRequest,
   type WriteTextFileRequest,
 } from "./types.ts";
 
@@ -153,6 +154,12 @@ export class AcpClient {
             writeTextFile: capabilities.writeNotes ?? false,
           },
           terminal: false,
+          // Not a terminal. This asks the agent to *describe* a sign-in that
+          // needs one -- the command and its arguments -- instead of hiding
+          // the method. Without it the Claude adapter lists no way to sign
+          // in at all, and the first prompt fails with "run /login" and
+          // nowhere to run it.
+          _meta: { "terminal-auth": true },
         },
         clientInfo: this.options.clientInfo,
       },
@@ -249,6 +256,18 @@ export class AcpClient {
 
   async setMode(sessionId: string, modeId: string): Promise<void> {
     await this.peer.request<unknown>("session/set_mode", { sessionId, modeId });
+  }
+
+  /**
+   * Switch the model the session runs on. Live, unlike a launch-time model:
+   * the agent answers `session/new` with the models it offers, and this
+   * changes the choice without restarting anything.
+   */
+  async setModel(sessionId: string, modelId: string): Promise<void> {
+    await this.peer.request<unknown>(
+      "session/set_model",
+      { sessionId, modelId } satisfies SetSessionModelRequest,
+    );
   }
 
   async close(): Promise<void> {

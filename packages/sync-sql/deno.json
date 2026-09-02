@@ -1,0 +1,11 @@
+{
+  "name": "@notesnook/sync-sql",
+  "version": "1.0.0",
+  "exports": {
+    ".": "./src/index.ts",
+    "./postgres": "./src/postgres.ts"
+  },
+  "imports": {
+    "@notesnook/sync-core": "../sync-core/src/index.ts"
+  }
+}
