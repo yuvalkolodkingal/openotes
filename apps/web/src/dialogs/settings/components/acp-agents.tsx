@@ -166,6 +166,43 @@ export function AgentsPanel() {
                   ))}
                 </Flex>
               ) : null}
+              {agent.models.length > 0 ? (
+                <Flex sx={{ alignItems: "center", gap: 1, mt: 1 }}>
+                  <Text variant="subBody" sx={{ color: "paragraph-secondary" }}>
+                    Model
+                  </Text>
+                  <select
+                    value={aiStore.modelFor(agent.id) ?? ""}
+                    onChange={(e) =>
+                      void aiStore.setModel(
+                        agent.id,
+                        e.target.value || undefined
+                      )
+                    }
+                    style={{
+                      fontSize: "inherit",
+                      fontFamily: "inherit",
+                      padding: "2px 4px"
+                    }}
+                  >
+                    <option value="">Agent's default</option>
+                    {agent.models.map((model) => (
+                      <option key={model.id} value={model.id}>
+                        {model.name}
+                      </option>
+                    ))}
+                  </select>
+                  {isConnected ? (
+                    <Text
+                      variant="subBody"
+                      sx={{ color: "paragraph-secondary" }}
+                    >
+                      changing this restarts {agent.name}
+                    </Text>
+                  ) : null}
+                </Flex>
+              ) : null}
+
               {isConnected && agent.authMethods.length === 0 ? (
                 // An agent whose own CLI is already signed in needs no login
                 // step, and inventing one would be a lie about what happened.

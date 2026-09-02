@@ -39,6 +39,8 @@ function AiAssistant() {
   const turns = useAiStore((store) => store.turns);
   const permission = useAiStore((store) => store.permission);
   const approval = useAiStore((store) => store.approval);
+  const modes = useAiStore((store) => store.modes);
+  const currentModeId = useAiStore((store) => store.currentModeId);
   const error = useAiStore((store) => store.error);
 
   const [draft, setDraft] = useState("");
@@ -80,9 +82,29 @@ function AiAssistant() {
             borderBottomColor: "border"
           }}
         >
-          <Text variant="subtitle">
-            {connected?.agentTitle ?? connected?.name ?? "AI assistant"}
-          </Text>
+          <Flex sx={{ alignItems: "center", gap: 2, minWidth: 0 }}>
+            <Text variant="subtitle" sx={{ flexShrink: 0 }}>
+              {connected?.agentTitle ?? connected?.name ?? "AI assistant"}
+            </Text>
+            {modes.length > 0 ? (
+              <select
+                value={currentModeId ?? ""}
+                onChange={(e) => void aiStore.setMode(e.target.value)}
+                title="How the agent works in this session"
+                style={{
+                  fontSize: "inherit",
+                  fontFamily: "inherit",
+                  maxWidth: 130
+                }}
+              >
+                {modes.map((mode) => (
+                  <option key={mode.id} value={mode.id}>
+                    {mode.name}
+                  </option>
+                ))}
+              </select>
+            ) : null}
+          </Flex>
           {agentId ? (
             <Button
               variant="secondary"

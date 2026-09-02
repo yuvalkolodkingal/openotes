@@ -30,6 +30,7 @@ import {
 import createStore from "../common/store";
 import BaseStore from "./index";
 import { db } from "../common/db";
+import Config from "../utils/config";
 import { useEditorStore } from "./editor-store";
 import { exportContent } from "@notesnook/common";
 import { parseNoteMarkdown } from "@notesnook/core";
@@ -55,6 +56,12 @@ export type AgentStatus = {
   authMethods: { id: string; name: string; description?: string }[];
   install?: { npm?: string; docs: string };
   authHint: string;
+  /** Models this agent can be asked for; empty means no choice is offered. */
+  models: { id: string; name: string }[];
+  /** Whether a free-typed model name can be passed to this agent. */
+  acceptsCustomModel: boolean;
+  /** The model the live connection was started with. */
+  modelId?: string;
 };
 
 export type ToolCallView = {
@@ -205,6 +212,9 @@ class AiStore extends BaseStore<AiStore> {
   sessionId?: string;
   /** The session's workspace directory; notes are addressed inside it. */
   workspace?: string;
+  /** What the agent calls its operating modes, if it has any. */
+  modes: { id: string; name: string; description?: string }[] = [];
+  currentModeId?: string;
   connecting = false;
   /** True while a turn is in flight. */
   busy = false;
@@ -234,6 +244,24 @@ class AiStore extends BaseStore<AiStore> {
     }
   };
 
+  /** The model chosen for an agent, remembered across restarts. */
+  modelFor = (agentId: string): string | undefined =>
+    Config.get(`ai:model:${agentId}`, undefined as string | undefined);
+
+  /**
+   * Choose a model and restart the agent on it.
+   *
+   * ACP cannot change a model mid-session -- it has no concept of one -- so
+   * the process is started with the choice and switching means reconnecting.
+   * The interface says so rather than implying it takes effect silently.
+   */
+  setModel = async (agentId: string, modelId?: string) => {
+    if (modelId) Config.set(`ai:model:${agentId}`, modelId);
+    else Config.set(`ai:model:${agentId}`, undefined);
+    if (this.get().agentId === agentId) await this.connect(agentId);
+    else await this.refresh();
+  };
+
   connect = async (agentId: string) => {
     this.set((state) => {
       state.connecting = true;
@@ -251,7 +279,7 @@ class AiStore extends BaseStore<AiStore> {
               resolvedPath: string;
             };
           }
-      >("acp.connect", { agentId });
+      >("acp.connect", { agentId, modelId: this.modelFor(agentId) });
 
       if (!result.ok) {
         // Not a failure: a question. Approving an agent means letting a
@@ -275,14 +303,20 @@ class AiStore extends BaseStore<AiStore> {
         return;
       }
 
-      const session = await rpc<{ sessionId: string; workspace: string }>(
-        "acp.newSession",
-        { agentId }
-      );
+      const session = await rpc<{
+        sessionId: string;
+        workspace: string;
+        modes?: {
+          currentModeId: string;
+          availableModes: { id: string; name: string; description?: string }[];
+        };
+      }>("acp.newSession", { agentId });
       this.set((state) => {
         state.agentId = agentId;
         state.sessionId = session.sessionId;
         state.workspace = session.workspace;
+        state.modes = session.modes?.availableModes ?? [];
+        state.currentModeId = session.modes?.currentModeId;
         state.turns = [];
       });
       await this.refresh();
@@ -339,6 +373,8 @@ class AiStore extends BaseStore<AiStore> {
       state.agentId = undefined;
       state.sessionId = undefined;
       state.workspace = undefined;
+      state.modes = [];
+      state.currentModeId = undefined;
       state.turns = [];
       state.busy = false;
     });
@@ -385,6 +421,26 @@ class AiStore extends BaseStore<AiStore> {
     } finally {
       this.set((state) => {
         state.busy = false;
+      });
+    }
+  };
+
+  /** Switch the agent's operating mode; unlike a model, this is live. */
+  setMode = async (modeId: string) => {
+    const { agentId, sessionId } = this.get();
+    if (!agentId || !sessionId) return;
+    const previous = this.get().currentModeId;
+    this.set((state) => {
+      state.currentModeId = modeId;
+    });
+    try {
+      await rpc("acp.setMode", { agentId, sessionId, modeId });
+    } catch (e) {
+      // Put it back: showing a mode the agent did not accept would be a lie
+      // about what it is doing.
+      this.set((state) => {
+        state.currentModeId = previous;
+        state.error = e instanceof Error ? e.message : String(e);
       });
     }
   };
@@ -475,6 +531,12 @@ function applyUpdate(payload: unknown) {
         }
         break;
       }
+      case "current_mode_update":
+        // The agent switched modes itself, which it is allowed to do.
+        store.set((draft) => {
+          draft.currentModeId = String(update.currentModeId ?? "");
+        });
+        break;
       case "plan":
         turn.plan = ((update.entries as PlanEntryView[]) ?? []).map((entry) => ({
           content: String(entry.content ?? ""),

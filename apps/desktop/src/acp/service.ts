@@ -23,6 +23,7 @@ import {
   type ContentBlock,
   type RequestPermissionRequest,
   type RequestPermissionResponse,
+  type SessionMode,
   type SessionNotification,
   StreamTransport,
 } from "@notesnook/acp";
@@ -57,6 +58,12 @@ export interface AgentStatusReport {
   authMethods: { id: string; name: string; description?: string }[];
   install?: { npm?: string; docs: string };
   authHint: string;
+  /** Models this agent can be asked for; empty means no choice is offered. */
+  models: { id: string; name: string }[];
+  /** Whether a free-typed model name can be passed to this agent. */
+  acceptsCustomModel: boolean;
+  /** The model this connection was started with, if any. */
+  modelId?: string;
   /** Last launch failure, if any. */
   error?: string;
 }
@@ -79,6 +86,8 @@ export interface AcpServiceOptions {
 
 interface Connection {
   agentId: string;
+  /** The model this process was started with; fixed for its lifetime. */
+  modelId?: string;
   client: AcpClient;
   child: Deno.ChildProcess;
   workspace: string;
@@ -144,6 +153,12 @@ export class AcpService {
         })),
         install: entry.install,
         authHint: entry.authHint,
+        models: (entry.models ?? []).map((model) => ({
+          id: model.id,
+          name: model.name,
+        })),
+        acceptsCustomModel: entry.modelEnvVar !== undefined,
+        modelId: connection?.modelId,
       });
     }
     return reports;
@@ -156,10 +171,23 @@ export class AcpService {
    * in and the interface should go straight to a session rather than inventing
    * a login step.
    */
-  async connect(agentId: string): Promise<AgentStatusReport> {
+  /**
+   * Start an agent, optionally asking it for a particular model.
+   *
+   * The model is fixed when the process starts -- ACP has no way to change it
+   * mid-session -- so switching means reconnecting, and an already-running
+   * connection with a different model is replaced rather than reused.
+   */
+  async connect(
+    agentId: string,
+    modelId?: string,
+  ): Promise<AgentStatusReport> {
     const existing = this.connections.get(agentId);
     if (existing) {
-      return (await this.listAgents()).find((a) => a.id === agentId)!;
+      if (existing.modelId === modelId) {
+        return (await this.listAgents()).find((a) => a.id === agentId)!;
+      }
+      await this.disconnect(agentId);
     }
 
     const entry = catalogEntry(agentId);
@@ -201,16 +229,29 @@ export class AcpService {
       workspace,
     });
 
+    // A listed model contributes arguments, an environment variable, or both;
+    // an unlisted one is passed through the agent's own variable when it has
+    // one. Anything unrecognised is ignored rather than guessed at.
+    const chosen = entry.models?.find((model) => model.id === modelId);
+    const custom = !chosen && modelId && entry.modelEnvVar
+      ? { [entry.modelEnvVar]: modelId }
+      : undefined;
+    const modelEnv = { ...(chosen?.env ?? {}), ...(custom ?? {}) };
+
     const child = new Deno.Command(launcher.command, {
-      args: launcher.args,
+      args: [...launcher.args, ...(chosen?.args ?? [])],
       stdin: "piped",
       stdout: "piped",
       stderr: "piped",
       cwd: workspace,
+      // Merged with the inherited environment, not replacing it: the agent
+      // still needs its own credentials, PATH and config directory.
+      ...(Object.keys(modelEnv).length > 0 ? { env: modelEnv } : {}),
     }).spawn();
 
     const connection: Connection = {
       agentId,
+      modelId,
       client: undefined as unknown as AcpClient,
       child,
       workspace,
@@ -275,7 +316,13 @@ export class AcpService {
 
   async newSession(
     agentId: string,
-  ): Promise<{ sessionId: string; workspace: string }> {
+  ): Promise<
+    {
+      sessionId: string;
+      workspace: string;
+      modes?: { currentModeId: string; availableModes: SessionMode[] };
+    }
+  > {
     const connection = this.connectionFor(agentId);
     // cwd must be a real absolute path — a real agent rejects a URI here.
     // The directory stays empty: notes are answered from the database through
@@ -285,7 +332,14 @@ export class AcpService {
     // The workspace goes back with the id because the interface has to name
     // notes as paths inside it; without it there is no way to tell the agent
     // where a note lives, which is why nothing could be read.
-    return { sessionId: session.sessionId, workspace: connection.workspace };
+    // The agent's modes travel with the session rather than being dropped:
+    // "ask" and "code" behave differently enough that hiding the switch made
+    // the agent look inconsistent.
+    return {
+      sessionId: session.sessionId,
+      workspace: connection.workspace,
+      modes: session.modes,
+    };
   }
 
   async prompt(

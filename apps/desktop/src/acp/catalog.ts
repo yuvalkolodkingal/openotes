@@ -53,6 +53,28 @@ export interface AgentCatalogEntry {
    * can run anything, which is not what the user agreed to.
    */
   detect: string[];
+  /**
+   * Models this agent can be asked for, if any.
+   *
+   * ACP has no model selection -- no `session/set_model`, no `availableModels`
+   * -- so the choice has to be made when the process starts, which is why it
+   * lives in the catalog beside the launchers rather than in the protocol.
+   * Two mechanisms exist in the wild and both are supported: an environment
+   * variable (the Claude adapter reads ANTHROPIC_MODEL and parses no model
+   * flag at all) and an argument (Gemini takes --model, and also reads
+   * GEMINI_MODEL).
+   *
+   * Absent means this agent gets no picker. That is deliberate for the agents
+   * shipped as installer shims, where the real binary's flags could not be
+   * confirmed: offering a control that silently does nothing is worse than
+   * offering none.
+   */
+  models?: AgentModel[];
+  /**
+   * The variable a free-typed model name is passed in, for models not listed.
+   * Absent means custom names are not offered.
+   */
+  modelEnvVar?: string;
   /** Where to get it, shown when nothing is installed. */
   install?: { npm?: string; docs: string };
   /**
@@ -60,6 +82,16 @@ export interface AgentCatalogEntry {
    * Openotes never handles these credentials; the agent's CLI owns them.
    */
   authHint: string;
+}
+
+/** One selectable model, and how to ask the agent for it. */
+export interface AgentModel {
+  id: string;
+  name: string;
+  /** Extra arguments appended to the launcher's own. */
+  args?: string[];
+  /** Environment set for the agent process. */
+  env?: Record<string, string>;
 }
 
 export const AGENT_CATALOG: readonly AgentCatalogEntry[] = [
@@ -76,6 +108,15 @@ export const AGENT_CATALOG: readonly AgentCatalogEntry[] = [
       { command: "npx", args: ["-y", "@agentclientprotocol/claude-agent-acp"] },
     ],
     detect: ["claude-agent-acp", "claude-code-acp"],
+    // Aliases rather than pinned identifiers: "opus" keeps meaning the
+    // current Opus, where claude-opus-4 would quietly become last year's
+    // model and this list would need editing on every release.
+    models: [
+      { id: "opus", name: "Opus", env: { ANTHROPIC_MODEL: "opus" } },
+      { id: "sonnet", name: "Sonnet", env: { ANTHROPIC_MODEL: "sonnet" } },
+      { id: "haiku", name: "Haiku", env: { ANTHROPIC_MODEL: "haiku" } },
+    ],
+    modelEnvVar: "ANTHROPIC_MODEL",
     install: {
       npm: "@agentclientprotocol/claude-agent-acp",
       docs: "https://github.com/agentclientprotocol/claude-agent-acp",
@@ -90,6 +131,14 @@ export const AGENT_CATALOG: readonly AgentCatalogEntry[] = [
     summary: "Google's agent. Uses your Google account.",
     launchers: [{ command: "gemini", args: ["--experimental-acp"] }],
     detect: ["gemini"],
+    // Gemini accepts --model and also reads GEMINI_MODEL; the flag is used
+    // because it is the documented surface, and the variable carries a
+    // free-typed name.
+    models: [
+      { id: "pro", name: "Pro", args: ["--model", "gemini-2.5-pro"] },
+      { id: "flash", name: "Flash", args: ["--model", "gemini-2.5-flash"] },
+    ],
+    modelEnvVar: "GEMINI_MODEL",
     install: {
       npm: "@google/gemini-cli",
       docs: "https://github.com/google-gemini/gemini-cli",

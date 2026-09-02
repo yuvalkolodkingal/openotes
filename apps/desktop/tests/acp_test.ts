@@ -136,3 +136,40 @@ Deno.test("connecting refuses anything that is not a catalog entry", async () =>
     );
   }
 });
+
+Deno.test("every offered model actually changes how the agent starts", () => {
+  // A picker entry that contributes neither an argument nor an environment
+  // variable would look like it works and do nothing at all -- the failure
+  // mode this catalog is meant to avoid, since ACP has no model selection of
+  // its own to fall back on.
+  for (const entry of AGENT_CATALOG) {
+    for (const model of entry.models ?? []) {
+      const args = model.args?.length ?? 0;
+      const env = Object.keys(model.env ?? {}).length;
+      assert(
+        args > 0 || env > 0,
+        `${entry.name} offers model "${model.id}" but passes nothing to the agent`,
+      );
+    }
+    // Free-typed names need somewhere to go.
+    if (entry.modelEnvVar !== undefined) {
+      assert(
+        entry.modelEnvVar.length > 0,
+        `${entry.name} declares an empty model variable`,
+      );
+    }
+  }
+});
+
+Deno.test("a model id is unique within its agent", () => {
+  for (const entry of AGENT_CATALOG) {
+    const seen = new Set<string>();
+    for (const model of entry.models ?? []) {
+      assert(
+        !seen.has(model.id),
+        `${entry.name} lists model id "${model.id}" twice`,
+      );
+      seen.add(model.id);
+    }
+  }
+});

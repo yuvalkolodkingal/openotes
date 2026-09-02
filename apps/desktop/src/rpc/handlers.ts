@@ -97,8 +97,16 @@ export function createHandlers(): Record<string, Handler> {
 
     "acp.connect": async (input, context) => {
       const agentId = asString(input, "agentId", 64);
+      // A model name is either a catalog id or a name the user typed, so it
+      // is length-capped like every other string crossing this boundary.
+      const modelId = isPlainObject(input)
+        ? optionalString(input.modelId)?.slice(0, 128)
+        : undefined;
       try {
-        return { ok: true as const, agent: await context.acp.connect(agentId) };
+        return {
+          ok: true as const,
+          agent: await context.acp.connect(agentId, modelId),
+        };
       } catch (e) {
         // Needing approval is not a failure — it is a question for the user,
         // so it comes back as an answerable result rather than an error toast.
