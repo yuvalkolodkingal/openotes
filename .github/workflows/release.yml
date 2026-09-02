@@ -78,6 +78,7 @@ jobs:
         env:
           VERSION_INPUT: ${{ inputs.version }}
           REF_NAME: ${{ github.ref_name }}
+          GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
           # A tag push already names the tag; a dispatch names a version.
@@ -134,14 +135,29 @@ jobs:
               git fetch --no-tags --depth=1 origin "+refs/tags/$tag:refs/tags/$tag"
               tagged=$(git rev-parse "refs/tags/$tag^{commit}")
               if [ "$tagged" != "$GITHUB_SHA" ]; then
-                echo "Tag $tag already exists and points at $tagged, but this" \
-                     "run checked out $GITHUB_SHA, so the artifacts would not" \
-                     "be built from the tagged commit." >&2
-                echo "Re-run the workflow with $tag selected as the ref, or" \
-                     "bump APP_VERSION and release the new version." >&2
-                exit 1
+                # A tag with a published release is immutable: those
+                # binaries were built from that commit and the tag must keep
+                # saying so. A tag *without* one is what a failed run leaves
+                # behind -- this job creates the tag before the suite runs --
+                # and the fix for that failure is by definition a later
+                # commit. Moving the tag onto it is the only way the version
+                # can ever be released, and it changes nothing anyone has
+                # downloaded.
+                if gh release view "$tag" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+                  echo "Tag $tag already exists and points at $tagged, which" \
+                       "has a published release; this run checked out" \
+                       "$GITHUB_SHA. A released tag is never moved." >&2
+                  echo "Bump APP_VERSION and release the new version." >&2
+                  exit 1
+                fi
+                echo "Tag $tag points at $tagged, which was never released" \
+                     "(the run that created it failed). Moving it to" \
+                     "$GITHUB_SHA."
+                git tag -f "$tag" "$GITHUB_SHA"
+                git push --force origin "refs/tags/$tag"
+              else
+                echo "Tag $tag already exists and matches this commit."
               fi
-              echo "Tag $tag already exists and matches this commit."
             else
               # Pushing this tag does NOT start a second Release run: GitHub
               # does not raise workflow-triggering events for pushes made with
