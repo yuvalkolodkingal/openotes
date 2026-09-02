@@ -22,8 +22,11 @@ connecting takes one click and no login step at all.
 **No model to maintain.** A better model, a new provider or a cheaper tier is
 someone else's release, not ours.
 
-**You can use an agent we have never heard of.** ACP is a protocol, not a
-partnership. "Custom" takes any command that speaks it.
+**Adding an agent is a data change.** ACP is a protocol, not a partnership, so
+supporting a new one is an entry in `apps/desktop/src/acp/catalog.ts` rather
+than an integration. It is not a free-form setting, though: the runtime will
+only start a program named in its permission manifest, so an arbitrary command
+cannot be pointed at — see the note under Troubleshooting.
 
 The cost is that an agent is a separate program running on your computer. That
 is a real trade and [ARCHITECTURE.md §3](ARCHITECTURE.md) describes exactly what
@@ -91,9 +94,18 @@ is usually the only thing that explains a bad install.
 
 ## Troubleshooting
 
-**"… is not installed."** Openotes looks for the agent's binary on your `PATH`.
-If you installed it somewhere else, either add that directory to `PATH` or use
-a Custom agent entry pointing at it.
+**"… is not installed."** Openotes looks for the agent's binary on your
+`PATH`. If it finds one somewhere else — under `nvm`, Homebrew or
+`~/.local/bin` — it says exactly where, because that case needs a different
+fix: add that directory to your `PATH` and restart Openotes, or start Openotes
+from a terminal that already has it.
+
+It cannot simply launch the binary where it lies. Openotes is compiled with a
+fixed list of programs it may run, and the runtime binds that list to the
+binaries found on `PATH` when it starts; a program at any other path is
+refused, and so is one under a name that is not on the list. That is the same
+restriction that stops an agent from being an arbitrary command, and it is
+deliberate — see [SECURITY.md §10](SECURITY.md).
 
 **The agent starts and immediately stops.** Check the diagnostics shown with
 the error — an agent that cannot find its own configuration usually says so on

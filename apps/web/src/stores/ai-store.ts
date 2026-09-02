@@ -62,6 +62,8 @@ export type AgentStatus = {
   acceptsCustomModel: boolean;
   /** The model the live connection was started with. */
   modelId?: string;
+  /** Why this agent cannot be used, when it is present but unreachable. */
+  error?: string;
 };
 
 export type ToolCallView = {

@@ -137,8 +137,8 @@ export class AcpService {
         id: entry.id,
         name: entry.name,
         summary: entry.summary,
-        installed: detected !== undefined,
-        resolvedPath: detected ?? resolved?.path,
+        installed: detected?.launchable === true,
+        resolvedPath: detected?.path ?? resolved?.path,
         connected: connection !== undefined,
         agentTitle: connection?.client.agentInfo?.title,
         agentVersion: connection?.client.agentInfo?.version,
@@ -159,6 +159,14 @@ export class AcpService {
         })),
         acceptsCustomModel: entry.modelEnvVar !== undefined,
         modelId: connection?.modelId,
+        // Present but unreachable is its own state, and the only one the user
+        // can act on: telling them to install what they already installed
+        // would be worse than saying nothing.
+        error: detected && !detected.launchable
+          ? `Found at ${detected.path}, but Openotes can only launch programs ` +
+            `on its own PATH. Add that directory to your PATH and restart ` +
+            `Openotes, or start Openotes from a terminal.`
+          : undefined,
       });
     }
     return reports;
@@ -191,7 +199,7 @@ export class AcpService {
     }
 
     const entry = catalogEntry(agentId);
-    if (!entry || entry.id === "custom") {
+    if (!entry) {
       throw new Error(`Unknown agent: ${agentId}`);
     }
 
@@ -509,13 +517,27 @@ function extraDirs(): string[] {
   return dirs;
 }
 
-/** Where this agent's own binary is, ignoring generic launchers like npx. */
+/**
+ * Where this agent's own binary is, and whether it can actually be launched.
+ *
+ * The distinction is forced by how the permission set works. Deno resolves
+ * `--allow-run=gemini` to the binary on PATH when the process starts, and
+ * refuses any other path afterwards -- verified: an allowlisted name at an
+ * unusual path is denied, and extending PATH later does not help. So a binary
+ * found outside PATH is real, and is also unlaunchable, and saying "not
+ * installed" would send the user to reinstall something they already have.
+ */
 async function resolveDetected(
   entry: AgentCatalogEntry,
-): Promise<string | undefined> {
+): Promise<{ path: string; launchable: boolean } | undefined> {
   for (const candidate of entry.detect) {
-    const path = await which(candidate);
-    if (path) return path;
+    const onPath = await which(candidate);
+    if (onPath) return { path: onPath, launchable: true };
+  }
+  const extra = extraDirs();
+  for (const candidate of entry.detect) {
+    const elsewhere = await which(candidate, extra);
+    if (elsewhere) return { path: elsewhere, launchable: false };
   }
   return undefined;
 }
@@ -538,7 +560,10 @@ async function resolveLauncher(
  * spawning a shell to find out what we are allowed to spawn is the wrong shape
  * — and `which` is not on the permitted list, correctly.
  */
-async function which(command: string): Promise<string | undefined> {
+async function which(
+  command: string,
+  dirs?: string[],
+): Promise<string | undefined> {
   const isWindows = Deno.build.os === "windows";
   const separator = isWindows ? ";" : ":";
   const extensions = isWindows ? ["", ".exe", ".cmd", ".bat"] : [""];
@@ -554,7 +579,7 @@ async function which(command: string): Promise<string | undefined> {
     path = undefined;
   }
 
-  for (const directory of [...(path?.split(separator) ?? []), ...extraDirs()]) {
+  for (const directory of dirs ?? path?.split(separator) ?? []) {
     if (!directory) continue;
     for (const extension of extensions) {
       const candidate = join(directory, command + extension);

@@ -213,8 +213,15 @@ export function AgentsPanel() {
             </Flex>
 
             {!agent.installed ? (
-              <Text variant="subBody" sx={{ color: "paragraph-secondary" }}>
-                Not installed
+              <Text
+                variant="subBody"
+                sx={{
+                  color: agent.error ? "accent" : "paragraph-secondary",
+                  maxWidth: 220,
+                  textAlign: "right"
+                }}
+              >
+                {agent.error ?? "Not installed"}
               </Text>
             ) : isConnected ? (
               <Button

@@ -20,7 +20,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 /**
  * The agents Openotes knows how to launch.
  *
- * Data, not code: adding an agent is an entry here, and "custom" covers
+ * Data, not code: adding an agent is an entry here, which covers
  * everything not listed. Nothing in this table is user-supplied — the
  * renderer picks an id, never a command line — which is what keeps the
  * subprocess allowlist meaningful.
@@ -31,8 +31,7 @@ export type AgentId =
   | "gemini"
   | "opencode"
   | "codex"
-  | "antigravity"
-  | "custom";
+  | "antigravity";
 
 export interface AgentCatalogEntry {
   id: AgentId;
