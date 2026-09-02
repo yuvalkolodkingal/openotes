@@ -58,8 +58,13 @@ if [ -n "$pins" ]; then
 fi
 
 if [ -n "$expected" ]; then
-  answer=$("$launcher" --version 2>&1) || fail "--version failed: $answer"
+  # The runtime narrates its start-up ("Runtime loaded successfully from",
+  # the allow-run resolutions, libEGL) around the answer, so only the last
+  # line of standard output is the answer.
+  output=$("$launcher" --version 2>/dev/null) \
+    || fail "--version exited $? with: $output"
+  answer=$(printf '%s\n' "$output" | tail -n 1)
   [ "$answer" = "Openotes $expected" ] \
-    || fail "--version answered \"$answer\", expected \"Openotes $expected\""
+    || fail "--version answered \"$answer\", expected \"Openotes $expected\" (full output: $output)"
 fi
 echo "check-launcher: $launcher hands over to $target"
