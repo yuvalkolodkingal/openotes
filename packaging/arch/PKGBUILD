@@ -33,7 +33,7 @@
 pkgname=openotes
 # Default matches APP_VERSION in apps/desktop/src/constants.ts. The CI release
 # job rewrites this line from the release tag before running makepkg.
-pkgver=2.2.1
+pkgver=2.2.2
 pkgrel=1
 pkgdesc="Offline-first, end-to-end-encrypted notes with WebDAV sync (a fork of Notesnook)"
 arch=('x86_64')
@@ -91,11 +91,24 @@ package() {
   # desktop launcher. Both resolvers check their environment override first,
   # so the prelude pins the two directories instead of relying on where the
   # binary happens to sit. A user-set value still wins.
+  # awk rather than sed, matching each placeholder line whole. 2.2.1's sed
+  # also filled in a comment that mentioned the placeholder, which left an
+  # `export OPENOTES_UI_ROOT/OPENOTES_NATIVE_DIR` on line 44 and a launcher
+  # that could not start. awk expands the \n in the -v value into newlines.
   install -d "${pkgdir}/usr/bin"
-  sed -e 's|@PRELUDE@|OPENOTES_UI_ROOT="${OPENOTES_UI_ROOT:-/usr/lib/openotes/ui}"\nOPENOTES_NATIVE_DIR="${OPENOTES_NATIVE_DIR:-/usr/lib/openotes/native}"\nexport OPENOTES_UI_ROOT OPENOTES_NATIVE_DIR|' \
-      -e 's|@TARGET@|/usr/lib/openotes/openotes|' \
-      "${_src}/openotes-launcher.sh" > "${pkgdir}/usr/bin/${pkgname}"
+  awk -v prelude='OPENOTES_UI_ROOT="${OPENOTES_UI_ROOT:-/usr/lib/openotes/ui}"\nOPENOTES_NATIVE_DIR="${OPENOTES_NATIVE_DIR:-/usr/lib/openotes/native}"\nexport OPENOTES_UI_ROOT OPENOTES_NATIVE_DIR' \
+      -v target='/usr/lib/openotes/openotes' '
+        $0 == "@PRELUDE@" { print prelude; next }
+        $0 == "exec @TARGET@ \"$@\"" { print "exec " target " \"$@\""; next }
+        { print }
+      ' "${_src}/openotes-launcher.sh" > "${pkgdir}/usr/bin/${pkgname}"
   chmod 755 "${pkgdir}/usr/bin/${pkgname}"
+  # The tarball's check-launcher.sh runs the result up to its hand-over: a
+  # launcher that still carries a placeholder, does not parse, or fails on
+  # the way to exec -- as 2.2.1's did -- fails the package instead of
+  # shipping.
+  sh "${_src}/check-launcher.sh" "${pkgdir}/usr/bin/${pkgname}" \
+    /usr/lib/openotes/openotes --pins /usr/lib/openotes
 
   install -Dm644 "${_src}/openotes.desktop" \
     "${pkgdir}/usr/share/applications/${pkgname}.desktop"

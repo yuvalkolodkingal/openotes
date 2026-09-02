@@ -2,7 +2,7 @@
   "expo": {
     "name": "Openotes",
     "slug": "openotes",
-    "version": "2.2.1",
+    "version": "2.2.2",
     "orientation": "portrait",
     "scheme": "openotes",
     "userInterfaceStyle": "automatic",
@@ -13,7 +13,7 @@
     },
     "android": {
       "package": "org.openotes.mobile",
-      "versionCode": 20201
+      "versionCode": 20202
     },
     "plugins": [
       "expo-sqlite",

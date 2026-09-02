@@ -100,7 +100,7 @@ is usually the only thing that explains a bad install.
 fix: add that directory to your `PATH` and restart Openotes, or start Openotes
 from a terminal that already has it.
 
-Since 2.2.1 the packaged Linux builds (AppImage, .deb, .rpm, Arch) start
+Since 2.2.2 the packaged Linux builds (AppImage, .deb, .rpm, Arch) start
 through a launcher that extends `PATH` the way a login shell would — the
 usual Node version managers, `~/.local/bin`, Homebrew, and whatever your own
 shell reports — so an agent installed with `npm install -g` is found from a

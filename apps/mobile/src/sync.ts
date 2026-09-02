@@ -41,7 +41,7 @@ import type { Connection } from "./secrets.ts";
  * broken cipher.
  */
 
-export const APP_VERSION = "2.2.1";
+export const APP_VERSION = "2.2.2";
 
 export function storageFor(connection: Connection): RemoteStorage {
   const inner: RemoteStorage =

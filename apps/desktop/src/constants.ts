@@ -38,7 +38,7 @@ export const APP_ID = "openotes";
 export const APP_IDENTIFIER = "org.openotes.Openotes";
 
 /** Fork version (semver). Kept in sync with deno.json by the build script. */
-export const APP_VERSION = "2.2.1";
+export const APP_VERSION = "2.2.2";
 
 /** Upstream revision this fork is based on, for Help -> About. */
 export const UPSTREAM_BASE = "streetwriters/notesnook v3.4.7";

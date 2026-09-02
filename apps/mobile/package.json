@@ -1,6 +1,6 @@
 {
   "name": "@openotes/mobile",
-  "version": "2.2.1",
+  "version": "2.2.2",
   "private": true,
   "description": "Openotes for phones: syncs to the same Neon or Supabase database as the desktop.",
   "main": "index.js",

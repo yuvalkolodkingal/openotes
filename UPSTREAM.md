@@ -16,7 +16,7 @@ be mechanical.
 | Upstream repository      | `streetwriters/notesnook`          |
 | Base revision            | `09a0c30` (merge of release/3.4.7) |
 | Base version             | 3.4.7                              |
-| Fork version             | 2.2.1                              |
+| Fork version             | 2.2.2                              |
 | Fork repository          | `yuvalkolodkingal/openotes`        |
 | Last merge from upstream | Initial fork point                 |
 
@@ -195,6 +195,24 @@ diff smaller.** A smaller diff is not worth a worse application.
 ---
 
 ## Fork changelog
+
+### 2.2.2 — the Linux packages start again
+
+- **2.2.1 did not start on Linux.** Every AppImage, .deb, .rpm and Arch
+  package of it shipped a launcher that could not hand over to the
+  application: the template's own comment mentioned its placeholders, a plain
+  string replace filled the mention in and left the real `exec @TARGET@`
+  line alone, and the Arch recipe's `sed` folded the comment into an `export`
+  line (line 44, `bad variable name`). The flatpak, which writes its own
+  launcher, was unaffected. The lines are now matched whole, the build
+  refuses a launcher it cannot run to the hand-over
+  (`packaging/linux/check-launcher.sh`, shipped in the tarball and used by
+  the PKGBUILD), and CI installs the .deb and runs every launcher with
+  `--version` instead of running the binary behind it.
+- The runtime's permission manifest now lists every `PG*` variable
+  postgres.js reads, so a plain Postgres or Neon connection over a socket
+  works in a packaged build and not only under `deno task dev`.
+- An Android APK of the phone app is built in CI and attached to releases.
 
 ### 2.2.1 — the agents launch, and notes reach a database and a phone
 

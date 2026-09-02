@@ -374,6 +374,35 @@ jobs:
           done
           echo "All three packages carry the interface and the native libraries."
 
+      # Then start them. 2.2.1's launchers listed fine and parsed fine and
+      # started nothing: every one of them still carried `exec @TARGET@`.
+      # check-launcher.sh executes each launcher up to its hand-over and
+      # then runs it for real, and `--version` must answer with this build's
+      # version. The .deb is installed so its launcher runs from /usr/bin
+      # the way it will on a user's machine; the .rpm launcher points at the
+      # same payload, so it runs against that installation.
+      - name: Start every launcher
+        run: |
+          set -euo pipefail
+          version="$VERSION"
+          arch='${{ matrix.arch }}'
+          check=packaging/linux/check-launcher.sh
+
+          sudo apt-get install --no-install-recommends -y \
+            "./dist/Openotes-$version-linux-$arch.deb"
+          xvfb-run -a sh "$check" /usr/bin/openotes /usr/lib/openotes/openotes \
+            --pins /usr/lib/openotes --version "$version"
+
+          rpmdir=$(mktemp -d)
+          (cd "$rpmdir" && rpm2cpio "$GITHUB_WORKSPACE/dist/Openotes-$version-linux-$arch.rpm" | cpio -idm --quiet ./usr/bin/openotes)
+          xvfb-run -a sh "$check" "$rpmdir/usr/bin/openotes" /usr/lib/openotes/openotes \
+            --pins /usr/lib/openotes --version "$version"
+
+          appdir=$(mktemp -d)
+          (cd "$appdir" && "$GITHUB_WORKSPACE/dist/Openotes-$version-linux-$arch.AppImage" --appimage-extract >/dev/null)
+          xvfb-run -a sh "$check" "$appdir/squashfs-root/AppRun" '"$HERE/AppRun.wrapped"' \
+            --version "$version"
+
       - name: Smoke test the AppImage
         run: >
           deno run -A apps/desktop/scripts/smoke-test.ts
@@ -578,6 +607,19 @@ jobs:
               || { echo "$package is missing $required" >&2; exit 1; }
           done
           echo "The Arch package carries the launcher, the payload, ui/ and native/."
+
+      # makepkg already ran check-launcher.sh on the launcher it wrote; this
+      # runs it on the one the package actually carries, and would have
+      # caught 2.2.1's `export OPENOTES_UI_ROOT/OPENOTES_NATIVE_DIR` line,
+      # which `sh -n` waves through and every start tripped on.
+      - name: Start the packaged launcher
+        run: |
+          set -eu
+          package=$(ls arch-build/*.pkg.tar.zst)
+          extracted=$(mktemp -d)
+          tar --extract --file "$package" --directory "$extracted" usr/bin/openotes
+          sh packaging/linux/check-launcher.sh "$extracted/usr/bin/openotes" \
+            /usr/lib/openotes/openotes --pins /usr/lib/openotes
 
       - uses: actions/upload-artifact@v4
         with:

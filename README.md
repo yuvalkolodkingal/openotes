@@ -98,20 +98,20 @@ Openotes uses.
 
 ```bash
 # AppImage — works anywhere
-chmod +x Openotes-2.2.1-linux-x86_64.AppImage
-./Openotes-2.2.1-linux-x86_64.AppImage
+chmod +x Openotes-2.2.2-linux-x86_64.AppImage
+./Openotes-2.2.2-linux-x86_64.AppImage
 
 # Debian / Ubuntu
-sudo apt install ./Openotes-2.2.1-linux-x86_64.deb
+sudo apt install ./Openotes-2.2.2-linux-x86_64.deb
 
 # Fedora / RHEL
-sudo dnf install ./Openotes-2.2.1-linux-x86_64.rpm
+sudo dnf install ./Openotes-2.2.2-linux-x86_64.rpm
 
 # Arch / Manjaro
-sudo pacman -U openotes-2.2.1-1-x86_64.pkg.tar.zst
+sudo pacman -U openotes-2.2.2-1-x86_64.pkg.tar.zst
 
 # Flatpak
-flatpak install Openotes-2.2.1-linux-x86_64.flatpak
+flatpak install Openotes-2.2.2-linux-x86_64.flatpak
 ```
 
 Linux needs **WebKitGTK** (`libwebkit2gtk-4.1-0` on Debian and Ubuntu,
@@ -120,7 +120,7 @@ expects it to be present.
 
 ### Android
 
-Download `Openotes-2.2.1-android.apk` to the phone and open it; Android asks
+Download `Openotes-2.2.2-android.apk` to the phone and open it; Android asks
 once to allow installs from your browser or file manager. The app is not on a
 store. It connects to the Neon or Supabase database the desktop syncs to —
 see [DATABASE.md](DATABASE.md).

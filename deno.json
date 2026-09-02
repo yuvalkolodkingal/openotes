@@ -1,6 +1,6 @@
 {
   "name": "@notesnook-deno/workspace",
-  "version": "2.2.1",
+  "version": "2.2.2",
   "license": "GPL-3.0-or-later",
   "nodeModulesDir": "auto",
   "unstable": [
@@ -180,7 +180,40 @@
         // 2.1.2 while working under `deno task dev`, which runs with -A.
         // PATHEXT is the Windows half of the same lookup.
         "PATH",
-        "PATHEXT"
+        "PATHEXT",
+        // postgres.js reads these when it opens a socket: the user name for
+        // the default role, and libpq's PG* variables. Under the manifest an
+        // unlisted read throws NotCapable, which refused every plain-Postgres
+        // and Neon-over-socket connection in a packaged build -- found by
+        // driving the executor under --permission-set=app, the way the
+        // ACP check does.
+        "USER",
+        "LOGNAME",
+        "USERNAME",
+        "PGHOST",
+        "PGPORT",
+        "PGDATABASE",
+        "PGUSER",
+        "PGUSERNAME",
+        "PGPASSWORD",
+        "PGAPPNAME",
+        "PGTARGETSESSIONATTRS",
+        // ...and one for every option default it carries, read as
+        // env['PG' + key.toUpperCase()] whether or not the variable exists.
+        "PGMAX",
+        "PGSSL",
+        "PGSSLNEGOTIATION",
+        "PGIDLE_TIMEOUT",
+        "PGCONNECT_TIMEOUT",
+        "PGMAX_LIFETIME",
+        "PGMAX_PIPELINE",
+        "PGBACKOFF",
+        "PGKEEP_ALIVE",
+        "PGPREPARE",
+        "PGDEBUG",
+        "PGFETCH_TYPES",
+        "PGPUBLICATIONS",
+        "PGTARGET_SESSION_ATTRS"
       ],
       "run": [
         "xdg-open",

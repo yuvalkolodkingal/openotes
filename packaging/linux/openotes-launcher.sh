@@ -38,9 +38,14 @@
 # the user's own shell to ask it a question. Set OPENOTES_NO_SHELL_PATH=1 to
 # skip that question and keep only the well-known directories.
 #
-# Placeholders are filled in by apps/desktop/scripts/build.ts (or by a
-# package recipe): @PRELUDE@ pins OPENOTES_UI_ROOT/OPENOTES_NATIVE_DIR where
-# the package needs it, and @TARGET@ is the program to exec.
+# Two placeholder lines are filled in by apps/desktop/scripts/build.ts (or
+# by a package recipe): the prelude, which pins OPENOTES_UI_ROOT and
+# OPENOTES_NATIVE_DIR where the package needs it, and the exec line, which
+# names the program to start. Each placeholder stands alone on its line and
+# nowhere else -- 2.2.1 shipped every Linux launcher with the placeholders
+# still in place, because a comment mentioned them first and the build
+# replaced the mention. The build now refuses a launcher that still carries
+# one, and CI starts the launchers it packages.
 
 @PRELUDE@
 

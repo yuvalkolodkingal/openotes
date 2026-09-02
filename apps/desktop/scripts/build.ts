@@ -68,6 +68,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 import { basename, fromFileUrl, join } from "@std/path";
 import { copy, emptyDir, ensureDir, exists } from "@std/fs";
+import { pinnedResources, renderLauncherTemplate } from "./launcher.ts";
 import { encodeHex } from "@std/encoding/hex";
 import {
   APP_ID,
@@ -511,6 +512,14 @@ async function addResources(
     // recipes install the same wrapper the .deb, .rpm and AppImage start
     // through (see packaging/README.md).
     await copy(LAUNCHER_TEMPLATE, join(destination, LAUNCHER_NAME), overwrite);
+    // ...and the check that proves a rendered copy of it starts the
+    // application, so those recipes refuse a broken launcher the way the
+    // formats built here do.
+    await copy(
+      LAUNCHER_CHECK,
+      join(destination, basename(LAUNCHER_CHECK)),
+      overwrite,
+    );
     if (await exists(desktopEntry)) {
       await copy(
         desktopEntry,
@@ -528,6 +537,7 @@ async function addResources(
 
 const LAUNCHER_NAME = `${APP_ID}-launcher.sh`;
 const LAUNCHER_TEMPLATE = join(PACKAGING_DIR, "linux", LAUNCHER_NAME);
+const LAUNCHER_CHECK = join(PACKAGING_DIR, "linux", "check-launcher.sh");
 
 /**
  * The shell wrapper every packaged Linux build starts through.
@@ -543,24 +553,10 @@ const LAUNCHER_TEMPLATE = join(PACKAGING_DIR, "linux", LAUNCHER_NAME);
 async function renderLauncher(
   options: { target: string; prelude?: string },
 ): Promise<string> {
-  const template = await Deno.readTextFile(LAUNCHER_TEMPLATE);
-  for (const placeholder of ["@PRELUDE@", "@TARGET@"]) {
-    if (!template.includes(placeholder)) {
-      throw new Error(`${LAUNCHER_TEMPLATE} has no ${placeholder} placeholder`);
-    }
-  }
-  return template
-    .replace("@PRELUDE@", options.prelude ?? "")
-    .replace("@TARGET@", options.target);
-}
-
-/** The prelude pinning the resource directories under a lib directory. */
-function pinnedResources(libDir: string): string {
-  return [
-    `OPENOTES_UI_ROOT="\${OPENOTES_UI_ROOT:-${libDir}/ui}"`,
-    `OPENOTES_NATIVE_DIR="\${OPENOTES_NATIVE_DIR:-${libDir}/native}"`,
-    "export OPENOTES_UI_ROOT OPENOTES_NATIVE_DIR",
-  ].join("\n");
+  return renderLauncherTemplate(
+    await Deno.readTextFile(LAUNCHER_TEMPLATE),
+    options,
+  );
 }
 
 /**
@@ -587,6 +583,33 @@ async function installLinuxLauncher(tree: string): Promise<void> {
     }),
   );
   await Deno.chmod(entry, 0o755);
+  await assertLaunches(entry, `${libDir}/${APP_ID}`, libDir);
+}
+
+/**
+ * Runs packaging/linux/check-launcher.sh against a rendered launcher: it
+ * must parse, carry no placeholder, and execute every line up to the
+ * hand-over. `sh -n` alone accepted both of 2.2.1's broken launchers.
+ */
+async function assertLaunches(
+  script: string,
+  target: string,
+  pins?: string,
+): Promise<void> {
+  const args = [
+    LAUNCHER_CHECK,
+    script,
+    target,
+    ...(pins ? ["--pins", pins] : []),
+  ];
+  const result = await new Deno.Command("sh", { args }).output();
+  if (result.code !== 0) {
+    throw new Error(
+      `${script} cannot start the application: ${
+        new TextDecoder().decode(result.stderr).trim()
+      }`,
+    );
+  }
 }
 
 /** Copies only the artifacts belonging to `target` into a staging directory. */
@@ -722,6 +745,7 @@ async function produceAppImage(
     }),
   );
   await Deno.chmod(appRun, 0o755);
+  await assertLaunches(appRun, '"$HERE/AppRun.wrapped"');
 
   const image = join(work, "payload.squashfs");
   await run("mksquashfs", [

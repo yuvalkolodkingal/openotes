@@ -179,8 +179,12 @@ async function resolveLaunchable(given: string): Promise<Launchable> {
       );
     }
     const root = join(workDirectory, "squashfs-root");
+    // Through AppRun, which is what the AppImage runtime execs -- not the
+    // binary behind it. 2.2.1's AppRun could not start the binary at all,
+    // and this test passed by going around it.
+    const appRun = join(root, "AppRun");
     return {
-      executable: join(root, APP_ID),
+      executable: (await exists(appRun)) ? appRun : join(root, APP_ID),
       payloadRoot: root,
       // Inside a real AppImage the runtime sets APPIMAGE and APPDIR;
       // paths.ts reads APPIMAGE to decide it is running from one.
