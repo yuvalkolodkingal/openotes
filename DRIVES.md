@@ -108,6 +108,7 @@ does not exist, and overwriting only if nobody else changed it first.
 | **WebDAV**       | emulated (probe + `If-None-Match`) | yes (`If-Match`)         | listing                  |
 | **Google Drive** | **no**                             | **no**                   | change feed              |
 | **S3** and compatible | yes (`If-None-Match: *`)      | yes (`If-Match`)         | none — listing           |
+| **Box**          | yes (409 on a taken name)          | yes (`If-Match`)         | none — listing           |
 
 ### S3, and the many services that speak it
 
@@ -125,6 +126,23 @@ rather than silently clobbering, the same defence the WebDAV backend needed.
 And the request signing has been tested for its structure but not yet against
 a live endpoint — a signing fault appears as a 403 on the first request, not
 as lost data.
+
+### Box
+
+Box has both primitives too: it refuses an upload whose name is already taken
+rather than renaming it, and it honours `If-Match` on a new version. It
+addresses everything by id rather than by path, so a path is resolved through
+the folder tree and the result cached — the same shape as Google Drive, but
+without Drive's weakness, because the refusals are real.
+
+It also renames and reparents in a single call, so retitling a note is one
+request rather than a copy and a delete.
+
+Box publishes an events feed, but it reports on the whole account rather than
+one folder and carries its own stream-position handling; it is deliberately
+not used, so change detection is a listing rather than a half-used feed. As
+with S3, the implementation is tested against a fake Box rather than a live
+account.
 
 ### Koofr, pCloud and Nextcloud go through WebDAV
 
