@@ -146,12 +146,30 @@ export class RpcPeer {
   >();
   private closed = false;
 
+  /**
+   * Extra parties interested in transport errors.
+   *
+   * `Transport.onError` holds a single handler, so whoever registers last
+   * wins. The peer must be that handler -- it is the only thing that can
+   * reject the in-flight requests -- so anyone else observes through here
+   * instead of registering on the transport and silently displacing it.
+   */
+  private readonly errorObservers = new Set<(error: Error) => void>();
+
   constructor(private readonly transport: Transport) {
     transport.onMessage((message) => void this.dispatch(message));
     transport.onClose(() =>
       this.failAllPending(new Error("Connection closed"))
     );
-    transport.onError((error) => this.failAllPending(error));
+    transport.onError((error) => {
+      this.failAllPending(error);
+      for (const observe of this.errorObservers) observe(error);
+    });
+  }
+
+  /** Be told about transport errors without taking over handling them. */
+  observeError(handler: (error: Error) => void): void {
+    this.errorObservers.add(handler);
   }
 
   /** Answer `method` when the other side calls it. */
@@ -163,7 +181,20 @@ export class RpcPeer {
     this.notificationHandlers.set(method, handler);
   }
 
-  async request<T>(method: string, params?: unknown): Promise<T> {
+  /**
+   * Call the other side and wait for its answer.
+   *
+   * `timeoutMs` is opt-in per call, deliberately. A turn legitimately runs for
+   * minutes while the agent thinks, so a blanket deadline would cancel real
+   * work; but a handshake that never answers -- a binary that does not speak
+   * this protocol, or an `npx` that is still downloading -- would otherwise
+   * hang with no way out. Only the calls with a known bound set one.
+   */
+  async request<T>(
+    method: string,
+    params?: unknown,
+    options?: { timeoutMs?: number },
+  ): Promise<T> {
     if (this.closed) {
       throw new Error(`Cannot call ${method}: connection closed`);
     }
@@ -172,7 +203,29 @@ export class RpcPeer {
       this.pending.set(id, { resolve, reject });
     });
     await this.transport.send({ jsonrpc: "2.0", id, method, params });
-    return await settled as T;
+
+    const timeoutMs = options?.timeoutMs;
+    if (timeoutMs === undefined) return await settled as T;
+
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const expired = new Promise<never>((_, reject) => {
+      timer = setTimeout(() => {
+        // Drop it from `pending` so a late answer is ignored rather than
+        // resolving a promise nobody is holding any more.
+        this.pending.delete(id);
+        reject(
+          new Error(
+            `${method} did not answer within ${Math.round(timeoutMs / 1000)}s.`,
+          ),
+        );
+      }, timeoutMs);
+    });
+
+    try {
+      return await Promise.race([settled, expired]) as T;
+    } finally {
+      if (timer !== undefined) clearTimeout(timer);
+    }
   }
 
   async notify(method: string, params?: unknown): Promise<void> {

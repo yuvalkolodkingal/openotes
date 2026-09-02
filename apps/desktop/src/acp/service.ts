@@ -118,18 +118,30 @@ export class AcpService {
   async listAgents(): Promise<AgentStatusReport[]> {
     const reports: AgentStatusReport[] = [];
     for (const entry of AGENT_CATALOG) {
+      // "Installed" means one of this agent's own binaries is present. The
+      // launcher may still be `npx`, which resolves everywhere Node does and
+      // would otherwise report every agent as installed.
+      const detected = await resolveDetected(entry);
       const resolved = await resolveLauncher(entry);
       const connection = this.connections.get(entry.id);
       reports.push({
         id: entry.id,
         name: entry.name,
         summary: entry.summary,
-        installed: resolved !== undefined,
-        resolvedPath: resolved?.path,
+        installed: detected !== undefined,
+        resolvedPath: detected ?? resolved?.path,
         connected: connection !== undefined,
         agentTitle: connection?.client.agentInfo?.title,
         agentVersion: connection?.client.agentInfo?.version,
-        authMethods: [],
+        // Read from the live connection rather than hardcoded empty: the
+        // interface refreshes this list right after connecting, so an empty
+        // array here erased the sign-in methods the handshake had just
+        // reported and left every agent claiming it was already signed in.
+        authMethods: (connection?.client.authMethods ?? []).map((method) => ({
+          id: method.id,
+          name: method.name,
+          description: method.description,
+        })),
         install: entry.install,
         authHint: entry.authHint,
       });
@@ -237,13 +249,10 @@ export class AcpService {
     this.connections.set(agentId, connection);
 
     try {
-      const info = await client.initialize();
+      await client.initialize();
+      // listAgents() now reads the auth methods off the live connection, so
+      // the report is already correct and does not need patching afterwards.
       const report = (await this.listAgents()).find((a) => a.id === agentId)!;
-      report.authMethods = (info.authMethods ?? []).map((method) => ({
-        id: method.id,
-        name: method.name,
-        description: method.description,
-      }));
       this.options.emit("acp.status", { agentId, connected: true });
       return report;
     } catch (e) {
@@ -264,14 +273,19 @@ export class AcpService {
     await this.connectionFor(agentId).client.authenticate(methodId);
   }
 
-  async newSession(agentId: string): Promise<string> {
+  async newSession(
+    agentId: string,
+  ): Promise<{ sessionId: string; workspace: string }> {
     const connection = this.connectionFor(agentId);
     // cwd must be a real absolute path — a real agent rejects a URI here.
     // The directory stays empty: notes are answered from the database through
     // the fs handlers, never written to disk.
     const session = await connection.client.newSession(connection.workspace);
     connection.sessions.add(session.sessionId);
-    return session.sessionId;
+    // The workspace goes back with the id because the interface has to name
+    // notes as paths inside it; without it there is no way to tell the agent
+    // where a note lives, which is why nothing could be read.
+    return { sessionId: session.sessionId, workspace: connection.workspace };
   }
 
   async prompt(
@@ -402,6 +416,56 @@ export function resolvePermission(
   return true;
 }
 
+/**
+ * Places agents get installed that a desktop launcher's PATH will not have.
+ *
+ * An application started from a dock, a .desktop file or an AppImage inherits
+ * a minimal PATH, not the one a login shell builds. An agent installed with
+ * npm -g under nvm, or with Homebrew, is invisible to it -- which reads to the
+ * user as "not installed" when it plainly is.
+ */
+function extraDirs(): string[] {
+  let home: string | undefined;
+  try {
+    home = Deno.env.get("HOME") ?? Deno.env.get("USERPROFILE");
+  } catch {
+    return [];
+  }
+  if (!home) return [];
+
+  const dirs = [
+    join(home, ".local", "bin"),
+    join(home, ".npm-global", "bin"),
+    join(home, ".bun", "bin"),
+    join(home, ".deno", "bin"),
+    "/usr/local/bin",
+    "/opt/homebrew/bin",
+  ];
+
+  // nvm keeps a directory per installed Node version; any of them may hold a
+  // globally installed adapter.
+  const nvm = join(home, ".nvm", "versions", "node");
+  try {
+    for (const entry of Deno.readDirSync(nvm)) {
+      if (entry.isDirectory) dirs.push(join(nvm, entry.name, "bin"));
+    }
+  } catch {
+    // No nvm here.
+  }
+  return dirs;
+}
+
+/** Where this agent's own binary is, ignoring generic launchers like npx. */
+async function resolveDetected(
+  entry: AgentCatalogEntry,
+): Promise<string | undefined> {
+  for (const candidate of entry.detect) {
+    const path = await which(candidate);
+    if (path) return path;
+  }
+  return undefined;
+}
+
 /** First launcher whose binary is on PATH, with the path it resolved to. */
 async function resolveLauncher(
   entry: AgentCatalogEntry,
@@ -421,13 +485,22 @@ async function resolveLauncher(
  * — and `which` is not on the permitted list, correctly.
  */
 async function which(command: string): Promise<string | undefined> {
-  const path = Deno.env.get("PATH");
-  if (!path) return undefined;
   const isWindows = Deno.build.os === "windows";
   const separator = isWindows ? ";" : ":";
   const extensions = isWindows ? ["", ".exe", ".cmd", ".bat"] : [""];
 
-  for (const directory of path.split(separator)) {
+  // Reading an unlisted variable throws NotCapable rather than returning
+  // undefined, and this is the only PATH read in the application; letting it
+  // escape would reject acp.listAgents outright and show no agents at all,
+  // with no clue why.
+  let path: string | undefined;
+  try {
+    path = Deno.env.get("PATH");
+  } catch {
+    path = undefined;
+  }
+
+  for (const directory of [...(path?.split(separator) ?? []), ...extraDirs()]) {
     if (!directory) continue;
     for (const extension of extensions) {
       const candidate = join(directory, command + extension);

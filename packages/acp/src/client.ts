@@ -37,9 +37,9 @@ import {
  * What the host must supply for Openotes to act as an ACP client.
  *
  * Note the shape of the filesystem hooks: ACP describes files, Openotes has
- * notes. The mapping lives above this class (a note is addressed as
- * `openotes://note/<id>`), so the protocol never learns about notes and the
- * note layer never learns about JSON-RPC.
+ * notes. The mapping lives above this class -- a note is addressed by its path
+ * inside the session's workspace directory -- so the protocol never learns
+ * about notes and the note layer never learns about JSON-RPC.
  */
 export interface AcpClientHandlers {
   /** Streamed output: message chunks, thoughts, tool calls, plans. */
@@ -64,6 +64,15 @@ export interface AcpClientOptions {
   transport: Transport;
   handlers: AcpClientHandlers;
   clientInfo?: { name: string; title?: string; version?: string };
+  /**
+   * How long to wait for the handshake before giving up, in milliseconds.
+   *
+   * Generous by default because the common first run is `npx -y <adapter>`,
+   * which downloads a package before speaking a byte. Without a bound, a
+   * binary that does not speak this protocol leaves the interface on
+   * "Connecting..." forever with nothing to cancel.
+   */
+  handshakeTimeoutMs?: number;
   /**
    * Whether the client offers note reading and writing. Off means the agent is
    * told so at initialize and will not attempt it.
@@ -120,7 +129,11 @@ export class AcpClient {
       return {};
     });
 
-    options.transport.onError((error) => handlers.onError?.(error));
+    // Through the peer, not the transport: registering on the transport
+    // replaces the peer's own handler, and the pending turn then has nothing
+    // left to reject it. A stream that errors without reaching EOF fires no
+    // onClose, so the turn hung forever.
+    this.peer.observeError((error) => handlers.onError?.(error));
   }
 
   /**
@@ -130,17 +143,21 @@ export class AcpClient {
    */
   async initialize(): Promise<InitializeResponse> {
     const capabilities = this.options.capabilities ?? {};
-    const response = await this.peer.request<InitializeResponse>("initialize", {
-      protocolVersion: PROTOCOL_VERSION,
-      clientCapabilities: {
-        fs: {
-          readTextFile: capabilities.readNotes ?? false,
-          writeTextFile: capabilities.writeNotes ?? false,
+    const response = await this.peer.request<InitializeResponse>(
+      "initialize",
+      {
+        protocolVersion: PROTOCOL_VERSION,
+        clientCapabilities: {
+          fs: {
+            readTextFile: capabilities.readNotes ?? false,
+            writeTextFile: capabilities.writeNotes ?? false,
+          },
+          terminal: false,
         },
-        terminal: false,
+        clientInfo: this.options.clientInfo,
       },
-      clientInfo: this.options.clientInfo,
-    });
+      { timeoutMs: this.options.handshakeTimeoutMs ?? 120_000 },
+    );
 
     // The spec says an agent that cannot speak our version answers with the
     // latest it supports. There is only version 1 today, so anything else is
@@ -171,6 +188,11 @@ export class AcpClient {
     return (this.initialized?.authMethods?.length ?? 0) === 0;
   }
 
+  /** How this agent wants the user to sign in; empty means no step needed. */
+  get authMethods() {
+    return this.initialized?.authMethods ?? [];
+  }
+
   async authenticate(methodId: string): Promise<void> {
     await this.peer.request<unknown>(
       "authenticate",
@@ -181,9 +203,10 @@ export class AcpClient {
   }
 
   /**
-   * Start a session. `cwd` must be absolute per the spec; Openotes passes an
-   * `openotes://` URI, which satisfies that and cannot be mistaken for a real
-   * directory on disk.
+   * Start a session. `cwd` must be an absolute filesystem path: a real agent
+   * rejects a URI here ("cwd must be an absolute path, but received:
+   * openotes://vault"), which is why the host creates a real directory for
+   * each session rather than inventing a scheme.
    */
   async newSession(cwd: string): Promise<NewSessionResponse> {
     return await this.peer.request<NewSessionResponse>("session/new", {

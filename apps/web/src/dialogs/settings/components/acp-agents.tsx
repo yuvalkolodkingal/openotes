@@ -39,9 +39,9 @@ export function AgentsPanel() {
   const error = useAiStore((store) => store.error);
 
   useEffect(() => {
-    void aiStore.refresh().catch(() => {
-      // The list renders its own empty state; a failed probe is not a toast.
-    });
+    // refresh() records its own failure into `error`, which renders above
+    // the list; nothing is swallowed here.
+    void aiStore.refresh();
   }, []);
 
   if (!IS_DESKTOP_APP) {

@@ -153,7 +153,15 @@
         "SNAP",
         "CI",
         "DENO_SQLITE_LOCAL",
-        "DENO_DIR"
+        "DENO_DIR",
+        // Finding an ACP agent means looking for its binary, and this list
+        // is exhaustive: reading an unlisted variable does not return
+        // undefined, it throws NotCapable. Leaving PATH out of it is what
+        // made the AI assistant fail in every packaged build from 2.0.0 to
+        // 2.1.2 while working under `deno task dev`, which runs with -A.
+        // PATHEXT is the Windows half of the same lookup.
+        "PATH",
+        "PATHEXT"
       ],
       "run": [
         "xdg-open",
@@ -168,10 +176,23 @@
         "wl-paste",
         "xclip",
         "dbus-send",
+        // How each desktop reports its light/dark preference. These are read
+        // by detectSystemTheme(); without them every probe fails silently and
+        // the app reports "light" on a dark desktop.
+        "gsettings",
+        "kreadconfig5",
+        "defaults",
+        "reg",
         "node",
         "npx",
         "deno",
         "bun",
+        // Two different adapters put Claude Code on ACP, and they install
+        // different binaries: @agentclientprotocol/claude-agent-acp provides
+        // claude-agent-acp, @zed-industries/claude-code-acp provides
+        // claude-code-acp. Allowing only the second meant the adapter the
+        // settings screen tells people to install could not be launched.
+        "claude-agent-acp",
         "claude-code-acp",
         "gemini",
         "opencode",

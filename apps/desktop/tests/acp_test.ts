@@ -25,6 +25,7 @@ import {
   PERMITTED_COMMANDS,
 } from "../src/acp/catalog.ts";
 import { PROCEDURE_NAMES } from "../src/rpc/protocol.ts";
+import { readPermissionManifest } from "./manifest.ts";
 import { AcpService } from "../src/acp/service.ts";
 
 /**
@@ -38,10 +39,8 @@ Deno.test("every launcher the catalog can run is permitted by the manifest", asy
   // The manifest is the real enforcement; the constant in catalog.ts is a
   // second copy. Drift between them would mean a launch failing at runtime
   // with a permission error no user could interpret, so it fails here first.
-  const manifest = JSON.parse(
-    await Deno.readTextFile(new URL("../../../deno.json", import.meta.url)),
-  ) as { permissions: { app: { run: string[] } } };
-  const allowed = new Set(manifest.permissions.app.run);
+  const manifest = await readPermissionManifest();
+  const allowed = new Set(manifest.run);
 
   for (const command of PERMITTED_COMMANDS) {
     assert(

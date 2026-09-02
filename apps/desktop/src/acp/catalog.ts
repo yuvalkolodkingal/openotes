@@ -44,7 +44,14 @@ export interface AgentCatalogEntry {
    * so a globally installed agent is preferred over fetching it with npx.
    */
   launchers: { command: string; args: string[] }[];
-  /** Binaries to probe when reporting whether the agent is installed. */
+  /**
+   * Binaries that mean this agent is actually installed.
+   *
+   * Deliberately not the same as `launchers`: the npx fallback resolves on
+   * any machine with Node, so treating a launcher as evidence reported every
+   * agent as installed and pinned consent to /usr/bin/npx -- a binary that
+   * can run anything, which is not what the user agreed to.
+   */
   detect: string[];
   /** Where to get it, shown when nothing is installed. */
   install?: { npm?: string; docs: string };
@@ -61,10 +68,14 @@ export const AGENT_CATALOG: readonly AgentCatalogEntry[] = [
     name: "Claude Code",
     summary: "Anthropic's agent. Uses your Claude subscription.",
     launchers: [
+      // The package below installs `claude-agent-acp`; `claude-code-acp` is
+      // the binary of the other adapter, @zed-industries/claude-code-acp.
+      // Both are real and people have both, so both are tried.
+      { command: "claude-agent-acp", args: [] },
       { command: "claude-code-acp", args: [] },
       { command: "npx", args: ["-y", "@agentclientprotocol/claude-agent-acp"] },
     ],
-    detect: ["claude-code-acp", "claude"],
+    detect: ["claude-agent-acp", "claude-code-acp"],
     install: {
       npm: "@agentclientprotocol/claude-agent-acp",
       docs: "https://github.com/agentclientprotocol/claude-agent-acp",
@@ -139,6 +150,7 @@ export const PERMITTED_COMMANDS: readonly string[] = [
   "npx",
   "deno",
   "bun",
+  "claude-agent-acp",
   "claude-code-acp",
   "gemini",
   "opencode",
