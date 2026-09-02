@@ -1,6 +1,7 @@
 # Syncing to a cloud drive
 
-Openotes syncs to Google Drive, Dropbox and OneDrive, as well as to a WebDAV
+Openotes syncs to Google Drive, Dropbox and OneDrive directly, to Koofr,
+pCloud and Nextcloud through WebDAV, as well as to any other WebDAV
 server. This describes what it writes, what it can promise, and what it cannot.
 
 ---
@@ -106,6 +107,26 @@ does not exist, and overwriting only if nobody else changed it first.
 | **OneDrive**     | yes, native                        | yes, native (`if-match`) | delta link               |
 | **WebDAV**       | emulated (probe + `If-None-Match`) | yes (`If-Match`)         | listing                  |
 | **Google Drive** | **no**                             | **no**                   | change feed              |
+
+### Koofr, pCloud and Nextcloud go through WebDAV
+
+These publish a WebDAV endpoint rather than an API of their own, so they use
+the WebDAV row above — the same code path, with the same real-server
+integration suite behind it, rather than a second implementation of
+create-if-absent and compare-and-swap for each. The connection form offers
+them as presets: picking one fills in the server URL and says which account
+details that provider actually wants.
+
+| Provider | Server | Account |
+|---|---|---|
+| Koofr | `https://app.koofr.net/dav/Koofr` | Email address, and an **app password** — the account password is refused |
+| pCloud (US) | `https://webdav.pcloud.com` | Email address and account password |
+| pCloud (EU) | `https://ewebdav.pcloud.com` | As above; EU accounts are rejected by the US host rather than redirected |
+| Nextcloud / ownCloud | `https://<server>/remote.php/dav/files/<user>` | Username, and an app password if two-factor is on |
+
+A preset only fills the server URL in. Any WebDAV server still works by typing
+its URL, and nothing here is required.
+
 
 ### Google Drive is the weakest, and here is exactly why
 

@@ -50,6 +50,7 @@ import {
   driveClient,
   isDriveProvider,
 } from "../sync/drive-providers.ts";
+import { WEBDAV_PRESETS } from "../sync/webdav-presets.ts";
 import { driveSecretKey, driveTokenKey } from "../sync/service.ts";
 import { beginAuthorization } from "../security/oauth.ts";
 import type { SyncProvider } from "../native/settings.ts";
@@ -813,6 +814,10 @@ export function createHandlers(): Record<string, Handler> {
      * registers no OAuth application, so every user brings their own —
      * which is also why a drive can only ever see files Openotes created.
      */
+    // Server presets for the drives that speak WebDAV rather than having an
+    // API of their own. Static data; no account is touched by asking.
+    "webdav.presets": () => WEBDAV_PRESETS,
+
     "webdav.driveSetup": (input) => {
       if (!isDriveProvider(input?.provider)) {
         throw new Error("Unknown drive provider.");

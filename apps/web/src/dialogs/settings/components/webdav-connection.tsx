@@ -43,7 +43,8 @@ import { strings } from "@notesnook/intl";
 import {
   useStore as useWebDavStore,
   store as webDavStore,
-  TestConnectionResult
+  TestConnectionResult,
+  type WebDavPreset
 } from "../../../stores/webdav-store";
 import { WebDavStatusPill } from "../../../components/status-bar/webdav-sync-status";
 
@@ -99,10 +100,38 @@ function ConnectionFields(props: WebDavConnectionFormProps) {
   const [isSaving, setIsSaving] = useState(false);
   const [testResult, setTestResult] = useState<TestConnectionResult>();
   const [error, setError] = useState<string>();
+  const [presets, setPresets] = useState<WebDavPreset[]>([]);
+  const [activePreset, setActivePreset] = useState<WebDavPreset>();
 
   useEffect(() => {
     if (config) setAllowInsecureHttp(config.allowInsecureHttp);
   }, [config]);
+
+  useEffect(() => {
+    // Static data from the runtime; a failure here just means no shortcuts,
+    // which is why it does not surface as an error.
+    void webDavStore
+      .presets()
+      .then(setPresets)
+      .catch(() => setPresets([]));
+  }, []);
+
+  /**
+   * Fill the form in for a known provider.
+   *
+   * Only the server URL is written: the username and password are the user's,
+   * and guessing at them would be worse than the hint shown underneath.
+   */
+  const applyPreset = useCallback((preset: WebDavPreset) => {
+    setActivePreset(preset);
+    const form = formRef.current;
+    if (!form) return;
+    const field = form.elements.namedItem("serverUrl");
+    if (field instanceof HTMLInputElement) {
+      field.value = preset.serverUrl;
+      field.focus();
+    }
+  }, []);
 
   const validate = useCallback(
     (values: FormValues) => {
@@ -235,6 +264,35 @@ function ConnectionFields(props: WebDavConnectionFormProps) {
       style={{ width: "100%" }}
       data-test-id="webdav-connection-form"
     >
+      {presets.length > 0 ? (
+        <Flex sx={{ alignItems: "center", gap: 1, mb: 1, flexWrap: "wrap" }}>
+          <Text variant="subBody" sx={{ color: "paragraph-secondary" }}>
+            Using a known provider?
+          </Text>
+          {presets.map((preset) => (
+            <Button
+              key={preset.id}
+              type="button"
+              variant="secondary"
+              sx={{ py: "2px", px: 1, fontSize: "subBody" }}
+              onClick={() => applyPreset(preset)}
+            >
+              {preset.label}
+            </Button>
+          ))}
+        </Flex>
+      ) : null}
+
+      {activePreset ? (
+        <Text
+          variant="subBody"
+          sx={{ color: "paragraph-secondary", mb: 1, whiteSpace: "pre-wrap" }}
+        >
+          {`Username: ${activePreset.usernameHint}\nPassword: ${activePreset.passwordHint}`}
+          {activePreset.setupUrl ? ` (${activePreset.setupUrl})` : ""}
+        </Text>
+      ) : null}
+
       <Field
         id="webdav-serverUrl"
         name="serverUrl"
