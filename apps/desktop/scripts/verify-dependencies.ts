@@ -93,6 +93,52 @@ const FORBIDDEN_PACKAGES = [
 const FORBIDDEN_SCOPES = ["@electron", "@electron-forge", "@react-native"];
 
 /**
+ * The one place the mobile toolchain is allowed: the phone app itself.
+ *
+ * apps/mobile is an Expo application by definition, so React Native, Expo
+ * and Metro belong there and nowhere else. The desktop must still not pick
+ * any of it up, which is what the rest of this guard keeps checking -- a
+ * finding under this directory is dropped only when it is a *mobile*
+ * reference; Electron is refused everywhere.
+ */
+const MOBILE_ROOT = "apps/mobile";
+
+const MOBILE_REFERENCES = [
+  "react-native",
+  "react-native-cli",
+  "metro",
+  "metro-react-native-babel-preset",
+  "@react-native-community/cli",
+  "@react-native",
+  "detox",
+  "eslint-plugin-detox",
+  "eslint-plugin-react-native",
+  "jetifier",
+  "expo",
+  "expo-cli",
+  "@notesnook/editor-mobile",
+  "@react-native-async-storage/async-storage",
+  "react-native-webview",
+  "pod install",
+  "gradlew",
+  "fastlane",
+  "xcodebuild",
+];
+
+function isMobileFinding(finding: Finding): boolean {
+  const lower = finding.detail.toLowerCase();
+  return MOBILE_REFERENCES.some((reference) => {
+    const escaped = reference.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    return new RegExp(`(^|[^a-z0-9@/-])${escaped}([^a-z0-9-]|$)`).test(lower);
+  });
+}
+
+function underMobileRoot(relativePath: string): boolean {
+  const normalised = relativePath.replaceAll("\\", "/");
+  return normalised === MOBILE_ROOT || normalised.startsWith(`${MOBILE_ROOT}/`);
+}
+
+/**
  * Command words that must not appear in an npm `scripts` entry or a task.
  * Matched as whole words so "electron-builder" in a sentence inside a
  * description field is ignored — only script bodies are searched.
@@ -449,6 +495,7 @@ export async function verifyDependencies(root = ROOT): Promise<Finding[]> {
   for await (const path of walk(root)) {
     const name = path.slice(path.lastIndexOf(SEPARATOR) + 1);
     const relativePath = relative(root, path);
+    const before = findings.length;
 
     if (name === "package.json") {
       manifests++;
@@ -489,6 +536,11 @@ export async function verifyDependencies(root = ROOT): Promise<Finding[]> {
         });
       }
     }
+
+    if (underMobileRoot(relativePath)) {
+      const kept = findings.splice(before).filter((f) => !isMobileFinding(f));
+      findings.push(...kept);
+    }
   }
 
   console.log(
@@ -520,7 +572,8 @@ if (import.meta.main) {
   if (findings.length === 0) {
     console.log(
       "\nOK — no Electron, electron-builder, electron-updater, electron-trpc,\n" +
-        "react-native or mobile build tooling in the dependency tree.",
+        "react-native or mobile build tooling in the dependency tree\n" +
+        `(the mobile toolchain is allowed under ${MOBILE_ROOT} only).`,
     );
     Deno.exit(0);
   }

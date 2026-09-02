@@ -261,6 +261,15 @@ is a statement about what one device last saw, so a shared one would need
 locking and would itself conflict. Nothing is lost by that, because note
 identity travels in each file's front-matter `id`.
 
+**A database as the store.** `packages/sync-sql` implements the same seam
+over one Postgres table, with the two primitives as single statements: the
+primary key makes `putNew` atomic and `UPDATE … WHERE version = $expected` is
+`putUpdate`. Three transports share it — a socket (`npm:postgres`), Neon's
+SQL-over-HTTPS endpoint, and Supabase's REST API — and the last two need
+nothing but `fetch`, which is what lets the phone app use them.
+`apps/desktop/src/sync/sql-providers.ts` creates the database on Neon or
+Supabase through their management APIs. See [DATABASE.md](DATABASE.md).
+
 **Shared by both.** `apps/desktop/src/sync/store-adapter.ts` is the only place
 that knows Notesnook's schema; it reuses the dirty/tombstone bookkeeping
 `@notesnook/core` already maintains, so "what changed locally" is a query
@@ -324,8 +333,12 @@ packages/
   common/             shared helpers and the capability module
   crypto/  sodium/    libsodium wrappers (upstream, audited)
   editor/             TipTap editor
-  sync-webdav/        the WebDAV sync + backup engine
+  sync-webdav/        the journal sync + backup engine
+  sync-sql/           a Postgres table as RemoteStorage (socket, Neon, Supabase)
+  sync-crypto-js/     the engine's cryptography without libsodium, for the phone
   theme/  ui/  intl/  logger/  streamable-fs/
+
+apps/mobile/          the Expo phone app: the packages above, imported by path
 
 packaging/            flatpak manifest, PKGBUILD, .desktop, man page
 .github/workflows/    test, build, release
@@ -364,7 +377,7 @@ a journal entry to be overwritten.
 | OS keychain via Electron `safeStorage` | Encrypted credential file | No reliable cross-platform Deno keychain binding; the renderer's existing fallback path covers the rest |
 | Chromium spellcheck | Not present | It was a Chromium session feature with no webview equivalent |
 | Monograph publishing, theme marketplace | Not present | Both require Notesnook-operated infrastructure |
-| Mobile apps | Not present | Desktop-only fork |
+| Mobile apps | A small Expo app that syncs to Neon or Supabase | Shares the desktop's engine and crypto by import; no attachments, no vault |
 
 ---
 

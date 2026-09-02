@@ -1,0 +1,30 @@
+{
+  "name": "@openotes/mobile",
+  "version": "2.2.1",
+  "private": true,
+  "description": "Openotes for phones: syncs to the same Neon or Supabase database as the desktop.",
+  "main": "index.js",
+  "license": "GPL-3.0-or-later",
+  "scripts": {
+    "start": "expo start",
+    "android": "expo run:android",
+    "ios": "expo run:ios",
+    "typecheck": "tsc --noEmit -p tsconfig.json"
+  },
+  "dependencies": {
+    "@noble/ciphers": "^2.3.0",
+    "@noble/hashes": "^2.3.0",
+    "expo": "~57.0.0",
+    "expo-secure-store": "~57.0.3",
+    "expo-sqlite": "~57.0.2",
+    "expo-status-bar": "~57.0.1",
+    "react": "19.2.3",
+    "react-native": "0.86.3",
+    "react-native-get-random-values": "~1.11.0",
+    "react-native-safe-area-context": "~5.7.0"
+  },
+  "devDependencies": {
+    "@types/react": "^19.2.18",
+    "typescript": "~5.9.0"
+  }
+}

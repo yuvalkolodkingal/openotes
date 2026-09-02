@@ -706,6 +706,12 @@ async function produceAppImage(
   // a file manager has the barest PATH of all.
   const appRun = join(extracted, "AppRun");
   const wrapped = join(extracted, "AppRun.wrapped");
+  if (!(await exists(appRun))) {
+    throw new Error(
+      `deno desktop's AppImage has no AppRun in ${extracted}; the layout ` +
+        `changed and the launcher wrapper needs updating.`,
+    );
+  }
   await Deno.rename(appRun, wrapped);
   await Deno.writeTextFile(
     appRun,

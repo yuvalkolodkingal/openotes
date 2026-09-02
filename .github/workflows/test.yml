@@ -92,7 +92,7 @@ jobs:
         run: deno task test
 
   forbidden-dependencies:
-    name: No Electron, no mobile toolchain
+    name: No Electron; mobile toolchain only under apps/mobile
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
@@ -175,6 +175,33 @@ jobs:
       # for a passing one.
       - name: WebDAV integration suite
         run: deno task test:webdav --require-server --no-download
+
+  # -------------------------------------------------------------------------
+  # The phone app. It cannot be run here, but it can be compiled: every
+  # shared package it imports by path (the sync engine, the SQL backend, the
+  # pure-JS crypto, the Markdown converter) is type-checked against React
+  # Native's types, which is where an incompatible import shows up first.
+  # -------------------------------------------------------------------------
+  mobile-typecheck:
+    name: Mobile app type-checks
+    runs-on: ubuntu-24.04
+    defaults:
+      run:
+        working-directory: apps/mobile
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: apps/mobile/package-lock.json
+
+      - name: Install the mobile toolchain
+        run: npm ci --ignore-scripts --no-audit --no-fund
+
+      - name: tsc --noEmit
+        run: npm run typecheck
 
   # -------------------------------------------------------------------------
   # The SQL backend against a real Postgres, not the recording fakes. The

@@ -16,7 +16,7 @@ be mechanical.
 | Upstream repository      | `streetwriters/notesnook`          |
 | Base revision            | `09a0c30` (merge of release/3.4.7) |
 | Base version             | 3.4.7                              |
-| Fork version             | 2.2.0                              |
+| Fork version             | 2.2.1                              |
 | Fork repository          | `yuvalkolodkingal/openotes`        |
 | Last merge from upstream | Initial fork point                 |
 
@@ -48,7 +48,7 @@ renaming is a licensing and honesty requirement, not branding.
 
 | Removed                                                                                           | Reason                                            | Anything depending on it?                   |
 | ------------------------------------------------------------------------------------------------- | ------------------------------------------------- | ------------------------------------------- |
-| `apps/mobile`                                                                                     | Desktop-only fork                                 | No                                          |
+| `apps/mobile`                                                                                     | Replaced in 2.2.1 by a small Expo app of the fork's own | No (rewritten)                        |
 | `packages/editor-mobile`                                                                          | Mobile editor wrapper                             | No                                          |
 | `apps/monograph`                                                                                  | Public note publishing; requires Notesnook Cloud  | No                                          |
 | `apps/vericrypt`                                                                                  | Unrelated tool                                    | No                                          |
@@ -195,6 +195,30 @@ diff smaller.** A smaller diff is not worth a worse application.
 ---
 
 ## Fork changelog
+
+### 2.2.1 — the agents launch, and notes reach a database and a phone
+
+- Fixed why no agent worked outside a terminal. On Windows an npm-installed
+  agent is a `.cmd` shim, which the runtime detected and could not start; the
+  shim's script is now run under `node`. On Linux the packaged builds start
+  through a launcher that extends `PATH` before the runtime binds its
+  allowlist, so agents under `nvm` or `~/.local/bin` are launchable from a
+  desktop launcher. Two catalog entries named commands that do not exist
+  (`codex acp`, `antigravity --acp`); they are `codex-acp` and `agy --acp`.
+- Made Claude's sign-in reachable: the adapter only lists it for a client
+  that understands terminal sign-ins, and refuses `authenticate` for it. The
+  command is shown, run where permitted, its page opened, the agent restarted.
+- A live model picker in the panel, through `session/set_model`, with the
+  launch-time picker as the fallback.
+- A Postgres database as a sync backend (`packages/sync-sql`): a plain
+  Postgres over a socket, Neon over its HTTPS endpoint, Supabase over REST,
+  with real create-if-absent and compare-and-swap. Neon (API key) and
+  Supabase (your own OAuth app, or a token) create the project and the table.
+- A second device now adopts the repository's salt instead of deriving a
+  different key and failing the passphrase check.
+- A phone app (`apps/mobile`, Expo) that syncs to Neon or Supabase with the
+  desktop's own engine, conflict rules and Markdown converter, on a pure-JS
+  build of the cryptography that is checked against libsodium in the tests.
 
 ### 2.2.0 — the assistant actually works
 

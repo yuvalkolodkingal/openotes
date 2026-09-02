@@ -1,0 +1,20 @@
+{
+  "expo": {
+    "name": "Openotes",
+    "slug": "openotes",
+    "version": "2.2.1",
+    "orientation": "portrait",
+    "scheme": "openotes",
+    "userInterfaceStyle": "automatic",
+    "newArchEnabled": true,
+    "ios": {
+      "bundleIdentifier": "org.openotes.mobile",
+      "supportsTablet": true
+    },
+    "android": {
+      "package": "org.openotes.mobile",
+      "edgeToEdgeEnabled": true
+    },
+    "plugins": ["expo-sqlite", "expo-secure-store"]
+  }
+}

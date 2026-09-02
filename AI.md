@@ -100,6 +100,23 @@ is usually the only thing that explains a bad install.
 fix: add that directory to your `PATH` and restart Openotes, or start Openotes
 from a terminal that already has it.
 
+Since 2.2.1 the packaged Linux builds (AppImage, .deb, .rpm, Arch) start
+through a launcher that extends `PATH` the way a login shell would — the
+usual Node version managers, `~/.local/bin`, Homebrew, and whatever your own
+shell reports — so an agent installed with `npm install -g` is found from a
+desktop launcher, not only from a terminal. The flatpak cannot see programs
+on the host at all.
+
+**Every agent fails on Windows with "program not found".** Fixed in 2.2.1.
+An agent installed with npm is a `.cmd` shim, which the runtime could detect
+but not start. Openotes now runs the script the shim points at under `node`.
+
+**Claude Code says it needs you to sign in.** The adapter cannot complete its
+subscription login over the protocol; it describes a command instead.
+Openotes shows it, runs it when it can, opens the page it prints in your
+browser, and restarts the agent once you are done. If it cannot run the
+command, run it yourself in a terminal and connect again.
+
 It cannot simply launch the binary where it lies. Openotes is compiled with a
 fixed list of programs it may run, and the runtime binds that list to the
 binaries found on `PATH` when it starts; a program at any other path is
@@ -117,3 +134,17 @@ older than this build. Updating either one resolves it.
 **A sign-in that never completes.** The browser flow belongs to the agent, not
 to Openotes. Running the agent's own CLI once, directly in a terminal, is the
 quickest way to see what it is asking for.
+
+---
+
+## Choosing a model
+
+Two kinds of choice exist, and the panel shows whichever the agent offers.
+
+An agent that lists its models with the session — Claude Code does — gets a
+picker in the panel header that switches live, through the protocol's
+`session/set_model`. An agent that takes a model only at launch — Gemini's
+`--model`, Claude's `ANTHROPIC_MODEL` — gets the same picker, and choosing
+restarts the agent, because that is the only way the choice can take effect.
+The control says so. An agent that offers neither gets no picker: a control
+that silently does nothing is worse than none.

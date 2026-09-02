@@ -109,6 +109,11 @@ does not exist, and overwriting only if nobody else changed it first.
 | **Google Drive** | **no**                             | **no**                   | change feed              |
 | **S3** and compatible | yes (`If-None-Match: *`)      | yes (`If-Match`)         | none — listing           |
 | **Box**          | yes (409 on a taken name)          | yes (`If-Match`)         | none — listing           |
+| **Postgres, Neon, Supabase** | yes (primary key)      | yes (`WHERE version = …`) | none — listing          |
+
+A Postgres database — yours, or one Neon or Supabase creates on request — has
+both primitives as ordinary features and is the one backend the phone app can
+reach. It has its own page: [DATABASE.md](DATABASE.md).
 
 ### S3, and the many services that speak it
 

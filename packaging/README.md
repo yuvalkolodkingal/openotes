@@ -28,6 +28,10 @@ Openotes-<version>-linux-x86_64.tar.gz     the release asset name
     │   ├── 16x16.png … 512x512.png  copied from apps/desktop/assets/icons
     ├── openotes.desktop             copied from packaging/linux
     ├── openotes.1                   copied from packaging/linux
+    ├── openotes-launcher.sh         the PATH-extending launcher template
+    │                                (see below); recipes fill in @PRELUDE@
+    │                                and @TARGET@ and install it as the
+    │                                command on PATH
     ├── LICENSE                      copied from the repository root
     └── UPSTREAM.md                  copied from the repository root
 ```
@@ -50,6 +54,22 @@ Three properties of that layout are load-bearing:
   everything together under a private lib directory and put a four-line `sh`
   launcher on `PATH` that pins the two variables, so an unset variable can
   never make an installed copy load a stale UI.
+
+## The launcher
+
+Every distro package and the AppImage start through
+`linux/openotes-launcher.sh`. The AI assistant launches agents the user
+installed, and the runtime only permits programs it found on `PATH` when it
+started; an application started from a desktop launcher gets the session's
+`PATH`, not a login shell's, so agents under `nvm`, `volta` or `~/.local/bin`
+were unlaunchable. The wrapper adds those directories — and the `PATH` the
+user's own shell reports, when it answers within three seconds — before
+`exec`ing the binary. `OPENOTES_NO_SHELL_PATH=1` skips asking the shell.
+
+The .deb and .rpm install it as `/usr/bin/openotes` with the resource
+directories pinned; the AppImage installs it as `AppRun` in front of Deno's
+own; the PKGBUILD fills it in from the tarball. The flatpak keeps its own
+four-line launcher, since host programs are not visible inside the sandbox.
 
 ## Files
 

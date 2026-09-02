@@ -353,6 +353,36 @@ not appear in Openotes' OAuth application.
 
 ---
 
+## 11a. Database backends and the phone
+
+A Postgres database — a plain one, Neon or Supabase — holds the same
+encrypted journal a WebDAV server does, under a path prefix in one table. The
+host sees object counts, sizes and timing, never content, titles or structure.
+
+What is stored, and where:
+
+| Secret | Where | Note |
+|---|---|---|
+| Connection string (password included) | Encrypted credential store | Neon and plain Postgres |
+| Supabase service key | Encrypted credential store | Bypasses row-level security by design; the table has RLS on with no policies, so the public anon key cannot reach it |
+| Neon API key, Supabase sign-in | Encrypted credential store | Management credentials: they can create and list projects. Kept so setup is not repeated; removed on disconnect |
+| Supabase OAuth client secret | Encrypted credential store | Your own application's; needed to refresh the sign-in |
+
+Neon's HTTPS endpoint carries the connection string in a request header over
+TLS, the same exposure its own driver has. Supabase's REST API carries the
+service key the same way.
+
+**The phone.** The mobile app keeps the connection and the sync passphrase in
+the OS keychain (iOS) or keystore (Android), and the decrypted notes in its
+own SQLite database, which the platform protects as any app's data. It does
+not carry the vault password, so vault notes are unreadable there, and it
+does not sync attachments. Its cryptography is a pure-JavaScript build of the
+same primitives, checked against libsodium in `packages/sync-crypto-js/tests`;
+key derivation there is the same Argon2i with the same parameters, so a
+passphrase is exactly as strong on the phone as on the desktop.
+
+---
+
 ## 12. Not impersonating Notesnook
 
 This fork does not spoof, forge or otherwise claim a Notesnook Pro

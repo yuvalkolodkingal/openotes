@@ -21,10 +21,12 @@ software — and changes what sits underneath:
 
 - **No Notesnook account.** Nothing to sign up for. The application opens
   straight into a local vault.
-- **Your server, your drive, or neither.** Synchronization goes to a WebDAV
-  server you control — Nextcloud, ownCloud, Apache, a Raspberry Pi — or to
-  Google Drive, Dropbox or OneDrive. Or skip it entirely and stay on one
-  machine. See [DRIVES.md](DRIVES.md).
+- **Your server, your database, your drive, or none.** Synchronization goes
+  to a WebDAV server you control — Nextcloud, ownCloud, Apache, a Raspberry Pi
+  — to a Postgres database (Neon and Supabase both have a free tier, and
+  Openotes can create the database for you), or to Google Drive, Dropbox or
+  OneDrive. Or skip it entirely and stay on one machine. See
+  [DATABASE.md](DATABASE.md) and [DRIVES.md](DRIVES.md).
 - **A readable folder, or an unreadable one — your choice.** A cloud drive gets
   one Markdown file per note by default, so the folder opens on your phone and
   survives Openotes itself. Turn on encryption and the same folder becomes
@@ -53,7 +55,9 @@ Being clear about this matters more than a feature list:
 - **Not a way to get Notesnook Pro for free.** The hosted subscription model is
   _removed_, not circumvented. This application never contacts Notesnook's
   servers and never claims a subscription it does not have.
-- **Not mobile.** Desktop only — Windows and Linux.
+- **Not a mobile-first app.** The desktop is Windows and Linux. There is a
+  phone app (`apps/mobile`) that syncs to the same Neon or Supabase database
+  and edits notes as Markdown; it does not carry attachments or the vault.
 - **Not a hosted web app.** There is nothing to deploy.
 - **Not a way to recover a lost passphrase.** Encryption without a back door
   means exactly that. Losing your sync passphrase means losing access to the
@@ -93,20 +97,20 @@ Openotes uses.
 
 ```bash
 # AppImage — works anywhere
-chmod +x Openotes-2.2.0-linux-x86_64.AppImage
-./Openotes-2.2.0-linux-x86_64.AppImage
+chmod +x Openotes-2.2.1-linux-x86_64.AppImage
+./Openotes-2.2.1-linux-x86_64.AppImage
 
 # Debian / Ubuntu
-sudo apt install ./Openotes-2.2.0-linux-x86_64.deb
+sudo apt install ./Openotes-2.2.1-linux-x86_64.deb
 
 # Fedora / RHEL
-sudo dnf install ./Openotes-2.2.0-linux-x86_64.rpm
+sudo dnf install ./Openotes-2.2.1-linux-x86_64.rpm
 
 # Arch / Manjaro
-sudo pacman -U openotes-2.2.0-1-x86_64.pkg.tar.zst
+sudo pacman -U openotes-2.2.1-1-x86_64.pkg.tar.zst
 
 # Flatpak
-flatpak install Openotes-2.2.0-linux-x86_64.flatpak
+flatpak install Openotes-2.2.1-linux-x86_64.flatpak
 ```
 
 Linux needs **WebKitGTK** (`libwebkit2gtk-4.1-0` on Debian and Ubuntu,
@@ -143,6 +147,17 @@ Drive uses the `drive.file` scope, so Openotes can only see files it created.
 
 [DRIVES.md](DRIVES.md) covers what each provider can actually guarantee, and why
 Google Drive is the weakest of the three.
+
+### Connecting a database
+
+`Settings → Synchronization`, pick **Neon** or **Supabase** and let Openotes
+create the project: a Neon API key, or a Supabase sign-in with your own OAuth
+app (or a personal access token), and one click. Or pick **PostgreSQL** and
+paste a connection string to a database you run. The table is created for
+you, and the database only ever holds ciphertext.
+
+A phone running the Openotes mobile app connects to the same Neon or Supabase
+project. [DATABASE.md](DATABASE.md) has the details.
 
 ### Connecting WebDAV
 
@@ -227,6 +242,7 @@ Full instructions, including packaging, are in [BUILDING.md](BUILDING.md).
 | [BUILDING.md](BUILDING.md)           | Development and builds, entirely in Deno         |
 | [ARCHITECTURE.md](ARCHITECTURE.md)   | How it is put together, and why                  |
 | [WEBDAV.md](WEBDAV.md)               | The sync protocol, in reimplementable detail     |
+| [DATABASE.md](DATABASE.md)           | Syncing through Postgres, Neon or Supabase; the phone app |
 | [DRIVES.md](DRIVES.md)               | Syncing to Google Drive, Dropbox or OneDrive     |
 | [AI.md](AI.md)                       | Hosting an ACP agent                             |
 | [MCP.md](MCP.md)                     | Letting an MCP client connect to Openotes        |

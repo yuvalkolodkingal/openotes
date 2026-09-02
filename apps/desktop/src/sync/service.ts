@@ -202,12 +202,7 @@ export class SyncService {
       ? await this.sqlStorage(config)
       : await this.driveStorage(config);
 
-    // The salt lives in the remote protocol.json so a second device with
-    // the same passphrase derives the same keys. On a fresh repository we
-    // generate one and it is written during initialization.
-    const knownSalt = await this.options.store.getMeta("webdav.salt");
-    const salt = knownSalt ?? (await this.crypto.generateSalt());
-    if (!knownSalt) await this.options.store.setMeta("webdav.salt", salt);
+    const salt = await this.resolveSalt(storage);
     this.masterKey = await this.crypto.deriveMasterKey(passphrase, salt);
 
     this.queue = new OutgoingQueue(
@@ -241,6 +236,31 @@ export class SyncService {
 
     this.engine = engine;
     return engine;
+  }
+
+  /**
+   * The salt the master key is derived with.
+   *
+   * It lives in the remote protocol.json so that every device with the same
+   * passphrase derives the same keys, and it is not a secret. The remote one
+   * is therefore authoritative: a device joining a repository another device
+   * created adopts its salt, rather than deriving a different key from a
+   * salt of its own and failing the key check with "wrong passphrase" -- which
+   * is exactly what a second device did before this. Only a repository that
+   * does not exist yet gets a fresh salt, and initialization writes it.
+   */
+  private async resolveSalt(storage: RemoteStorage): Promise<string> {
+    const store = this.options.store;
+    const known = await store.getMeta("webdav.salt");
+    const remote = await readRemoteSalt(storage);
+    if (remote && remote !== known) {
+      await store.setMeta("webdav.salt", remote);
+      return remote;
+    }
+    if (known) return known;
+    const fresh = await this.crypto.generateSalt();
+    await store.setMeta("webdav.salt", fresh);
+    return fresh;
   }
 
   /** The WebDAV path, unchanged: a client wrapped in a RemoteStorage. */
@@ -351,8 +371,9 @@ export class SyncService {
       });
       close = built.close;
 
-      const knownSalt = await this.options.store.getMeta("webdav.salt");
-      const salt = knownSalt ?? (await this.crypto.generateSalt());
+      const salt = (await readRemoteSalt(built.storage)) ??
+        (await this.options.store.getMeta("webdav.salt")) ??
+        (await this.crypto.generateSalt());
       const masterKey = await this.crypto.deriveMasterKey(passphrase, salt);
       const probe = new SyncEngine({
         storage: built.storage,
@@ -521,15 +542,17 @@ export class SyncService {
         allowInsecureHttp: candidate.allowInsecureHttp ?? false,
       });
 
-      const knownSalt = await this.options.store.getMeta("webdav.salt");
-      const salt = knownSalt ?? (await this.crypto.generateSalt());
+      const storage = new WebDavRemoteStorage(client);
+      const salt = (await readRemoteSalt(storage)) ??
+        (await this.options.store.getMeta("webdav.salt")) ??
+        (await this.crypto.generateSalt());
       const masterKey = await this.crypto.deriveMasterKey(
         candidate.passphrase,
         salt,
       );
 
       const probe = new SyncEngine({
-        storage: new WebDavRemoteStorage(client),
+        storage,
         crypto: this.crypto,
         store: this.options.store,
         queue: new OutgoingQueue(
@@ -691,6 +714,28 @@ export class SyncService {
     this.periodicTimer = undefined;
     this.scheduler?.cancel();
     this.scheduler = undefined;
+  }
+}
+
+/**
+ * The salt recorded in a remote repository's protocol.json, or undefined
+ * when there is no repository yet. Anything unreadable is left to the
+ * engine to report properly; this only answers "which salt".
+ */
+export async function readRemoteSalt(
+  storage: RemoteStorage,
+): Promise<string | undefined> {
+  try {
+    const raw = await storage.getIfExists("protocol.json");
+    if (!raw) return undefined;
+    const parsed = JSON.parse(new TextDecoder().decode(raw)) as {
+      salt?: unknown;
+    };
+    return typeof parsed.salt === "string" && parsed.salt
+      ? parsed.salt
+      : undefined;
+  } catch {
+    return undefined;
   }
 }
 

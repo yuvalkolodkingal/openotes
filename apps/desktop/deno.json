@@ -1,6 +1,6 @@
 {
   "name": "@openotes/desktop",
-  "version": "2.2.0",
+  "version": "2.2.1",
   "exports": {
     ".": "./main.ts",
     "./shared": "./src/shared.ts"

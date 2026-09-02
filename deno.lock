@@ -25,6 +25,8 @@
     "jsr:@std/path@^1.1.5": "1.1.6",
     "jsr:@std/path@^1.1.6": "1.1.6",
     "jsr:@std/testing@^1.0.9": "1.0.20",
+    "npm:@noble/ciphers@2.3.0": "2.3.0",
+    "npm:@noble/hashes@2.3.0": "2.3.0",
     "npm:@types/node@^18.7.13": "18.19.130",
     "npm:@typescript/native-preview@^7.0.0-dev.20251006.1": "7.0.0-dev.20260707.2",
     "npm:cross-env@^7.0.3": "7.0.3",
@@ -334,6 +336,12 @@
         "@emnapi/runtime",
         "@tybys/wasm-util"
       ]
+    },
+    "@noble/ciphers@2.3.0": {
+      "integrity": "sha512-Clu/xdfgVTf9o7ngLOURaxePwR0j8sjclKEtVij10/jGulwFsPWCvvRgG/XjUVf8Nei+jLG6uwyXzUTGY1DQrw=="
+    },
+    "@noble/hashes@2.3.0": {
+      "integrity": "sha512-oN+QwyX7VSHotibwubG3kpzbwKrfnyR6OOO+3Nk/53ADL7FmgHHz4TgrbaYKvvOw09u6QTx0oiH1cNCIOuN0CQ=="
     },
     "@nodelib/fs.scandir@2.1.5": {
       "integrity": "sha512-vq24Bq3ym5HEQm2NKCr3yXDwjc7vTsEThRDnkp2DK9p1uqLR+DHurm/NOTo0KG7HYHU7eppKZj3MyqYuMBf62g==",
@@ -1909,6 +1917,8 @@
       "jsr:@std/fs@^1.0.9",
       "jsr:@std/path@^1.0.8",
       "jsr:@std/testing@^1.0.9",
+      "npm:@noble/ciphers@2.3.0",
+      "npm:@noble/hashes@2.3.0",
       "npm:postgres@^3.4.9"
     ],
     "packageJson": {
