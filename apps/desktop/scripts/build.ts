@@ -392,7 +392,15 @@ async function denoDesktop({ target, output, nativeStage }: CompileOptions) {
   await ensureDir(join(output, ".."));
   await run(Deno.execPath(), [
     "desktop",
-    "-A",
+    // The permission set from deno.json, not -A. This is what makes the
+    // subprocess allowlist SECURITY.md describes an actual boundary rather
+    // than a description of one: compiled with -A, the shipped application
+    // could run anything, and permissions.app was documentation nothing
+    // enforced. The manifest tests keep the set honest about what the code
+    // needs; the smoke test proves the application still starts under it.
+    // The value attaches with "=": passed as a separate argument, "app" is
+    // taken for the script path instead.
+    "--permission-set=app",
     // Managed npm, and only the packages the module graph actually reaches.
     // Without these two the compiler embeds every local node_modules tree it
     // can see — 437 MB of build-time-only npm packages for a graph that needs
