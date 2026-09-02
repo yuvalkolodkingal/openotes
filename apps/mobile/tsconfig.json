@@ -9,7 +9,9 @@
       "@notesnook/sodium": ["../../packages/sync-crypto-js/src/sodium-alias.ts"],
       "@notesnook/sync-core": ["../../packages/sync-core/src/index.ts"],
       "@notesnook/sync-sql": ["../../packages/sync-sql/src/index.ts"],
-      "@openotes/markdown": ["../../apps/desktop/src/mcp/markdown.ts"]
+      "@openotes/markdown": ["../../apps/desktop/src/mcp/markdown.ts"],
+      "@noble/ciphers/*": ["node_modules/@noble/ciphers/*"],
+      "@noble/hashes/*": ["node_modules/@noble/hashes/*"]
     }
   },
   "include": ["App.tsx", "index.js", "src/**/*.ts", "src/**/*.tsx"]
