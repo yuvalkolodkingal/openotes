@@ -107,6 +107,24 @@ does not exist, and overwriting only if nobody else changed it first.
 | **OneDrive**     | yes, native                        | yes, native (`if-match`) | delta link               |
 | **WebDAV**       | emulated (probe + `If-None-Match`) | yes (`If-Match`)         | listing                  |
 | **Google Drive** | **no**                             | **no**                   | change feed              |
+| **S3** and compatible | yes (`If-None-Match: *`)      | yes (`If-Match`)         | none — listing           |
+
+### S3, and the many services that speak it
+
+S3 is the only one of these with both primitives as real features, so it is
+the best-behaved backend after Dropbox. It authenticates by signing each
+request with an access key rather than by OAuth, so there is no browser
+hand-off and no token to expire. The same provider reaches MinIO, Backblaze
+B2, Cloudflare R2, Wasabi and anything else with an S3-compatible endpoint —
+set the endpoint host and, for most of them, path-style addressing.
+
+Two honest caveats. `If-None-Match` and `If-Match` are recent additions to the
+S3 API and not every compatible implementation honours them; one that accepts
+a conditional header and ignores it is caught by the upload verification
+rather than silently clobbering, the same defence the WebDAV backend needed.
+And the request signing has been tested for its structure but not yet against
+a live endpoint — a signing fault appears as a 403 on the first request, not
+as lost data.
 
 ### Koofr, pCloud and Nextcloud go through WebDAV
 
